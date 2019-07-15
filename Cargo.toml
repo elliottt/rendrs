@@ -12,4 +12,3 @@ image = "0.21.2"
 
 [[bin]]
 name = "rainbow"
-src = "src/bin/rainbow.rs"
