@@ -1,0 +1,15 @@
+[package]
+name = "rendrs"
+version = "0.1.0"
+authors = ["Trevor Elliott <awesomelyawesome@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nalgebra = "0.18.0"
+image = "0.21.2"
+
+[[bin]]
+name = "rainbow"
+src = "src/bin/rainbow.rs"
