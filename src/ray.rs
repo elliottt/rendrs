@@ -1,5 +1,5 @@
 
-use nalgebra::{Point3,Vector3};
+use nalgebra::{Matrix4,Point3,Vector3};
 
 pub struct Ray {
     pub origin: Point3<f32>,
@@ -59,6 +59,13 @@ impl Ray {
         None
     }
 
+    /// Make a new ray that has the given transformation applied to it.
+    pub fn transform(&self, matrix: &Matrix4<f32>) -> Self {
+        let origin = matrix.transform_point(&self.origin);
+        let direction = matrix.transform_vector(&self.direction);
+        Self::new(origin, direction)
+    }
+
 }
 
 #[test]
@@ -68,4 +75,27 @@ fn test_position() {
     assert_eq!(p.position(0.0), p.origin);
     assert_eq!(p.position(1.0), Point3::new(0.0, 1.0, 0.0));
     assert_eq!(p.position(-1.0), Point3::new(0.0, -1., 0.0));
+}
+
+#[test]
+fn test_transform() {
+    let p = Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
+
+    {
+        let m = Matrix4::new_translation(&Vector3::new(0.0, 1.0, 0.0));
+        assert_eq!(p.transform(&m).origin, Point3::new(0.0, 1.0, 0.0));
+        assert_eq!(p.transform(&m).direction, p.direction);
+    }
+
+    {
+        let m = Matrix4::new_rotation(Vector3::new(0.0, 1.0, 0.0));
+        assert_eq!(p.transform(&m).origin, Point3::new(0.0, 0.0, 0.0));
+        assert_eq!(p.transform(&m).direction, Vector3::new(0.0, 1.0, 0.0));
+    }
+
+    {
+        let m = Matrix4::new_nonuniform_scaling(&Vector3::new(2.0, 3.0, 4.0));
+        assert_eq!(p.transform(&m).origin, Point3::new(0.0, 0.0, 0.0));
+        assert_eq!(p.transform(&m).direction, Vector3::new(0.0, 3.0, 0.0));
+    }
 }
