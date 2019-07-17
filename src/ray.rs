@@ -8,7 +8,7 @@ pub struct Ray {
 
 pub struct MarchResult {
     pub steps: usize,
-    pub dist: f32,
+    pub distance: f32,
     pub point: Point3<f32>,
 }
 
@@ -52,7 +52,7 @@ impl Ray {
 
             // the ray has gotten close enough to something to be considered a hit
             if dist <= min_dist {
-                return Some(MarchResult{ steps: i, dist: total_dist, point: pos })
+                return Some(MarchResult{ steps: i, distance: total_dist, point: pos })
             }
         }
 
@@ -98,4 +98,23 @@ fn test_transform() {
         assert_eq!(p.transform(&m).origin, Point3::new(0.0, 0.0, 0.0));
         assert_eq!(p.transform(&m).direction, Vector3::new(0.0, 3.0, 0.0));
     }
+}
+
+#[test]
+fn test_march() {
+    use crate::shapes::{Scene,Shape};
+
+    let ray = Ray::new(Point3::new(0.0, 0.0, -5.0), Vector3::new(0.0, 0.0, 1.0));
+
+    let mut scene = Scene::new();
+    let sphere = scene.sphere();
+    let scaled = scene.add(Shape::uniform_scaling(2.0, sphere.clone()));
+    let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere.clone()));
+
+    // test an intersectino
+    let result = ray.march(|pt| scene.sdf(&scaled, pt)).expect("Failed to march ray");
+    assert_eq!(result.distance, 3.0);
+
+    // test a miss
+    assert!(ray.march(|pt| scene.sdf(&moved, pt)).is_none());
 }
