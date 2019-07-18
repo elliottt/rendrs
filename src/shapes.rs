@@ -10,6 +10,11 @@ pub enum Shape {
     /// The unit sphere
     Sphere,
 
+    /// Union together a bunch of nodes
+    Union{
+        nodes: Vec<NodeId>,
+    },
+
     /// A transformation applied to a sub-graph
     Transform{
         matrix: Matrix4<f32>,
@@ -29,6 +34,14 @@ impl Shape {
             Shape::Sphere => {
                 let magnitude = (point - Point3::origin()).magnitude();
                 magnitude - 1.0
+            },
+
+            Shape::Union{nodes} => {
+                nodes
+                    .iter()
+                    .map(|node| scene.sdf(node, point))
+                    .min_by(|a,b| a.partial_cmp(b).expect("failed to compare"))
+                    .expect("Missing nodes to union")
             },
 
             Shape::Transform{ matrix, node } => {
@@ -57,6 +70,11 @@ impl Shape {
     pub fn uniform_scaling(amount: f32, node: NodeId) -> Self {
         Shape::UniformScale{ amount, node }
     }
+
+    pub fn union(nodes: Vec<NodeId>) -> Self {
+        Shape::Union{ nodes: nodes.into() }
+    }
+
 }
 
 pub struct Scene {

@@ -12,3 +12,6 @@ image = "0.21.2"
 
 [[bin]]
 name = "rainbow"
+
+[[bin]]
+name = "sphere"

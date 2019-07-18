@@ -22,9 +22,9 @@ impl Ray {
         self.origin + (self.direction * t)
     }
 
-    const MAX_STEPS: usize = 100;
-    const MIN_DIST: f32 = 0.01;
-    const MAX_DIST: f32 = 100.0;
+    pub const MAX_STEPS: usize = 100;
+    pub const MIN_DIST: f32 = 0.01;
+    pub const MAX_DIST: f32 = 100.0;
 
     pub fn march<SDF>(&self, sdf: SDF)
         -> Option<MarchResult>
