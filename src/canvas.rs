@@ -1,11 +1,11 @@
 
-use std::ops::Mul;
+use std::ops::{Add,Mul};
 use std::path::Path;
 use image::{ImageBuffer,Rgb};
 
 
-#[derive(Debug,Default)]
-pub struct Pixel {
+#[derive(Clone,Debug,Default)]
+pub struct Color {
     data: [f32; 3],
 }
 
@@ -23,10 +23,14 @@ fn f32_to_u8(val: f32) -> u8 {
     (val * 255.0).floor() as u8
 }
 
-impl Pixel {
+impl Color {
 
     pub fn new(r: f32, g: f32, b: f32) -> Self {
-        Pixel{ data: [clamp(r), clamp(g), clamp(b)] }
+        Color{ data: [r, g, b] }
+    }
+
+    pub fn black() -> Self {
+        Self::new(0.0, 0.0, 0.0)
     }
 
     pub fn r(&self) -> f32 {
@@ -62,9 +66,22 @@ impl Pixel {
 
 }
 
-impl Mul for Pixel {
+impl Add for &Color {
+    type Output = Color;
 
-    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut data = [0.0; 3];
+        for i in 0 .. 3 {
+            data[i] = self.data[i] + rhs.data[i];
+        }
+
+        Color{ data }
+    }
+}
+
+impl Mul for &Color {
+
+    type Output = Color;
 
     fn mul(self, rhs: Self) -> Self::Output {
         let mut data = [0.0; 3];
@@ -72,15 +89,49 @@ impl Mul for Pixel {
             data[i] = self.data[i] * rhs.data[i];
         }
 
-        Pixel{ data }
+        Color{ data }
     }
 
 }
 
+impl Mul for Color {
+
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        &self * &rhs
+    }
+
+}
+
+impl Mul<f32> for &Color {
+
+    type Output = Color;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        let mut data = [0.0; 3];
+        for i in 0 .. 3 {
+            data[i] = self.data[i] * rhs;
+        }
+
+        Color{ data }
+    }
+
+}
+
+impl Mul<f32> for Color {
+
+    type Output = Color;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        &self * rhs
+    }
+
+}
 pub struct Canvas {
     pub width: usize,
     pub height: usize,
-    pixels: Vec<Pixel>,
+    pixels: Vec<Color>,
 }
 
 impl Canvas {
@@ -99,11 +150,11 @@ impl Canvas {
         }
     }
 
-    pub fn get(&self, x: usize, y: usize) -> Option<&Pixel> {
+    pub fn get(&self, x: usize, y: usize) -> Option<&Color> {
         self.index(x, y).map( |ix| unsafe { self.pixels.get_unchecked(ix) })
     }
 
-    pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut Pixel> {
+    pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut Color> {
         self.index(x, y).map(move |ix| unsafe { self.pixels.get_unchecked_mut(ix) })
     }
 
