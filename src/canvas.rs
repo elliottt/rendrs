@@ -162,7 +162,8 @@ impl Canvas {
     where Q: AsRef<Path>
     {
         let image = ImageBuffer::from_fn(self.width as u32, self.height as u32, |x,y| {
-            let ix = (y as usize) * self.width + (x as usize);
+            // invert the y coordinate, otherwise the image will be saved upsidown
+            let ix = (self.height - (y as usize) - 1) * self.width + (x as usize);
             unsafe { self.pixels.get_unchecked(ix).to_rgb() }
         });
 
