@@ -16,8 +16,8 @@ pub fn main() {
     let root = scene.add(Shape::union(vec![a, b]));
 
     scene.add_light(Light{
-        position: Point3::new(0.0, -5.0, 0.0),
-        color: canvas::Color::new(1.0, 1.0, 1.0)
+        position: Point3::new(0.0, -5.0, -10.0),
+        color: canvas::Color::new(0.0, 1.0, 1.0)
     });
 
     let origin = Point3::new(0.0, 0.0, -5.0);
@@ -27,12 +27,12 @@ pub fn main() {
         let oy = 10.0 * ((y as f32) / 1000.0) - 5.0;
         for x in 0 .. c.width {
             let ox = 10.0 * ((x as f32) / 1000.0) - 5.0;
-            let target = Point3::new(ox, oy, 2.0);
+            let target = Point3::new(origin.x + ox, origin.y + oy, 2.0);
             let direction = (target - origin).normalize();
             let pixel = c.get_mut(x,y).expect("Missing a pixel!");
-            if let Some(res) = Ray::new(origin, direction).march(|pt| scene.sdf(&sphere, pt)) {
+            if let Some(res) = Ray::new(origin, direction).march(|pt| scene.sdf(&root, pt)) {
                 let mat = scene.get_material(res.material.clone());
-                let normal = res.normal(|pt| scene.sdf(&sphere, pt));
+                let normal = res.normal(|pt| scene.sdf(&root, pt));
 
                 for light in scene.iter_lights() {
                     // not correct, but what do you do

@@ -96,27 +96,18 @@ pub struct MarchResult<Mat> {
 
 impl<Mat> MarchResult<Mat> {
 
+    /// Compute the normal to this result
     pub fn normal<SDF,M>(&self, sdf: SDF)
         -> Vector3<f32>
         where SDF: Fn(&Point3<f32>) -> (f32,M),
     {
-        self.normal_with(&Default::default(), sdf)
-    }
+        let (dist,_) = sdf(&self.point);
+        let offset = Vector3::new(0.001, 0.0, 0.0);
 
-    /// Compute the normal to this result
-    pub fn normal_with<SDF,M>(&self, cfg: &RayConfig, sdf: SDF)
-        -> Vector3<f32>
-        where SDF: Fn(&Point3<f32>) -> (f32,M),
-    {
-        let (px,_) = sdf(&Point3::new(self.point.x + cfg.min_dist, self.point.y, self.point.z));
-        let (py,_) = sdf(&Point3::new(self.point.x, self.point.y + cfg.min_dist, self.point.z));
-        let (pz,_) = sdf(&Point3::new(self.point.x, self.point.y, self.point.z + cfg.min_dist));
-
-        let ax = px - self.distance;
-        let ay = py - self.distance;
-        let az = pz - self.distance;
-
-        Vector3::new(ax, ay, az).normalize()
+        let (px,_) = sdf(&(self.point - offset.xyy()));
+        let (py,_) = sdf(&(self.point - offset.yxy()));
+        let (pz,_) = sdf(&(self.point - offset.yyx()));
+        Vector3::new(dist - px, dist - py, dist - pz).normalize()
     }
 
 }
@@ -164,7 +155,7 @@ fn test_march() {
     let scaled = scene.add(Shape::uniform_scaling(2.0, sphere.clone()));
     let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere.clone()));
 
-    // test an intersectino
+    // test an intersection
     let result = ray.march(|pt| scene.sdf(&scaled, pt)).expect("Failed to march ray");
     assert_eq!(result.distance, 3.0);
 

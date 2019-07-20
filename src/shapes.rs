@@ -109,7 +109,7 @@ impl Shape {
     fn sdf<'a>(&self, scene: &'a Scene, point: &Point3<f32>) -> (f32,MaterialId) {
         match self {
             Shape::Sphere => {
-                let magnitude = (point - Point3::origin()).magnitude();
+                let magnitude = Vector3::new(point.x, point.y, point.z).magnitude();
                 (magnitude - 1.0, scene.default_material())
             },
 
@@ -241,6 +241,20 @@ fn test_lighting() {
         assert_eq!(res.r(), 1.9);
         assert_eq!(res.g(), 1.9);
         assert_eq!(res.b(), 1.9);
+    }
+
+    {
+        let s2d2 = f32::sqrt(2.0) / 2.0;
+        let eyev = Vector3::new(0.0, s2d2, -s2d2);
+        let normalv = Vector3::new(0.0, 0.0, -1.0);
+        let light = Light{
+            position: Point3::new(0.0, 0.0, -10.0),
+            color: Color::new(1.0, 1.0, 1.0)
+        };
+        let res = m.lighting(&light, &pos, &eyev, &normalv);
+        assert_eq!(res.r(), 1.0);
+        assert_eq!(res.g(), 1.0);
+        assert_eq!(res.b(), 1.0);
     }
 
     // TODO: implement the rest of the tests
