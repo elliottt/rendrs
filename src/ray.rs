@@ -10,7 +10,7 @@ pub struct RayConfig {
 
 impl RayConfig {
     pub const MAX_STEPS: usize = 100;
-    pub const MIN_DIST: f32 = 0.01;
+    pub const MIN_DIST: f32 = 0.001;
     pub const MAX_DIST: f32 = 100.0;
 }
 

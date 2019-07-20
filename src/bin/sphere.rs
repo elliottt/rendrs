@@ -13,7 +13,9 @@ pub fn main() {
     let a = scene.add(Shape::translation(&Vector3::new(-1.0, 0.0, 0.0), sphere.clone()));
     let d = scene.add(Shape::uniform_scaling(2.0, sphere.clone()));
     let b = scene.add(Shape::translation(&Vector3::new(1.0, 0.0, 0.0), d));
-    let root = scene.add(Shape::union(vec![a, b]));
+    let e = scene.add(Shape::translation(&Vector3::new(0.0, 1.0, -0.5), sphere.clone()));
+    let s = scene.add(Shape::union(vec![a, b]));
+    let root = scene.add(Shape::subtract(s, e));
 
     scene.add_light(Light{
         position: Point3::new(0.0, -5.0, -10.0),

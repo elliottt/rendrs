@@ -86,6 +86,12 @@ pub enum Shape {
         nodes: Vec<NodeId>,
     },
 
+    /// Subtract one node from another
+    Subtract{
+        first: NodeId,
+        second: NodeId,
+    },
+
     /// A transformation applied to a sub-graph
     Transform{
         matrix: Matrix4<f32>,
@@ -119,6 +125,12 @@ impl Shape {
                     .map(|node| scene.sdf(node, point))
                     .min_by(|a,b| a.0.partial_cmp(&b.0).expect("failed to compare"))
                     .expect("Missing nodes to union")
+            },
+
+            Shape::Subtract{ first, second } => {
+                let (da, mat) = scene.sdf(first, point);
+                let (db, _) = scene.sdf(second, point);
+                (f32::max(da, -db), mat)
             },
 
             Shape::Transform{ matrix, node } => {
@@ -156,6 +168,10 @@ impl Shape {
 
     pub fn union(nodes: Vec<NodeId>) -> Self {
         Shape::Union{ nodes: nodes.into() }
+    }
+
+    pub fn subtract(first: NodeId, second: NodeId) -> Self {
+        Shape::Subtract{ first, second }
     }
 
 }
