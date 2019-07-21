@@ -29,6 +29,10 @@ impl Color {
         Color{ data: [r, g, b] }
     }
 
+    pub fn white() -> Self {
+        Self::new(1.0, 1.0, 1.0)
+    }
+
     pub fn black() -> Self {
         Self::new(0.0, 0.0, 0.0)
     }
@@ -163,7 +167,8 @@ impl Canvas {
     {
         let image = ImageBuffer::from_fn(self.width as u32, self.height as u32, |x,y| {
             // invert the y coordinate, otherwise the image will be saved upsidown
-            let ix = (self.height - (y as usize) - 1) * self.width + (x as usize);
+            // let ix = (self.height - (y as usize) - 1) * self.width + (x as usize);
+            let ix = (y as usize) * self.width + (x as usize);
             unsafe { self.pixels.get_unchecked(ix).to_rgb() }
         });
 

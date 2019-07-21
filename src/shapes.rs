@@ -4,13 +4,13 @@ use nalgebra::{Vector3,Point3,Matrix4};
 use crate::canvas::Color;
 use crate::ray::reflect;
 
-#[derive(Clone,Ord,PartialOrd,Eq,PartialEq)]
+#[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq)]
 pub struct NodeId(usize);
 
-#[derive(Clone,Ord,PartialOrd,Eq,PartialEq)]
+#[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq)]
 pub struct MaterialId(usize);
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum Material {
 
     /// Phong shaded material
@@ -116,7 +116,8 @@ impl Shape {
         match self {
             Shape::Sphere => {
                 let magnitude = Vector3::new(point.x, point.y, point.z).magnitude();
-                (magnitude - 1.0, scene.default_material())
+                let dist = magnitude - 1.0;
+                (dist, scene.default_material())
             },
 
             Shape::Union{nodes} => {
@@ -174,6 +175,9 @@ impl Shape {
         Shape::Subtract{ first, second }
     }
 
+    pub fn material(material: MaterialId, node: NodeId) -> Self {
+        Shape::Material{ material, node }
+    }
 }
 
 pub struct Light {

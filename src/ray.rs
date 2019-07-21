@@ -30,6 +30,7 @@ pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
     vec - (normal * 2.0 * dot)
 }
 
+#[derive(Debug)]
 pub struct Ray {
     pub origin: Point3<f32>,
     pub direction: Vector3<f32>,
