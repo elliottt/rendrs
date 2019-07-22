@@ -54,12 +54,12 @@ pub fn main() {
         let mat = Matrix4::new_rotation(axis * angle)
             .append_translation(&Vector3::new(0.0, 0.0, 10.0));
         let wall = scene.add(Shape::transform(&mat, scene.xz_plane()));
-        let blue_wall = scene.add(Shape::material(blue, wall));
+        let blue_wall = scene.add(Shape::material(striped, wall));
         scene.add_root(blue_wall);
     }
 
     scene.add_light(Light{
-        position: Point3::new(0.0, 10.0, -2.0),
+        position: Point3::new(2.0, 2.0, -5.0),
         color: Color::white(),
     });
 

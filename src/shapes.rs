@@ -48,6 +48,11 @@ impl Material {
         self
     }
 
+    pub fn set_shininess(mut self, shininess: f32) -> Self {
+        self.shininess = shininess;
+        self
+    }
+
     pub fn lighting(
         &self,
         light: &Light,
