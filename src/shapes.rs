@@ -3,6 +3,7 @@ use nalgebra::{Vector3,Point3,Matrix4};
 
 use crate::canvas::Color;
 use crate::ray::reflect;
+use crate::texture::Texture;
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
 pub struct NodeId(usize);
@@ -11,23 +12,18 @@ pub struct NodeId(usize);
 pub struct MaterialId(usize);
 
 #[derive(Clone,Debug)]
-pub enum Material {
-
-    /// Phong shaded material
-    Phong{
-        color: Color,
-        ambient: f32,
-        diffuse: f32,
-        specular: f32,
-        shininess: f32,
-    },
-
+pub struct Material {
+    texture: Texture,
+    ambient: f32,
+    diffuse: f32,
+    specular: f32,
+    shininess: f32,
 }
 
 impl Default for Material {
     fn default() -> Self {
-        Material::Phong{
-            color: Color::new(1.0, 1.0, 1.0),
+        Material{
+            texture: Texture::solid(Color::white()),
             ambient: 0.1,
             diffuse: 0.9,
             specular: 0.9,
@@ -37,6 +33,21 @@ impl Default for Material {
 }
 
 impl Material {
+    pub fn new(
+        texture: Texture,
+        ambient: f32,
+        diffuse: f32,
+        specular: f32,
+        shininess: f32,
+    ) -> Self {
+        Material{ texture, ambient, diffuse, specular, shininess }
+    }
+
+    pub fn set_texture(mut self, texture: Texture) -> Self {
+        self.texture = texture;
+        self
+    }
+
     pub fn lighting(
         &self,
         light: &Light,
@@ -45,35 +56,31 @@ impl Material {
         normal: &Vector3<f32>,
         visible: bool,
     ) -> Color {
-        match self {
-            Material::Phong{ color, ambient, diffuse, specular, shininess } => {
-                let effectivec = color * &light.color;
-                let lightv = (light.position - point).normalize();
-                let ambientc = &effectivec * *ambient;
-                let light_dot_normal = lightv.dot(normal);
+        let effectivec = self.texture.color_at(point) * &light.color;
+        let lightv = (light.position - point).normalize();
+        let ambientc = &effectivec * self.ambient;
+        let light_dot_normal = lightv.dot(normal);
 
-                let diffuse_specular =
-                    if !visible || light_dot_normal < 0.0 {
+        let diffuse_specular =
+            if !visible || light_dot_normal < 0.0 {
+                Color::black()
+            } else {
+                let specularc = {
+                    let reflectv = reflect(& -lightv, normal);
+                    let reflect_dot_eye = reflectv.dot(dir);
+                    if reflect_dot_eye <= 0.0 {
                         Color::black()
                     } else {
-                        let specularc = {
-                            let reflectv = reflect(& -lightv, normal);
-                            let reflect_dot_eye = reflectv.dot(dir);
-                            if reflect_dot_eye <= 0.0 {
-                                Color::black()
-                            } else {
-                                let factor = reflect_dot_eye.powf(*shininess);
-                                &light.color * (specular * factor)
-                            }
-                        };
+                        let factor = reflect_dot_eye.powf(self.shininess);
+                        &light.color * (self.specular * factor)
+                    }
+                };
 
-                        let diffusec = &effectivec * (diffuse * light_dot_normal);
-                        &diffusec + &specularc
-                    };
+                let diffusec = &effectivec * (self.diffuse * light_dot_normal);
+                &diffusec + &specularc
+            };
 
-                &ambientc + &diffuse_specular
-            },
-        }
+        &ambientc + &diffuse_specular
     }
 }
 

@@ -8,26 +8,26 @@ use rendrs::{
     canvas::{Canvas,Color},
     ray::Ray,
     shapes::{Light,Scene,Shape,Material},
+    texture::Texture,
 };
 
 pub fn main() {
     let mut c = Canvas::new(1000,1000);
 
     let mut scene = Scene::new();
-    let blue = scene.add_material(Material::Phong{
-        color: Color::new(0.0, 0.0, 1.0),
-        ambient: 0.1,
-        diffuse: 0.9,
-        specular: 0.9,
-        shininess: 200.0,
-    });
-    let red = scene.add_material(Material::Phong{
-        color: Color::new(1.0, 0.0, 0.0),
-        ambient: 0.1,
-        diffuse: 0.9,
-        specular: 0.9,
-        shininess: 200.0,
-    });
+    let blue = scene.add_material(
+        Material::default()
+        .set_texture(Texture::solid(Color::new(0.0, 0.0, 1.0)))
+    );
+    let red = scene.add_material(
+        Material::default()
+        .set_texture(Texture::solid(Color::new(1.0, 0.0, 0.0)))
+    );
+
+    let striped = scene.add_material(
+        Material::default()
+        .set_texture(Texture::stripe(Color::black(), Color::white()))
+    );
 
     {
         let sphere = scene.sphere();
@@ -44,8 +44,8 @@ pub fn main() {
 
     {
         let ground = scene.add(Shape::translation(&Vector3::new(0.0, -2.0, 0.0), scene.xz_plane()));
-        let red_ground = scene.add(Shape::material(red, ground));
-        scene.add_root(red_ground);
+        let striped_ground = scene.add(Shape::material(striped, ground));
+        scene.add_root(striped_ground);
     }
 
     {

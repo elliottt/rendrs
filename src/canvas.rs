@@ -9,6 +9,14 @@ pub struct Color {
     data: [f32; 3],
 }
 
+impl PartialEq for Color {
+    fn eq(&self, other: &Color) -> bool {
+        self.r().eq(&other.r()) &&
+            self.g().eq(&other.g()) &&
+            self.b().eq(&other.b())
+    }
+}
+
 fn clamp(val: f32) -> f32 {
     if val < 0.0 {
         0.0
