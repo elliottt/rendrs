@@ -178,9 +178,13 @@ impl Shape {
         }
     }
 
-    fn transform(matrix: &Matrix4<f32>, node: NodeId) -> Self {
+    pub fn transform(matrix: &Matrix4<f32>, node: NodeId) -> Self {
         let inv = matrix.try_inverse().expect("Unable to invert transformation matrix");
         Shape::Transform{ matrix: inv, node }
+    }
+
+    pub fn rotation(axisangle: Vector3<f32>, node: NodeId) -> Self {
+        Self::transform(&Matrix4::new_rotation(axisangle), node)
     }
 
     /// Translate the sub-graph by the given vector.

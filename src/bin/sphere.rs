@@ -29,20 +29,34 @@ pub fn main() {
         shininess: 200.0,
     });
 
-    let sphere = scene.sphere();
-    let red_sphere = scene.add(Shape::material(red, sphere));
-    let blue_sphere = scene.add(Shape::material(blue, sphere));
-    let a = scene.add(Shape::translation(&Vector3::new(-1.0, 0.0, 0.0), red_sphere));
-    let d = scene.add(Shape::uniform_scaling(2.0, blue_sphere));
-    let b = scene.add(Shape::translation(&Vector3::new(1.0, 0.0, 0.0), d));
-    let e = scene.add(Shape::translation(&Vector3::new(0.0, 1.0, -1.0), sphere));
-    let s = scene.add(Shape::union(vec![a, b]));
-    let root = scene.add(Shape::subtract(s, e));
-    scene.add_root(root);
+    {
+        let sphere = scene.sphere();
+        let red_sphere = scene.add(Shape::material(red, sphere));
+        let blue_sphere = scene.add(Shape::material(blue, sphere));
+        let a = scene.add(Shape::translation(&Vector3::new(-1.0, 0.0, 0.0), red_sphere));
+        let d = scene.add(Shape::uniform_scaling(2.0, blue_sphere));
+        let b = scene.add(Shape::translation(&Vector3::new(1.0, 0.0, 0.0), d));
+        let e = scene.add(Shape::translation(&Vector3::new(0.0, 1.0, -1.0), sphere));
+        let s = scene.add(Shape::union(vec![a, b]));
+        let root = scene.add(Shape::subtract(s, e));
+        scene.add_root(root);
+    }
 
-    let ground = scene.add(Shape::translation(&Vector3::new(0.0, -2.0, 0.0), scene.xz_plane()));
-    let red_ground = scene.add(Shape::material(red, ground));
-    scene.add_root(red_ground);
+    {
+        let ground = scene.add(Shape::translation(&Vector3::new(0.0, -2.0, 0.0), scene.xz_plane()));
+        let red_ground = scene.add(Shape::material(red, ground));
+        scene.add_root(red_ground);
+    }
+
+    {
+        let angle = 3.0 * (std::f32::consts::PI / 2.0);
+        let axis = Vector3::new(1.0, 0.0, 0.0);
+        let mat = Matrix4::new_rotation(axis * angle)
+            .append_translation(&Vector3::new(0.0, 0.0, 10.0));
+        let wall = scene.add(Shape::transform(&mat, scene.xz_plane()));
+        let blue_wall = scene.add(Shape::material(blue, wall));
+        scene.add_root(blue_wall);
+    }
 
     scene.add_light(Light{
         position: Point3::new(0.0, 10.0, -2.0),
