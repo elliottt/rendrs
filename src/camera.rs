@@ -70,6 +70,8 @@ impl Camera {
 
 #[test]
 fn test_ray_for_pixel() {
+    use nalgebra::{Vector3};
+
     let mut camera = Camera::new(11, 11, std::f32::consts::PI / 2.0);
     let eye = Point3::new(0.0, 0.0, -1.0);
     camera.set_transform(Matrix4::look_at_lh(

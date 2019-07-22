@@ -88,6 +88,7 @@ impl Ray {
 
 }
 
+#[derive(Debug)]
 pub struct MarchResult<Mat> {
     pub steps: usize,
     pub distance: f32,
@@ -153,15 +154,15 @@ fn test_march() {
 
     let mut scene = Scene::new();
     let sphere = scene.sphere();
-    let scaled = scene.add(Shape::uniform_scaling(2.0, sphere.clone()));
-    let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere.clone()));
+    let scaled = scene.add(Shape::uniform_scaling(2.0, sphere));
+    let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere));
 
     // test an intersection
-    let result = ray.march(|pt| scene.sdf(&scaled, pt)).expect("Failed to march ray");
+    let result = ray.march(|pt| scene.sdf_from(&scaled, pt)).expect("Failed to march ray");
     assert_eq!(result.distance, 3.0);
 
     // test a miss
-    assert!(ray.march(|pt| scene.sdf(&moved, pt)).is_none());
+    assert!(ray.march(|pt| scene.sdf_from(&moved, pt)).is_none());
 }
 
 #[test]

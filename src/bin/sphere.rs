@@ -6,6 +6,7 @@ use nalgebra::{Point3,Vector3,Matrix4};
 use rendrs::{
     camera::Camera,
     canvas::{Canvas,Color},
+    ray::Ray,
     shapes::{Light,Scene,Shape,Material},
 };
 
@@ -37,9 +38,14 @@ pub fn main() {
     let e = scene.add(Shape::translation(&Vector3::new(0.0, 1.0, -1.0), sphere));
     let s = scene.add(Shape::union(vec![a, b]));
     let root = scene.add(Shape::subtract(s, e));
+    scene.add_root(root);
+
+    let ground = scene.add(Shape::translation(&Vector3::new(0.0, -2.0, 0.0), scene.xz_plane()));
+    let red_ground = scene.add(Shape::material(red, ground));
+    scene.add_root(red_ground);
 
     scene.add_light(Light{
-        position: Point3::new(0.0, -5.0, -10.0),
+        position: Point3::new(0.0, 10.0, -2.0),
         color: Color::white(),
     });
 
@@ -57,13 +63,23 @@ pub fn main() {
         for x in 0 .. c.width {
             let ray = camera.ray_for_pixel(x, y);
             let pixel = c.get_mut(x,y).expect("Missing a pixel!");
-            if let Some(res) = ray.march(|pt| scene.sdf(&root, pt)) {
+            if let Some(res) = ray.march(|pt| scene.sdf(pt)) {
                 let mat = scene.get_material(res.material);
-                let normal = res.normal(|pt| scene.sdf(&root, pt));
+                let normal = res.normal(|pt| scene.sdf(pt));
 
                 for light in scene.iter_lights() {
-                    // not correct, but what do you do
-                    *pixel = mat.lighting(light, &res.point, &ray.direction, &normal);
+                    let point = res.point + normal * 0.01;
+                    let light_dir = light.position - point;
+                    let dist = light_dir.magnitude();
+
+                    // check to see if the path to the light is obstructed
+                    let light_visible = Ray::new(point, light_dir.normalize())
+                        .march(|pt| scene.sdf(pt))
+                        .map_or(true, |hit| hit.distance >= dist);
+
+                    // TODO: should be blending the light
+                    *pixel = mat.lighting(light, &res.point, &ray.direction, &normal, light_visible);
+
                 }
             } else {
                 pixel.set_r(0.1).set_g(0.1).set_b(0.1);

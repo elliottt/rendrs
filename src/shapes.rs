@@ -4,10 +4,10 @@ use nalgebra::{Vector3,Point3,Matrix4};
 use crate::canvas::Color;
 use crate::ray::reflect;
 
-#[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq)]
+#[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
 pub struct NodeId(usize);
 
-#[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq)]
+#[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
 pub struct MaterialId(usize);
 
 #[derive(Clone,Debug)]
@@ -43,6 +43,7 @@ impl Material {
         point: &Point3<f32>,
         dir: &Vector3<f32>,
         normal: &Vector3<f32>,
+        visible: bool,
     ) -> Color {
         match self {
             Material::Phong{ color, ambient, diffuse, specular, shininess } => {
@@ -52,7 +53,7 @@ impl Material {
                 let light_dot_normal = lightv.dot(normal);
 
                 let diffuse_specular =
-                    if light_dot_normal < 0.0 {
+                    if !visible || light_dot_normal < 0.0 {
                         Color::black()
                     } else {
                         let specularc = {
@@ -77,9 +78,36 @@ impl Material {
 }
 
 #[derive(Clone)]
-pub enum Shape {
+pub enum PrimShape {
     /// The unit sphere
     Sphere,
+
+    /// X-Z plane
+    XZPlane,
+}
+
+impl PrimShape {
+    fn sdf(&self, point: &Point3<f32>) -> f32 {
+        match self {
+            PrimShape::Sphere => {
+                let magnitude = Vector3::new(point.x, point.y, point.z).magnitude();
+                magnitude - 1.0
+            },
+
+            PrimShape::XZPlane => {
+                point.y
+            }
+        }
+    }
+
+}
+
+#[derive(Clone)]
+pub enum Shape {
+    /// The unit sphere
+    PrimShape{
+        shape: PrimShape,
+    },
 
     /// Union together a bunch of nodes
     Union{
@@ -114,39 +142,37 @@ pub enum Shape {
 impl Shape {
     fn sdf<'a>(&self, scene: &'a Scene, point: &Point3<f32>) -> (f32,MaterialId) {
         match self {
-            Shape::Sphere => {
-                let magnitude = Vector3::new(point.x, point.y, point.z).magnitude();
-                let dist = magnitude - 1.0;
-                (dist, scene.default_material())
+            Shape::PrimShape{ shape } => {
+                (shape.sdf(point), scene.default_material())
             },
 
             Shape::Union{nodes} => {
                 nodes
                     .iter()
-                    .map(|node| scene.sdf(node, point))
+                    .map(|node| scene.sdf_from(node, point))
                     .min_by(|a,b| a.0.partial_cmp(&b.0).expect("failed to compare"))
                     .expect("Missing nodes to union")
             },
 
             Shape::Subtract{ first, second } => {
-                let (da, mat) = scene.sdf(first, point);
-                let (db, _) = scene.sdf(second, point);
+                let (da, mat) = scene.sdf_from(first, point);
+                let (db, _) = scene.sdf_from(second, point);
                 (f32::max(da, -db), mat)
             },
 
             Shape::Transform{ matrix, node } => {
                 let p = matrix.transform_point(point);
-                scene.sdf(node, &p)
+                scene.sdf_from(node, &p)
             },
 
             Shape::UniformScale{ amount, node } => {
                 let p = point / *amount;
-                let (dist,mat) = scene.sdf(node, &p);
+                let (dist,mat) = scene.sdf_from(node, &p);
                 (dist * amount, mat)
             },
 
             Shape::Material{ material, node } => {
-                let (dist,_) = scene.sdf(node, point);
+                let (dist,_) = scene.sdf_from(node, point);
                 (dist, material.clone())
             }
         }
@@ -189,6 +215,9 @@ pub struct Scene {
     members: Vec<Shape>,
     lights: Vec<Light>,
     materials: Vec<Material>,
+
+    // the roots of the world
+    world: Vec<NodeId>,
 }
 
 impl Scene {
@@ -198,10 +227,12 @@ impl Scene {
             members: Vec::new(),
             lights: Vec::new(),
             materials: Vec::new(),
+            world: Vec::new(),
         };
 
         // record primitives
-        scene.add(Shape::Sphere);
+        scene.add(Shape::PrimShape{ shape: PrimShape::Sphere });
+        scene.add(Shape::PrimShape{ shape: PrimShape::XZPlane });
         scene.add_material(Default::default());
 
         scene
@@ -210,6 +241,10 @@ impl Scene {
     pub fn add(&mut self, shape: Shape) -> NodeId {
         self.members.push(shape);
         NodeId(self.members.len() - 1)
+    }
+
+    pub fn add_root(&mut self, node: NodeId) {
+        self.world.push(node);
     }
 
     pub fn add_light(&mut self, light: Light) {
@@ -235,11 +270,23 @@ impl Scene {
         NodeId(0)
     }
 
+    pub fn xz_plane(&self) -> NodeId {
+        NodeId(1)
+    }
+
     pub fn default_material(&self) -> MaterialId {
         MaterialId(0)
     }
 
-    pub fn sdf(&self, root: &NodeId, point: &Point3<f32>) -> (f32,MaterialId) {
+    pub fn sdf(&self, point: &Point3<f32>) -> (f32,MaterialId) {
+        self.world
+            .iter()
+            .map(|root| self.sdf_from(root, point))
+            .min_by(|a,b| a.0.partial_cmp(&b.0).expect("failed to compare"))
+            .expect("Empty world")
+    }
+
+    pub fn sdf_from(&self, root: &NodeId, point: &Point3<f32>) -> (f32,MaterialId) {
         unsafe { self.members.get_unchecked(root.0).sdf(self, point) }
     }
 
@@ -257,10 +304,15 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             color: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, &pos, &eyev, &normalv);
+        let res = m.lighting(&light, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.9);
         assert_eq!(res.g(), 1.9);
         assert_eq!(res.b(), 1.9);
+
+        let res = m.lighting(&light, &pos, &eyev, &normalv, false);
+        assert_eq!(res.r(), 0.1);
+        assert_eq!(res.g(), 0.1);
+        assert_eq!(res.b(), 0.1);
     }
 
     {
@@ -271,11 +323,9 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             color: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, &pos, &eyev, &normalv);
+        let res = m.lighting(&light, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.0);
         assert_eq!(res.g(), 1.0);
         assert_eq!(res.b(), 1.0);
     }
-
-    // TODO: implement the rest of the tests
 }
