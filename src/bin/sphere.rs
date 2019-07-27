@@ -8,7 +8,7 @@ use rendrs::{
     canvas::{Canvas,Color},
     ray::Ray,
     shapes::{Light,Scene,Shape,Material},
-    texture::Texture,
+    pattern::Pattern,
 };
 
 pub fn main() {
@@ -17,16 +17,16 @@ pub fn main() {
     let mut scene = Scene::new();
     let blue = scene.add_material(
         Material::default()
-        .set_texture(Texture::solid(Color::new(0.0, 0.0, 1.0)))
+        .set_pattern(Pattern::solid(Color::new(0.0, 0.0, 1.0)))
     );
     let red = scene.add_material(
         Material::default()
-        .set_texture(Texture::solid(Color::new(1.0, 0.0, 0.0)))
+        .set_pattern(Pattern::solid(Color::new(1.0, 0.0, 0.0)))
     );
 
     let striped = scene.add_material(
         Material::default()
-        .set_texture(Texture::stripe(Color::black(), Color::white()))
+        .set_pattern(Pattern::stripe(Color::black(), Color::white()))
     );
 
     {

@@ -3,7 +3,7 @@ use nalgebra::{Vector3,Point3,Matrix4};
 
 use crate::canvas::Color;
 use crate::ray::{SDFResult,reflect};
-use crate::texture::Texture;
+use crate::pattern::Pattern;
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
 pub struct NodeId(usize);
@@ -13,7 +13,7 @@ pub struct MaterialId(usize);
 
 #[derive(Clone,Debug)]
 pub struct Material {
-    texture: Texture,
+    pattern: Pattern,
     ambient: f32,
     diffuse: f32,
     specular: f32,
@@ -23,7 +23,7 @@ pub struct Material {
 impl Default for Material {
     fn default() -> Self {
         Material{
-            texture: Texture::solid(Color::white()),
+            pattern: Pattern::solid(Color::white()),
             ambient: 0.1,
             diffuse: 0.9,
             specular: 0.9,
@@ -34,17 +34,17 @@ impl Default for Material {
 
 impl Material {
     pub fn new(
-        texture: Texture,
+        pattern: Pattern,
         ambient: f32,
         diffuse: f32,
         specular: f32,
         shininess: f32,
     ) -> Self {
-        Material{ texture, ambient, diffuse, specular, shininess }
+        Material{ pattern, ambient, diffuse, specular, shininess }
     }
 
-    pub fn set_texture(mut self, texture: Texture) -> Self {
-        self.texture = texture;
+    pub fn set_pattern(mut self, pattern: Pattern) -> Self {
+        self.pattern = pattern;
         self
     }
 
@@ -62,7 +62,7 @@ impl Material {
         normal: &Vector3<f32>,
         visible: bool,
     ) -> Color {
-        let effectivec = self.texture.color_at(object_space_point) * &light.color;
+        let effectivec = self.pattern.color_at(object_space_point) * &light.color;
         let lightv = (light.position - world_space_point).normalize();
         let ambientc = &effectivec * self.ambient;
         let light_dot_normal = lightv.dot(normal);
