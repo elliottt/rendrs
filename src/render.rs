@@ -92,10 +92,12 @@ fn render_job(
 
     let get_pattern = |pid| scene.get_pattern(pid);
 
-    for y in (idx .. cfg.height).step_by(cfg.jobs) {
-        for x in 0 .. cfg.width {
+    let light_weight = 1.0 / (scene.num_lights() as f32);
+
+    for x in 0 .. cfg.width {
+        for y in (idx .. cfg.height).step_by(cfg.jobs) {
             let ray = camera.ray_for_pixel(x, y);
-            let mut pixel = Color::new(0.1, 0.1, 0.1);
+            let mut pixel = Color::black();
             if let Some(res) = ray.march(|pt| scene.sdf(pt)) {
                 let pat = scene.get_pattern(res.material.0);
                 let mat = scene.get_material(res.material.1);
@@ -111,11 +113,10 @@ fn render_job(
                         .march(|pt| scene.sdf(pt))
                         .map_or(true, |hit| hit.distance >= dist);
 
-                    // TODO: should be blending the light
-                    pixel = mat.lighting(
+                    pixel += mat.lighting(
                         light, get_pattern, &pat, &res.object_space_point, &res.world_space_point,
                         &ray.direction, &normal, light_visible,
-                    );
+                    ) * light_weight;
 
                 }
             }

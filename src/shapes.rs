@@ -275,6 +275,10 @@ impl Scene {
         self.lights.push(light);
     }
 
+    pub fn num_lights(&self) -> usize {
+        self.lights.len()
+    }
+
     pub fn iter_lights(&self) -> impl Iterator<Item=&Light> {
         self.lights.iter()
     }

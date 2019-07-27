@@ -1,5 +1,5 @@
 
-use std::ops::{Add,Mul};
+use std::ops::{Add,AddAssign,Mul};
 use std::path::Path;
 use image::{ImageBuffer,Rgb};
 
@@ -76,6 +76,20 @@ impl Color {
         Rgb([ f32_to_u8(self.r()), f32_to_u8(self.g()), f32_to_u8(self.b()) ])
     }
 
+}
+
+impl AddAssign for Color {
+    fn add_assign(&mut self, rhs: Color) {
+        self.add_assign(&rhs)
+    }
+}
+
+impl AddAssign<&Color> for Color {
+    fn add_assign(&mut self, rhs: &Color) {
+        for i in 0 .. 3 {
+            self.data[i] += rhs.data[i];
+        }
+    }
 }
 
 impl Add for &Color {

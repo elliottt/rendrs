@@ -58,6 +58,11 @@ pub fn main() {
         color: Color::white(),
     });
 
+    scene.add_light(Light{
+        position: Point3::new(-3.0, 2.0, 0.0),
+        color: Color::white(),
+    });
+
     let mut camera = Camera::new(1000, 1000, std::f32::consts::PI / 2.0);
     camera.set_transform(
         Matrix4::look_at_lh(
@@ -74,7 +79,5 @@ pub fn main() {
         .build();
 
     let recv = render(Arc::new(scene), Arc::new(camera), cfg.clone());
-    let canvas = write_canvas(cfg, recv);
-
-    canvas.save("test.png");
+    write_canvas(cfg, recv).save("test.png");
 }
