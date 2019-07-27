@@ -36,6 +36,12 @@ pub struct Ray {
     pub direction: Vector3<f32>,
 }
 
+pub struct SDFResult<Mat> {
+    pub distance: f32,
+    pub object_space_point: Point3<f32>,
+    pub material: Mat,
+}
+
 impl Ray {
 
     pub fn new(origin: Point3<f32>, direction: Vector3<f32>) -> Self {
@@ -48,31 +54,37 @@ impl Ray {
 
     pub fn march<SDF,Mat>(&self, sdf: SDF)
         -> Option<MarchResult<Mat>>
-        where SDF: Fn(&Point3<f32>) -> (f32,Mat),
+        where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
     {
         self.march_with(&Default::default(), sdf)
     }
 
     pub fn march_with<SDF,Mat>(&self, cfg: &RayConfig, sdf: SDF)
         -> Option<MarchResult<Mat>>
-        where SDF: Fn(&Point3<f32>) -> (f32,Mat),
+        where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
     {
         let mut pos = self.origin.clone();
         let mut total_dist = 0.0;
         for i in 0 .. cfg.max_steps {
-            let (dist,material) = sdf(&pos);
-            total_dist += dist;
+            let res = sdf(&pos);
+            total_dist += res.distance;
 
             // the ray has failed to hit anything in the scene
             if total_dist >= cfg.max_dist {
                 return None
             }
 
-            pos += dist * self.direction;
+            pos += res.distance * self.direction;
 
             // the ray has gotten close enough to something to be considered a hit
-            if dist <= cfg.min_dist {
-                return Some(MarchResult{ steps: i, distance: total_dist, point: pos, material })
+            if res.distance <= cfg.min_dist {
+                return Some(MarchResult{
+                    steps: i,
+                    distance: total_dist,
+                    object_space_point: res.object_space_point.clone(),
+                    world_space_point: pos,
+                    material: res.material,
+                })
             }
         }
 
@@ -92,24 +104,32 @@ impl Ray {
 pub struct MarchResult<Mat> {
     pub steps: usize,
     pub distance: f32,
-    pub point: Point3<f32>,
+    pub object_space_point: Point3<f32>,
+    pub world_space_point: Point3<f32>,
     pub material: Mat,
 }
 
 impl<Mat> MarchResult<Mat> {
 
     /// Compute the normal to this result
+    ///
+    /// NOTE: the variable M here is different from Mat, to underscore the fact that the material
+    /// is not used in the computation of the normal.
     pub fn normal<SDF,M>(&self, sdf: SDF)
         -> Vector3<f32>
-        where SDF: Fn(&Point3<f32>) -> (f32,M),
+        where SDF: Fn(&Point3<f32>) -> SDFResult<M>,
     {
-        let (dist,_) = sdf(&self.point);
+        let res = sdf(&self.world_space_point);
         let offset = Vector3::new(0.001, 0.0, 0.0);
 
-        let (px,_) = sdf(&(self.point - offset.xyy()));
-        let (py,_) = sdf(&(self.point - offset.yxy()));
-        let (pz,_) = sdf(&(self.point - offset.yyx()));
-        Vector3::new(dist - px, dist - py, dist - pz).normalize()
+        let px = sdf(&(self.world_space_point - offset.xyy()));
+        let py = sdf(&(self.world_space_point - offset.yxy()));
+        let pz = sdf(&(self.world_space_point - offset.yyx()));
+        Vector3::new(
+            res.distance - px.distance,
+            res.distance - py.distance,
+            res.distance - pz.distance,
+        ).normalize()
     }
 
 }

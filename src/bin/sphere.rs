@@ -82,7 +82,7 @@ pub fn main() {
                 let normal = res.normal(|pt| scene.sdf(pt));
 
                 for light in scene.iter_lights() {
-                    let point = res.point + normal * 0.01;
+                    let point = res.world_space_point + normal * 0.01;
                     let light_dir = light.position - point;
                     let dist = light_dir.magnitude();
 
@@ -92,7 +92,10 @@ pub fn main() {
                         .map_or(true, |hit| hit.distance >= dist);
 
                     // TODO: should be blending the light
-                    *pixel = mat.lighting(light, &res.point, &ray.direction, &normal, light_visible);
+                    *pixel = mat.lighting(
+                        light, &res.object_space_point, &res.world_space_point,
+                        &ray.direction, &normal, light_visible,
+                    );
 
                 }
             } else {

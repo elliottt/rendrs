@@ -2,7 +2,7 @@
 use nalgebra::{Vector3,Point3,Matrix4};
 
 use crate::canvas::Color;
-use crate::ray::reflect;
+use crate::ray::{SDFResult,reflect};
 use crate::texture::Texture;
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
@@ -56,13 +56,14 @@ impl Material {
     pub fn lighting(
         &self,
         light: &Light,
-        point: &Point3<f32>,
+        object_space_point: &Point3<f32>,
+        world_space_point: &Point3<f32>,
         dir: &Vector3<f32>,
         normal: &Vector3<f32>,
         visible: bool,
     ) -> Color {
-        let effectivec = self.texture.color_at(point) * &light.color;
-        let lightv = (light.position - point).normalize();
+        let effectivec = self.texture.color_at(object_space_point) * &light.color;
+        let lightv = (light.position - world_space_point).normalize();
         let ambientc = &effectivec * self.ambient;
         let light_dot_normal = lightv.dot(normal);
 
@@ -152,24 +153,29 @@ pub enum Shape {
 }
 
 impl Shape {
-    fn sdf<'a>(&self, scene: &'a Scene, point: &Point3<f32>) -> (f32,MaterialId) {
+    fn sdf<'a>(&self, scene: &'a Scene, point: &Point3<f32>) -> SDFResult<MaterialId> {
         match self {
             Shape::PrimShape{ shape } => {
-                (shape.sdf(point), scene.default_material())
+                SDFResult{
+                    distance: shape.sdf(point),
+                    object_space_point: point.clone(),
+                    material: scene.default_material(),
+                }
             },
 
             Shape::Union{nodes} => {
                 nodes
                     .iter()
                     .map(|node| scene.sdf_from(node, point))
-                    .min_by(|a,b| a.0.partial_cmp(&b.0).expect("failed to compare"))
+                    .min_by(|a,b| a.distance.partial_cmp(&b.distance).expect("failed to compare"))
                     .expect("Missing nodes to union")
             },
 
             Shape::Subtract{ first, second } => {
-                let (da, mat) = scene.sdf_from(first, point);
-                let (db, _) = scene.sdf_from(second, point);
-                (f32::max(da, -db), mat)
+                let mut ra = scene.sdf_from(first, point);
+                let rb = scene.sdf_from(second, point);
+                ra.distance = f32::max(ra.distance, -rb.distance);
+                ra
             },
 
             Shape::Transform{ matrix, node } => {
@@ -179,13 +185,15 @@ impl Shape {
 
             Shape::UniformScale{ amount, node } => {
                 let p = point / *amount;
-                let (dist,mat) = scene.sdf_from(node, &p);
-                (dist * amount, mat)
+                let mut res = scene.sdf_from(node, &p);
+                res.distance *= amount;
+                res
             },
 
             Shape::Material{ material, node } => {
-                let (dist,_) = scene.sdf_from(node, point);
-                (dist, material.clone())
+                let mut res = scene.sdf_from(node, point);
+                res.material = material.clone();
+                res
             }
         }
     }
@@ -294,15 +302,15 @@ impl Scene {
         MaterialId(0)
     }
 
-    pub fn sdf(&self, point: &Point3<f32>) -> (f32,MaterialId) {
+    pub fn sdf(&self, point: &Point3<f32>) -> SDFResult<MaterialId> {
         self.world
             .iter()
             .map(|root| self.sdf_from(root, point))
-            .min_by(|a,b| a.0.partial_cmp(&b.0).expect("failed to compare"))
+            .min_by(|a,b| a.distance.partial_cmp(&b.distance).expect("failed to compare"))
             .expect("Empty world")
     }
 
-    pub fn sdf_from(&self, root: &NodeId, point: &Point3<f32>) -> (f32,MaterialId) {
+    pub fn sdf_from(&self, root: &NodeId, point: &Point3<f32>) -> SDFResult<MaterialId> {
         unsafe { self.members.get_unchecked(root.0).sdf(self, point) }
     }
 
@@ -320,12 +328,12 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             color: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, &pos, &eyev, &normalv, true);
+        let res = m.lighting(&light, &pos, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.9);
         assert_eq!(res.g(), 1.9);
         assert_eq!(res.b(), 1.9);
 
-        let res = m.lighting(&light, &pos, &eyev, &normalv, false);
+        let res = m.lighting(&light, &pos, &pos, &eyev, &normalv, false);
         assert_eq!(res.r(), 0.1);
         assert_eq!(res.g(), 0.1);
         assert_eq!(res.b(), 0.1);
@@ -339,7 +347,7 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             color: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, &pos, &eyev, &normalv, true);
+        let res = m.lighting(&light, &pos, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.0);
         assert_eq!(res.g(), 1.0);
         assert_eq!(res.b(), 1.0);
