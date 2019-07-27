@@ -7,32 +7,27 @@ use rendrs::{
     camera::Camera,
     canvas::{Canvas,Color},
     ray::Ray,
-    shapes::{Light,Scene,Shape,Material},
-    pattern::Pattern,
+    shapes::{Light,Scene,Shape},
+    pattern::{Pattern,PatternStore},
 };
 
 pub fn main() {
     let mut c = Canvas::new(1000,1000);
 
     let mut scene = Scene::new();
-    let blue = scene.add_material(
-        Material::default()
-        .set_pattern(Pattern::solid(Color::new(0.0, 0.0, 1.0)))
-    );
-    let red = scene.add_material(
-        Material::default()
-        .set_pattern(Pattern::solid(Color::new(1.0, 0.0, 0.0)))
-    );
+    let mat = scene.default_material();
+    let blue = scene.add_pattern(Pattern::solid(Color::new(0.0, 0.0, 1.0)));
+    let red = scene.add_pattern(Pattern::solid(Color::new(1.0, 0.0, 0.0)));
 
-    let striped = scene.add_material(
-        Material::default()
-        .set_pattern(Pattern::stripe(Color::black(), Color::white()))
-    );
+
+    let white = scene.add_pattern(Pattern::solid(Color::white()));
+    let black = scene.add_pattern(Pattern::solid(Color::black()));
+    let striped = scene.add_pattern(Pattern::stripe(black, white));
 
     {
         let sphere = scene.sphere();
-        let red_sphere = scene.add(Shape::material(red, sphere));
-        let blue_sphere = scene.add(Shape::material(blue, sphere));
+        let red_sphere = scene.add(Shape::material(red, mat, sphere));
+        let blue_sphere = scene.add(Shape::material(blue, mat, sphere));
         let a = scene.add(Shape::translation(&Vector3::new(-1.0, 0.0, 0.0), red_sphere));
         let d = scene.add(Shape::uniform_scaling(2.0, blue_sphere));
         let b = scene.add(Shape::translation(&Vector3::new(1.0, 0.0, 0.0), d));
@@ -44,17 +39,17 @@ pub fn main() {
 
     {
         let ground = scene.add(Shape::translation(&Vector3::new(0.0, -2.0, 0.0), scene.xz_plane()));
-        let striped_ground = scene.add(Shape::material(striped, ground));
+        let striped_ground = scene.add(Shape::material(striped, mat, ground));
         scene.add_root(striped_ground);
     }
 
     {
         let angle = 3.0 * (std::f32::consts::PI / 2.0);
         let axis = Vector3::new(1.0, 0.0, 0.0);
-        let mat = Matrix4::new_rotation(axis * angle)
+        let trans = Matrix4::new_rotation(axis * angle)
             .append_translation(&Vector3::new(0.0, 0.0, 10.0));
-        let wall = scene.add(Shape::transform(&mat, scene.xz_plane()));
-        let blue_wall = scene.add(Shape::material(striped, wall));
+        let wall = scene.add(Shape::transform(&trans, scene.xz_plane()));
+        let blue_wall = scene.add(Shape::material(striped, mat, wall));
         scene.add_root(blue_wall);
     }
 
@@ -78,7 +73,8 @@ pub fn main() {
             let ray = camera.ray_for_pixel(x, y);
             let pixel = c.get_mut(x,y).expect("Missing a pixel!");
             if let Some(res) = ray.march(|pt| scene.sdf(pt)) {
-                let mat = scene.get_material(res.material);
+                let pat = scene.get_pattern(res.material.0);
+                let mat = scene.get_material(res.material.1);
                 let normal = res.normal(|pt| scene.sdf(pt));
 
                 for light in scene.iter_lights() {
@@ -93,7 +89,7 @@ pub fn main() {
 
                     // TODO: should be blending the light
                     *pixel = mat.lighting(
-                        light, &res.object_space_point, &res.world_space_point,
+                        light, &scene, &pat, &res.object_space_point, &res.world_space_point,
                         &ray.direction, &normal, light_visible,
                     );
 

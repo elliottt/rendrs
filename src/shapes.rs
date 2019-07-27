@@ -3,7 +3,7 @@ use nalgebra::{Vector3,Point3,Matrix4};
 
 use crate::canvas::Color;
 use crate::ray::{SDFResult,reflect};
-use crate::pattern::Pattern;
+use crate::pattern::{PatternId,Pattern,Patterns,PatternStore};
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
 pub struct NodeId(usize);
@@ -13,7 +13,6 @@ pub struct MaterialId(usize);
 
 #[derive(Clone,Debug)]
 pub struct Material {
-    pattern: Pattern,
     ambient: f32,
     diffuse: f32,
     specular: f32,
@@ -23,7 +22,6 @@ pub struct Material {
 impl Default for Material {
     fn default() -> Self {
         Material{
-            pattern: Pattern::solid(Color::white()),
             ambient: 0.1,
             diffuse: 0.9,
             specular: 0.9,
@@ -34,18 +32,12 @@ impl Default for Material {
 
 impl Material {
     pub fn new(
-        pattern: Pattern,
         ambient: f32,
         diffuse: f32,
         specular: f32,
         shininess: f32,
     ) -> Self {
-        Material{ pattern, ambient, diffuse, specular, shininess }
-    }
-
-    pub fn set_pattern(mut self, pattern: Pattern) -> Self {
-        self.pattern = pattern;
-        self
+        Material{ ambient, diffuse, specular, shininess }
     }
 
     pub fn set_shininess(mut self, shininess: f32) -> Self {
@@ -53,16 +45,20 @@ impl Material {
         self
     }
 
-    pub fn lighting(
+    pub fn lighting<Pats>(
         &self,
         light: &Light,
+        patterns: &Pats,
+        pattern: &Pattern,
         object_space_point: &Point3<f32>,
         world_space_point: &Point3<f32>,
         dir: &Vector3<f32>,
         normal: &Vector3<f32>,
         visible: bool,
-    ) -> Color {
-        let effectivec = self.pattern.color_at(object_space_point) * &light.color;
+    ) -> Color
+        where Pats: PatternStore,
+    {
+        let effectivec = pattern.color_at(patterns, object_space_point) * &light.color;
         let lightv = (light.position - world_space_point).normalize();
         let ambientc = &effectivec * self.ambient;
         let light_dot_normal = lightv.dot(normal);
@@ -147,19 +143,20 @@ pub enum Shape {
 
     /// Apply this material to the sub-graph
     Material{
+        pattern: PatternId,
         material: MaterialId,
         node: NodeId,
     },
 }
 
 impl Shape {
-    fn sdf<'a>(&self, scene: &'a Scene, point: &Point3<f32>) -> SDFResult<MaterialId> {
+    fn sdf<'a>(&self, scene: &'a Scene, point: &Point3<f32>) -> SDFResult<(PatternId,MaterialId)> {
         match self {
             Shape::PrimShape{ shape } => {
                 SDFResult{
                     distance: shape.sdf(point),
                     object_space_point: point.clone(),
-                    material: scene.default_material(),
+                    material: (scene.default_pattern(),scene.default_material()),
                 }
             },
 
@@ -190,9 +187,9 @@ impl Shape {
                 res
             },
 
-            Shape::Material{ material, node } => {
+            Shape::Material{ pattern, material, node } => {
                 let mut res = scene.sdf_from(node, point);
-                res.material = material.clone();
+                res.material = (*pattern,*material);
                 res
             }
         }
@@ -225,8 +222,8 @@ impl Shape {
         Shape::Subtract{ first, second }
     }
 
-    pub fn material(material: MaterialId, node: NodeId) -> Self {
-        Shape::Material{ material, node }
+    pub fn material(pattern: PatternId, material: MaterialId, node: NodeId) -> Self {
+        Shape::Material{ pattern, material, node }
     }
 }
 
@@ -239,6 +236,7 @@ pub struct Scene {
     members: Vec<Shape>,
     lights: Vec<Light>,
     materials: Vec<Material>,
+    patterns: Patterns,
 
     // the roots of the world
     world: Vec<NodeId>,
@@ -251,12 +249,14 @@ impl Scene {
             members: Vec::new(),
             lights: Vec::new(),
             materials: Vec::new(),
+            patterns: Patterns::new(),
             world: Vec::new(),
         };
 
         // record primitives
         scene.add(Shape::PrimShape{ shape: PrimShape::Sphere });
         scene.add(Shape::PrimShape{ shape: PrimShape::XZPlane });
+        scene.add_pattern(Pattern::solid(Color::white()));
         scene.add_material(Default::default());
 
         scene
@@ -298,11 +298,15 @@ impl Scene {
         NodeId(1)
     }
 
+    pub fn default_pattern(&self) -> PatternId {
+        PatternId(0)
+    }
+
     pub fn default_material(&self) -> MaterialId {
         MaterialId(0)
     }
 
-    pub fn sdf(&self, point: &Point3<f32>) -> SDFResult<MaterialId> {
+    pub fn sdf(&self, point: &Point3<f32>) -> SDFResult<(PatternId,MaterialId)> {
         self.world
             .iter()
             .map(|root| self.sdf_from(root, point))
@@ -310,14 +314,27 @@ impl Scene {
             .expect("Empty world")
     }
 
-    pub fn sdf_from(&self, root: &NodeId, point: &Point3<f32>) -> SDFResult<MaterialId> {
+    pub fn sdf_from(&self, root: &NodeId, point: &Point3<f32>) -> SDFResult<(PatternId,MaterialId)> {
         unsafe { self.members.get_unchecked(root.0).sdf(self, point) }
     }
 
 }
 
+impl PatternStore for Scene {
+    fn add_pattern(&mut self, pattern: Pattern) -> PatternId {
+        self.patterns.add_pattern(pattern)
+    }
+
+    fn get_pattern(&self, pattern: PatternId) -> &'_ Pattern {
+        self.patterns.get_pattern(pattern)
+    }
+}
+
+
 #[test]
 fn test_lighting() {
+    let pats = Patterns::new();
+    let white = Pattern::solid(Color::white());
     let m = Material::default();
     let pos = Point3::origin();
 
@@ -328,12 +345,12 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             color: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, &pos, &pos, &eyev, &normalv, true);
+        let res = m.lighting(&light, &pats, &white, &pos, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.9);
         assert_eq!(res.g(), 1.9);
         assert_eq!(res.b(), 1.9);
 
-        let res = m.lighting(&light, &pos, &pos, &eyev, &normalv, false);
+        let res = m.lighting(&light, &pats, &white, &pos, &pos, &eyev, &normalv, false);
         assert_eq!(res.r(), 0.1);
         assert_eq!(res.g(), 0.1);
         assert_eq!(res.b(), 0.1);
@@ -347,7 +364,7 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             color: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, &pos, &pos, &eyev, &normalv, true);
+        let res = m.lighting(&light, &pats, &white, &pos, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.0);
         assert_eq!(res.g(), 1.0);
         assert_eq!(res.b(), 1.0);
