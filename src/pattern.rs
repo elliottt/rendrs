@@ -6,12 +6,6 @@ use crate::canvas::Color;
 #[derive(Copy,Clone,Debug,PartialEq,Eq,PartialOrd,Ord)]
 pub struct PatternId(pub usize);
 
-pub trait PatternStore {
-    fn add_pattern(&mut self, pattern: Pattern) -> PatternId;
-
-    fn get_pattern(&self, pid: PatternId) -> &Pattern;
-}
-
 #[derive(Debug)]
 pub struct Patterns {
     patterns: Vec<Pattern>,
@@ -21,15 +15,13 @@ impl Patterns {
     pub fn new() -> Self {
         Patterns { patterns: Vec::with_capacity(10), }
     }
-}
 
-impl PatternStore for Patterns {
-    fn add_pattern(&mut self, pattern: Pattern) -> PatternId {
+    pub fn add_pattern(&mut self, pattern: Pattern) -> PatternId {
         self.patterns.push(pattern);
         PatternId(self.patterns.len() - 1)
     }
 
-    fn get_pattern(&self, pid: PatternId) -> &Pattern {
+    pub fn get_pattern(&self, pid: PatternId) -> &Pattern {
         unsafe { self.patterns.get_unchecked(pid.0) }
     }
 }
@@ -57,9 +49,9 @@ impl Pattern {
         Pattern::Stripe{ first, second }
     }
 
-    pub fn color_at<'a,Pats>(&'a self, store: &'a Pats, point: &Point3<f32>)
+    pub fn color_at<'a,Pats>(&'a self, store: Pats, point: &Point3<f32>)
         -> &'a Color
-        where Pats: PatternStore
+        where Pats: Fn(PatternId) -> &'a Pattern
     {
         match self {
             Pattern::Solid{ color } => {
@@ -68,9 +60,9 @@ impl Pattern {
 
             Pattern::Stripe{ first, second } => {
                 if (point.x.floor() as isize) % 2 == 0 {
-                    store.get_pattern(*first).color_at(store, point)
+                    store(*first).color_at(store, point)
                 } else {
-                    store.get_pattern(*second).color_at(store, point)
+                    store(*second).color_at(store, point)
                 }
             },
         }
@@ -83,7 +75,8 @@ fn test_stripes() {
     let black = store.add_pattern(Pattern::solid(Color::black()));
     let white = store.add_pattern(Pattern::solid(Color::white()));
     let tex = Pattern::stripe(black, white);
-    assert_eq!(tex.color_at(&store, &Point3::new(0.0, 0.0, 0.0)), &Color::black());
-    assert_eq!(tex.color_at(&store, &Point3::new(1.0, 0.0, 0.0)), &Color::white());
-    assert_eq!(tex.color_at(&store, &Point3::new(2.5, 0.0, 0.0)), &Color::black());
+    let lookup = |pid| store.get_pattern(pid);
+    assert_eq!(tex.color_at(lookup, &Point3::new(0.0, 0.0, 0.0)), &Color::black());
+    assert_eq!(tex.color_at(lookup, &Point3::new(1.0, 0.0, 0.0)), &Color::white());
+    assert_eq!(tex.color_at(lookup, &Point3::new(2.5, 0.0, 0.0)), &Color::black());
 }

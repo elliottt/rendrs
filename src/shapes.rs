@@ -3,7 +3,7 @@ use nalgebra::{Vector3,Point3,Matrix4};
 
 use crate::canvas::Color;
 use crate::ray::{SDFResult,reflect};
-use crate::pattern::{PatternId,Pattern,Patterns,PatternStore};
+use crate::pattern::{PatternId,Pattern,Patterns};
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
 pub struct NodeId(usize);
@@ -45,18 +45,18 @@ impl Material {
         self
     }
 
-    pub fn lighting<Pats>(
-        &self,
+    pub fn lighting<'a, Pats>(
+        &'a self,
         light: &Light,
-        patterns: &Pats,
-        pattern: &Pattern,
+        patterns: Pats,
+        pattern: &'a Pattern,
         object_space_point: &Point3<f32>,
         world_space_point: &Point3<f32>,
         dir: &Vector3<f32>,
         normal: &Vector3<f32>,
         visible: bool,
     ) -> Color
-        where Pats: PatternStore,
+        where Pats: Fn(PatternId) -> &'a Pattern
     {
         let effectivec = pattern.color_at(patterns, object_space_point) * &light.color;
         let lightv = (light.position - world_space_point).normalize();
@@ -279,6 +279,14 @@ impl Scene {
         self.lights.iter()
     }
 
+    pub fn add_pattern(&mut self, pattern: Pattern) -> PatternId {
+        self.patterns.add_pattern(pattern)
+    }
+
+    pub fn get_pattern(&self, pattern: PatternId) -> &'_ Pattern {
+        self.patterns.get_pattern(pattern)
+    }
+
     pub fn add_material(&mut self, material: Material) -> MaterialId {
         self.materials.push(material);
         MaterialId(self.materials.len() - 1)
@@ -318,16 +326,6 @@ impl Scene {
         unsafe { self.members.get_unchecked(root.0).sdf(self, point) }
     }
 
-}
-
-impl PatternStore for Scene {
-    fn add_pattern(&mut self, pattern: Pattern) -> PatternId {
-        self.patterns.add_pattern(pattern)
-    }
-
-    fn get_pattern(&self, pattern: PatternId) -> &'_ Pattern {
-        self.patterns.get_pattern(pattern)
-    }
 }
 
 

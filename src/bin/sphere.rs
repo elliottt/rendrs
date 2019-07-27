@@ -1,19 +1,19 @@
 
 extern crate nalgebra;
 
+use std::sync::Arc;
+
 use nalgebra::{Point3,Vector3,Matrix4};
 
 use rendrs::{
     camera::Camera,
-    canvas::{Canvas,Color},
-    ray::Ray,
+    canvas::{Color},
     shapes::{Light,Scene,Shape},
-    pattern::{Pattern,PatternStore},
+    pattern::{Pattern},
+    render::{render,write_canvas,ConfigBuilder},
 };
 
 pub fn main() {
-    let mut c = Canvas::new(1000,1000);
-
     let mut scene = Scene::new();
     let mat = scene.default_material();
     let blue = scene.add_pattern(Pattern::solid(Color::new(0.0, 0.0, 1.0)));
@@ -67,38 +67,14 @@ pub fn main() {
         )
     );
 
-    // cast rays
-    for y in 0 .. c.height {
-        for x in 0 .. c.width {
-            let ray = camera.ray_for_pixel(x, y);
-            let pixel = c.get_mut(x,y).expect("Missing a pixel!");
-            if let Some(res) = ray.march(|pt| scene.sdf(pt)) {
-                let pat = scene.get_pattern(res.material.0);
-                let mat = scene.get_material(res.material.1);
-                let normal = res.normal(|pt| scene.sdf(pt));
+    let cfg = ConfigBuilder::default()
+        .set_width(1000)
+        .set_height(1000)
+        .set_jobs(8)
+        .build();
 
-                for light in scene.iter_lights() {
-                    let point = res.world_space_point + normal * 0.01;
-                    let light_dir = light.position - point;
-                    let dist = light_dir.magnitude();
+    let recv = render(Arc::new(scene), Arc::new(camera), cfg.clone());
+    let canvas = write_canvas(cfg, recv);
 
-                    // check to see if the path to the light is obstructed
-                    let light_visible = Ray::new(point, light_dir.normalize())
-                        .march(|pt| scene.sdf(pt))
-                        .map_or(true, |hit| hit.distance >= dist);
-
-                    // TODO: should be blending the light
-                    *pixel = mat.lighting(
-                        light, &scene, &pat, &res.object_space_point, &res.world_space_point,
-                        &ray.direction, &normal, light_visible,
-                    );
-
-                }
-            } else {
-                pixel.set_r(0.1).set_g(0.1).set_b(0.1);
-            }
-        }
-    }
-
-    c.save("test.png");
+    canvas.save("test.png");
 }
