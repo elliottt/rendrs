@@ -32,7 +32,7 @@ impl Ray {
         self.origin + (self.direction * t)
     }
 
-    pub fn march<SDF,Mat>(&self, max_steps: usize, sdf: SDF)
+    pub fn march<SDF,Mat>(&self, max_steps: usize, sign: f32, sdf: SDF)
         -> Option<MarchResult<Mat>>
         where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
     {
@@ -40,7 +40,9 @@ impl Ray {
         let mut total_dist = 0.0;
         for i in 0 .. max_steps {
             let res = sdf(&pos);
-            total_dist += res.distance;
+
+            let signed_radius = sign * res.distance;
+            total_dist += signed_radius;
 
             // the ray has failed to hit anything in the scene
             if total_dist >= Self::MAX_DIST {
@@ -151,11 +153,11 @@ fn test_march() {
     let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere));
 
     // test an intersection
-    let result = ray.march(100, |pt| scene.sdf_from(&scaled, pt)).expect("Failed to march ray");
+    let result = ray.march(100, 1.0, |pt| scene.sdf_from(&scaled, pt)).expect("Failed to march ray");
     assert_eq!(result.distance, 3.0);
 
     // test a miss
-    assert!(ray.march(100, |pt| scene.sdf_from(&moved, pt)).is_none());
+    assert!(ray.march(100, 1.0, |pt| scene.sdf_from(&moved, pt)).is_none());
 }
 
 #[test]

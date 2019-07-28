@@ -127,7 +127,7 @@ fn render_job(
             let ray = camera.ray_for_pixel(x, y);
 
             let mut pixel = Color::black();
-            if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
+            if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
                 let pat = scene.get_pattern(res.material.0);
                 let mat = scene.get_material(res.material.1);
                 let normal = res.normal(|pt| scene.sdf(pt));
@@ -144,7 +144,7 @@ fn render_job(
 
                     // check to see if the path to the light is obstructed
                     let light_visible = Ray::new(point, light_dir.normalize())
-                        .march(cfg.max_steps, |pt| scene.sdf(pt))
+                        .march(cfg.max_steps, 1.0, |pt| scene.sdf(pt))
                         .map_or(true, |hit| hit.distance >= dist);
 
                     pixel += mat.lighting(
@@ -172,7 +172,7 @@ fn render_normals_job(
             let ray = camera.ray_for_pixel(x, y);
 
             let mut pixel = Color::black();
-            if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
+            if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
                 let normal = res.normal(|pt| scene.sdf(pt));
                 pixel
                     .set_r(0.5 + normal.x / 2.0)
@@ -200,9 +200,9 @@ fn render_steps_job(
             let ray = camera.ray_for_pixel(x, y);
 
             let mut pixel = Color::black();
-            if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
-                let step_val = (res.steps as f32) / step_max;
-                pixel.set_r(step_val).set_g(step_val).set_b(step_val);
+            if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
+                let step_val = 1.0 - (res.steps as f32) / step_max;
+                pixel.set_r(step_val).set_b(step_val);
             }
 
             send.send((x,y,pixel)).expect("Failed to send pixel!");

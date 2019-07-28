@@ -1,0 +1,67 @@
+
+materials:
+  - name: default
+    ambient: 0.9
+    diffuse: 0.9
+    specular: 0.9
+    shininess: 200.0
+
+patterns:
+  - name: white
+    solid:
+      red: 1.0
+      green: 1.0
+      blue: 1.0
+
+  - name: black
+    solid:
+      red: 0.0
+      green: 0.0
+      blue: 0.0
+
+  - name: red
+    solid:
+      red: 1.0
+      green: 0.0
+      blue: 0.0
+
+  - name: blue
+    solid:
+      red: 0.0
+      green: 0.0
+      blue: 1.0
+
+  - name: striped
+    striped:
+      first: white
+      second: black
+
+objects:
+  - name: sphere
+    prim: sphere
+
+  - name: red-sphere
+    material:
+      object: sphere
+      pattern: red
+      material: default
+
+  - name: blue-sphere
+    material:
+      object: sphere
+      pattern: blue
+      material: default
+
+  - name: small-sphere
+    translate:
+      object: red-sphere
+      x: -1.0
+      y: 0.0
+      z: 0.0
+
+  - name: large-sphere
+    uniform-scale:
+      object: blue-sphere
+      amount: 2.0
+
+  - name: moved-large-sphere
