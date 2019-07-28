@@ -27,7 +27,7 @@ impl Default for RayConfig {
 /// Reflect a vector through a normal.
 pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
     let dot = vec.dot(normal);
-    vec - (normal * 2.0 * dot)
+    vec - (normal * (2.0 * dot))
 }
 
 #[derive(Debug)]
@@ -201,6 +201,6 @@ fn test_reflect() {
 
         assert!(r.x - 1.0 < std::f32::EPSILON);
         assert!(r.y < std::f32::EPSILON);
-        assert!(r.z == 0.0);
+        assert_eq!(r.z, 0.0);
     }
 }

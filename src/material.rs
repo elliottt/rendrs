@@ -7,7 +7,7 @@ use crate::pattern::{PatternId,Pattern};
 
 pub struct Light {
     pub position: Point3<f32>,
-    pub color: Color,
+    pub intensity: Color,
 }
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
@@ -56,35 +56,34 @@ impl Material {
         world_space_point: &Point3<f32>,
         dir: &Vector3<f32>,
         normal: &Vector3<f32>,
-        visible: bool,
+        light_visible: bool,
     ) -> Color
         where Pats: Fn(PatternId) -> &'a Pattern
     {
-        let effectivec = pattern.color_at(patterns, object_space_point) * &light.color;
-        let lightv = (light.position - world_space_point).normalize();
-        let ambientc = &effectivec * self.ambient;
-        let light_dot_normal = lightv.dot(normal);
+        let effectivec = pattern.color_at(patterns, object_space_point) * &light.intensity;
 
-        let diffuse_specular =
-            if !visible || light_dot_normal < 0.0 {
-                Color::black()
-            } else {
-                let specularc = {
-                    let reflectv = reflect(& -lightv, normal);
-                    let reflect_dot_eye = reflectv.dot(dir);
-                    if reflect_dot_eye <= 0.0 {
-                        Color::black()
-                    } else {
-                        let factor = reflect_dot_eye.powf(self.shininess);
-                        &light.color * (self.specular * factor)
-                    }
-                };
+        let mut color = &effectivec * self.ambient;
 
-                let diffusec = &effectivec * (self.diffuse * light_dot_normal);
-                &diffusec + &specularc
-            };
+        if light_visible {
+            // the direction to the light
+            let lightv = (light.position - world_space_point).normalize();
+            let light_dot_normal = lightv.dot(normal);
 
-        &ambientc + &diffuse_specular
+            if light_dot_normal > 0.0 {
+                // add in the diffuse part
+                color += &effectivec * (self.diffuse * light_dot_normal);
+
+                let reflectv = reflect(&lightv, normal);
+                let reflect_dot_eye = reflectv.dot(dir);
+
+                if reflect_dot_eye > 0.0 {
+                    let factor = reflect_dot_eye.powf(self.shininess);
+                    color += &light.intensity * (self.specular * factor);
+                }
+            }
+        }
+
+        color
     }
 }
 
@@ -103,7 +102,7 @@ fn test_lighting() {
         let normalv = Vector3::new(0.0, 0.0, -1.0);
         let light = Light{
             position: Point3::new(0.0, 0.0, -10.0),
-            color: Color::new(1.0, 1.0, 1.0)
+            intensity: Color::new(1.0, 1.0, 1.0)
         };
         let res = m.lighting(&light, lookup, &white, &pos, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.9);
@@ -122,11 +121,21 @@ fn test_lighting() {
         let normalv = Vector3::new(0.0, 0.0, -1.0);
         let light = Light{
             position: Point3::new(0.0, 0.0, -10.0),
-            color: Color::new(1.0, 1.0, 1.0)
+            intensity: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, lookup, &white, &pos, &pos, &eyev, &normalv, true);
+        let mut res = m.lighting(&light, lookup, &white, &pos, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.0);
         assert_eq!(res.g(), 1.0);
         assert_eq!(res.b(), 1.0);
+
+        let eyev2 = Vector3::new(0.0, -s2d2, -s2d2);
+        let light2 = Light{
+            position: Point3::new(0.0, 10.0, -10.0),
+            intensity: Color::new(1.0, 1.0, 1.0),
+        };
+        res = m.lighting(&light2, lookup, &white, &pos, &pos, &eyev2, &normalv, true);
+        assert_eq!(res.r(), 1.6363853);
+        assert_eq!(res.g(), 1.6363853);
+        assert_eq!(res.b(), 1.6363853);
     }
 }

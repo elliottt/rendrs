@@ -97,6 +97,7 @@ fn render_job(
     for x in 0 .. cfg.width {
         for y in (idx .. cfg.height).step_by(cfg.jobs) {
             let ray = camera.ray_for_pixel(x, y);
+
             let mut pixel = Color::black();
             if let Some(res) = ray.march(|pt| scene.sdf(pt)) {
                 let pat = scene.get_pattern(res.material.0);

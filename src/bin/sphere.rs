@@ -55,14 +55,14 @@ pub fn main() {
     }
 
     scene.add_light(Light{
-        position: Point3::new(2.0, 2.0, -5.0),
-        color: Color::white(),
+        position: Point3::new(5.0, 10.0, -10.0),
+        intensity: Color::white(),
     });
 
-    scene.add_light(Light{
-        position: Point3::new(-3.0, 2.0, 0.0),
-        color: Color::white(),
-    });
+    // scene.add_light(Light{
+    //     position: Point3::new(-3.0, 2.0, 0.0),
+    //     intensity: Color::white(),
+    // });
 
     let mut camera = Camera::new(1000, 1000, std::f32::consts::PI / 2.0);
     camera.set_transform(

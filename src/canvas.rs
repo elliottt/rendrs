@@ -28,7 +28,7 @@ fn clamp(val: f32) -> f32 {
 }
 
 fn f32_to_u8(val: f32) -> u8 {
-    (val * 255.0).floor() as u8
+    f32::max(0.0, f32::min(255.0, val * 255.0)) as u8
 }
 
 impl Color {
