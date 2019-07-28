@@ -3,7 +3,6 @@ use nalgebra::{Point3,Vector3};
 
 use crate::ray::reflect;
 use crate::canvas::Color;
-use crate::pattern::{PatternId,Pattern};
 
 pub struct Light {
     pub position: Point3<f32>,
@@ -47,20 +46,17 @@ impl Material {
         self
     }
 
-    pub fn lighting<'a, Pats>(
-        &'a self,
+    pub fn lighting(
+        &self,
         light: &Light,
-        patterns: Pats,
-        pattern: &'a Pattern,
-        object_space_point: &Point3<f32>,
+        obj_color: &Color,
         world_space_point: &Point3<f32>,
-        dir: &Vector3<f32>,
+        eyev: &Vector3<f32>,
         normal: &Vector3<f32>,
         light_visible: bool,
     ) -> Color
-        where Pats: Fn(PatternId) -> &'a Pattern
     {
-        let effectivec = pattern.color_at(patterns, object_space_point) * &light.intensity;
+        let effectivec = obj_color * &light.intensity;
 
         let mut color = &effectivec * self.ambient;
 
@@ -73,8 +69,8 @@ impl Material {
                 // add in the diffuse part
                 color += &effectivec * (self.diffuse * light_dot_normal);
 
-                let reflectv = reflect(&lightv, normal);
-                let reflect_dot_eye = reflectv.dot(dir);
+                let reflectv = reflect(& -lightv, normal);
+                let reflect_dot_eye = reflectv.dot(eyev);
 
                 if reflect_dot_eye > 0.0 {
                     let factor = reflect_dot_eye.powf(self.shininess);
@@ -89,11 +85,7 @@ impl Material {
 
 #[test]
 fn test_lighting() {
-    use crate::pattern::Patterns;
-
-    let pats = Patterns::new();
-    let lookup = |patid| pats.get_pattern(patid);
-    let white = Pattern::solid(Color::white());
+    let white = Color::white();
     let m = Material::default();
     let pos = Point3::origin();
 
@@ -104,12 +96,12 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             intensity: Color::new(1.0, 1.0, 1.0)
         };
-        let res = m.lighting(&light, lookup, &white, &pos, &pos, &eyev, &normalv, true);
+        let res = m.lighting(&light, &white, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.9);
         assert_eq!(res.g(), 1.9);
         assert_eq!(res.b(), 1.9);
 
-        let res = m.lighting(&light, lookup, &white, &pos, &pos, &eyev, &normalv, false);
+        let res = m.lighting(&light, &white, &pos, &eyev, &normalv, false);
         assert_eq!(res.r(), 0.1);
         assert_eq!(res.g(), 0.1);
         assert_eq!(res.b(), 0.1);
@@ -123,7 +115,7 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             intensity: Color::new(1.0, 1.0, 1.0)
         };
-        let mut res = m.lighting(&light, lookup, &white, &pos, &pos, &eyev, &normalv, true);
+        let mut res = m.lighting(&light, &white, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.0);
         assert_eq!(res.g(), 1.0);
         assert_eq!(res.b(), 1.0);
@@ -133,7 +125,7 @@ fn test_lighting() {
             position: Point3::new(0.0, 10.0, -10.0),
             intensity: Color::new(1.0, 1.0, 1.0),
         };
-        res = m.lighting(&light2, lookup, &white, &pos, &pos, &eyev2, &normalv, true);
+        res = m.lighting(&light2, &white, &pos, &eyev2, &normalv, true);
         assert_eq!(res.r(), 1.6363853);
         assert_eq!(res.g(), 1.6363853);
         assert_eq!(res.b(), 1.6363853);

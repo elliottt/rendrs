@@ -132,6 +132,11 @@ fn render_job(
                 let mat = scene.get_material(res.material.1);
                 let normal = res.normal(|pt| scene.sdf(pt));
 
+                let obj_color = pat.color_at(get_pattern, &res.object_space_point);
+
+                // the direction towards the eye
+                let eyev = -ray.direction;
+
                 for light in scene.iter_lights() {
                     let point = res.world_space_point + normal * 0.01;
                     let light_dir = light.position - point;
@@ -143,8 +148,8 @@ fn render_job(
                         .map_or(true, |hit| hit.distance >= dist);
 
                     pixel += mat.lighting(
-                        light, get_pattern, &pat, &res.object_space_point, &res.world_space_point,
-                        &ray.direction, &normal, light_visible,
+                        light, &obj_color, &res.world_space_point,
+                        &eyev, &normal, light_visible,
                     ) * light_weight;
 
                 }

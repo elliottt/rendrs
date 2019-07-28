@@ -151,11 +151,11 @@ fn test_march() {
     let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere));
 
     // test an intersection
-    let result = ray.march(|pt| scene.sdf_from(&scaled, pt)).expect("Failed to march ray");
+    let result = ray.march(100, |pt| scene.sdf_from(&scaled, pt)).expect("Failed to march ray");
     assert_eq!(result.distance, 3.0);
 
     // test a miss
-    assert!(ray.march(|pt| scene.sdf_from(&moved, pt)).is_none());
+    assert!(ray.march(100, |pt| scene.sdf_from(&moved, pt)).is_none());
 }
 
 #[test]
