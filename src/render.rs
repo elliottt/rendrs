@@ -14,21 +14,28 @@ use crate::{
     shapes::Scene,
 };
 
+pub enum DebugMode {
+    Normals,
+    Steps,
+}
+
+pub struct ConfigBuilder {
+    config: Config,
+}
+
 impl Default for ConfigBuilder {
     fn default() -> Self {
         ConfigBuilder {
             config: Config {
                 width: 100,
                 height: 100,
+                max_steps: 100,
                 jobs: 1,
                 buffer_size: 1000,
+                debug_mode: None,
             }
         }
     }
-}
-
-pub struct ConfigBuilder {
-    config: Config,
 }
 
 impl ConfigBuilder {
@@ -42,6 +49,11 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn set_max_steps(mut self, steps: usize) -> Self {
+        self.config.max_steps = steps;
+        self
+    }
+
     pub fn set_jobs(mut self, jobs: usize) -> Self {
         self.config.jobs = usize::max(jobs, 1);
         self
@@ -49,6 +61,11 @@ impl ConfigBuilder {
 
     pub fn set_buffer_size(mut self, size: usize) -> Self {
         self.config.buffer_size = size;
+        self
+    }
+
+    pub fn set_debug_mode(mut self, mode: DebugMode) -> Self {
+        self.config.debug_mode = Some(mode);
         self
     }
 
@@ -60,8 +77,10 @@ impl ConfigBuilder {
 pub struct Config {
     width: usize,
     height: usize,
+    max_steps: usize,
     jobs: usize,
     buffer_size: usize,
+    debug_mode: Option<DebugMode>,
 }
 
 pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Receiver<(usize,usize,Color)> {
@@ -76,7 +95,16 @@ pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Recei
         let cfg_copy = cfg.clone();
         let send_copy = send.clone();
         thread::spawn(move || {
-            render_job(scene_copy, camera_copy, cfg_copy, i, send_copy)
+            match cfg_copy.debug_mode {
+                None =>
+                    render_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
+
+                Some(DebugMode::Normals) =>
+                    render_normals_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
+
+                Some(DebugMode::Steps) =>
+                    render_steps_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
+            }
         });
     }
 
@@ -99,7 +127,7 @@ fn render_job(
             let ray = camera.ray_for_pixel(x, y);
 
             let mut pixel = Color::black();
-            if let Some(res) = ray.march(|pt| scene.sdf(pt)) {
+            if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
                 let pat = scene.get_pattern(res.material.0);
                 let mat = scene.get_material(res.material.1);
                 let normal = res.normal(|pt| scene.sdf(pt));
@@ -111,7 +139,7 @@ fn render_job(
 
                     // check to see if the path to the light is obstructed
                     let light_visible = Ray::new(point, light_dir.normalize())
-                        .march(|pt| scene.sdf(pt))
+                        .march(cfg.max_steps, |pt| scene.sdf(pt))
                         .map_or(true, |hit| hit.distance >= dist);
 
                     pixel += mat.lighting(
@@ -120,6 +148,56 @@ fn render_job(
                     ) * light_weight;
 
                 }
+            }
+
+            send.send((x,y,pixel)).expect("Failed to send pixel!");
+        }
+    }
+}
+
+fn render_normals_job(
+    scene: Arc<Scene>,
+    camera: Arc<Camera>,
+    cfg: Arc<Config>,
+    idx: usize,
+    send: SyncSender<(usize,usize,Color)>) {
+
+    for x in 0 .. cfg.width {
+        for y in (idx .. cfg.height).step_by(cfg.jobs) {
+            let ray = camera.ray_for_pixel(x, y);
+
+            let mut pixel = Color::black();
+            if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
+                let normal = res.normal(|pt| scene.sdf(pt));
+                pixel
+                    .set_r(0.5 + normal.x / 2.0)
+                    .set_g(0.5 + normal.y / 2.0)
+                    .set_b(0.5 + normal.z / 2.0);
+            }
+
+            send.send((x,y,pixel)).expect("Failed to send pixel!");
+        }
+    }
+
+}
+
+fn render_steps_job(
+    scene: Arc<Scene>,
+    camera: Arc<Camera>,
+    cfg: Arc<Config>,
+    idx: usize,
+    send: SyncSender<(usize,usize,Color)>) {
+
+    let step_max = cfg.max_steps as f32;
+
+    for x in 0 .. cfg.width {
+        for y in (idx .. cfg.height).step_by(cfg.jobs) {
+            let ray = camera.ray_for_pixel(x, y);
+
+            let mut pixel = Color::black();
+            if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
+                let step_val = (res.steps as f32) / step_max;
+                pixel.set_r(step_val).set_g(step_val).set_b(step_val);
             }
 
             send.send((x,y,pixel)).expect("Failed to send pixel!");

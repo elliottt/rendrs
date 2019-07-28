@@ -77,6 +77,7 @@ pub fn main() {
         .set_width(1000)
         .set_height(1000)
         .set_jobs(8)
+        .set_max_steps(1000)
         .build();
 
     let recv = render(Arc::new(scene), Arc::new(camera), cfg.clone());

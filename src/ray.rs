@@ -1,29 +1,6 @@
 
 use nalgebra::{Matrix4,Point3,Vector3};
 
-#[derive(Debug)]
-pub struct RayConfig {
-    pub max_steps: usize,
-    pub min_dist: f32,
-    pub max_dist: f32,
-}
-
-impl RayConfig {
-    pub const MAX_STEPS: usize = 1000;
-    pub const MIN_DIST: f32 = 0.001;
-    pub const MAX_DIST: f32 = 100.0;
-}
-
-impl Default for RayConfig {
-    fn default() -> Self {
-        RayConfig{
-            max_steps: RayConfig::MAX_STEPS,
-            min_dist: RayConfig::MIN_DIST,
-            max_dist: RayConfig::MAX_DIST,
-        }
-    }
-}
-
 /// Reflect a vector through a normal.
 pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
     let dot = vec.dot(normal);
@@ -44,6 +21,9 @@ pub struct SDFResult<Mat> {
 
 impl Ray {
 
+    pub const MIN_DIST: f32 = 0.001;
+    pub const MAX_DIST: f32 = 100.0;
+
     pub fn new(origin: Point3<f32>, direction: Vector3<f32>) -> Self {
         Ray{ origin, direction }
     }
@@ -52,32 +32,25 @@ impl Ray {
         self.origin + (self.direction * t)
     }
 
-    pub fn march<SDF,Mat>(&self, sdf: SDF)
-        -> Option<MarchResult<Mat>>
-        where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
-    {
-        self.march_with(&Default::default(), sdf)
-    }
-
-    pub fn march_with<SDF,Mat>(&self, cfg: &RayConfig, sdf: SDF)
+    pub fn march<SDF,Mat>(&self, max_steps: usize, sdf: SDF)
         -> Option<MarchResult<Mat>>
         where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
     {
         let mut pos = self.origin.clone();
         let mut total_dist = 0.0;
-        for i in 0 .. cfg.max_steps {
+        for i in 0 .. max_steps {
             let res = sdf(&pos);
             total_dist += res.distance;
 
             // the ray has failed to hit anything in the scene
-            if total_dist >= cfg.max_dist {
+            if total_dist >= Self::MAX_DIST {
                 return None
             }
 
             pos += res.distance * self.direction;
 
             // the ray has gotten close enough to something to be considered a hit
-            if res.distance <= cfg.min_dist {
+            if res.distance <= Self::MIN_DIST {
                 return Some(MarchResult{
                     steps: i,
                     distance: total_dist,
