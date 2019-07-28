@@ -8,8 +8,9 @@ use nalgebra::{Point3,Vector3,Matrix4};
 use rendrs::{
     camera::Camera,
     canvas::{Color},
-    shapes::{Light,Scene,Shape},
+    shapes::{Scene,Shape},
     pattern::{Pattern},
+    material::Light,
     render::{render,write_canvas,ConfigBuilder},
 };
 
