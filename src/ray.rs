@@ -36,13 +36,29 @@ impl Ray {
         -> Option<MarchResult<Mat>>
         where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
     {
+        // for over-relaxation sphere-tracing
+        let mut previous_radius = 0.0;
+        let mut step_length = 0.0;
+        let mut omega = 1.2;
+
         let mut pos = self.origin.clone();
         let mut total_dist = 0.0;
         for i in 0 .. max_steps {
             let res = sdf(&pos);
 
             let signed_radius = sign * res.distance;
-            total_dist += signed_radius;
+            let radius = res.distance.abs();
+
+            if omega > 1.0 && (radius + previous_radius) < step_length {
+                // the step taken was too big (the new radius doesn't overlap the previous one)
+                step_length -= omega * step_length;
+                omega = 1.0;
+            } else {
+                step_length = signed_radius * omega;
+            }
+
+            previous_radius = radius;
+            total_dist += step_length;
 
             // the ray has failed to hit anything in the scene
             if total_dist >= Self::MAX_DIST {
