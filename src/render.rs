@@ -14,6 +14,7 @@ use crate::{
     shapes::Scene,
 };
 
+#[derive(Debug)]
 pub enum DebugMode {
     Normals,
     Steps,
@@ -74,6 +75,7 @@ impl ConfigBuilder {
     }
 } 
 
+#[derive(Debug)]
 pub struct Config {
     width: usize,
     height: usize,
