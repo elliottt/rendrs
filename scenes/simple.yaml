@@ -1,0 +1,41 @@
+# This is a simple scene with a single blue unit-sphere, centered at the origin,
+# and a light set back and above, in the same plane as the camera.
+patterns:
+- name: blue
+  solid:
+    r: 0.0
+    g: 0.0
+    b: 1.0
+
+materials:
+- name: default
+  ambient: 0.9
+  diffuse: 0.9
+  specular: 0.9
+  shininess: 200.0
+
+objects:
+- name: sphere
+  sphere:
+
+lights:
+- position:
+    x: 0.0
+    y: 5.0
+    z: -1.0
+
+scene:
+- sphere
+
+camera:
+  fov: 90.0
+
+  position:
+    x: 0.0
+    y: 0.0
+    z: -5.0
+
+  target:
+    x: 0.0
+    y: 0.0
+    z: 0.0
