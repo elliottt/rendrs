@@ -1,6 +1,7 @@
 
-extern crate yaml_rust;
+extern crate clap;
 extern crate num_cpus;
+extern crate yaml_rust;
 
 use std::{
     sync::{Arc},
@@ -9,6 +10,7 @@ use std::{
     path::Path,
 };
 
+use clap::{Arg,App,ArgMatches};
 use rendrs::render::{ConfigBuilder,Config,DebugMode};
 
 #[derive(Debug)]
@@ -18,88 +20,78 @@ struct Opts {
     output: String,
 }
 
-fn parse_usize(str: &String, ty: &str) -> Result<usize,String> {
-    let width = str.parse().map_err(|_err| format!("failed to parse {}", ty))?;
-    Ok(width)
+fn parse_usize(matches: &ArgMatches, label: &str, default: usize) -> Result<usize,String> {
+    matches
+        .value_of(label)
+        .expect(&format!("Is `{}` missing a default?", label))
+        .parse()
+        .map_err(|_| format!("Failed to parse option `{}`", label))
 }
 
-fn parse_opts() -> Result<Opts,String> {
-    let mut builder = ConfigBuilder::default();
+fn main() -> Result<(),String> {
 
-    builder = builder.set_jobs(num_cpus::get());
+    let cpus = num_cpus::get();
+    let cpu_str = cpus.to_string();
 
-    let mut args = env::args().skip(1);
+    let matches =
+        App::new("rendrs")
+            .version("0.1.0")
+            .about("Renders scenes")
+            .arg(Arg::with_name("jobs")
+                 .short("j")
+                 .long("jobs")
+                 .default_value(&cpu_str)
+                 .value_name("NUM_JOBS")
+                 .help("Number of concurrent render jobs")
+                 .takes_value(true))
+            .arg(Arg::with_name("width")
+                 .short("w")
+                 .long("width")
+                 .default_value("100")
+                 .value_name("PIXELS")
+                 .help("Width of the image in pixels")
+                 .takes_value(true))
+            .arg(Arg::with_name("height")
+                 .short("h")
+                 .long("height")
+                 .default_value("100")
+                 .value_name("PIXELS")
+                 .help("Height of the image in pixels")
+                 .takes_value(true))
+            .arg(Arg::with_name("debug")
+                 .long("debug")
+                 .possible_values(&["steps", "normals"])
+                 .help("Debug mode")
+                 .takes_value(true))
+            .arg(Arg::with_name("SCENE")
+                 .index(1)
+                 .required(true))
+            .arg(Arg::with_name("OUTPUT")
+                 .index(2)
+                 .required(true))
+            .get_matches();
 
-    let mut scene_file = None;
-    let mut output_file = None;
+    let scene = matches.value_of("SCENE").expect("Missing SCENE");
+    let output = matches.value_of("OUTPUT").expect("Missing OUTPUT");
 
-    while let Some(arg) = args.next() {
-        match arg.as_ref() {
-            "--debug" => {
-                let debug_str = args.next().ok_or("Invalid --debug")?;
-                match debug_str.as_ref() {
-                    "steps" =>
-                        builder = builder.set_debug_mode(DebugMode::Steps),
+    let mut builder = ConfigBuilder::default()
+        .set_jobs(parse_usize(&matches, "jobs", cpus)?)
+        .set_width(parse_usize(&matches, "width", cpus)?)
+        .set_width(parse_usize(&matches, "height", cpus)?);
 
-                    "normals" =>
-                        builder = builder.set_debug_mode(DebugMode::Normals),
+    builder = match matches.value_of("debug") {
+        Some("steps") => builder.set_debug_mode(DebugMode::Steps),
+        Some("normals") => builder.set_debug_mode(DebugMode::Normals),
+        _ => builder,
+    };
 
-                    _ =>
-                        return Err("Invalid --debug".to_string())
-                };
-            },
-
-            "--jobs" => {
-                let jobs = parse_usize(&args.next().ok_or("missing jobs value")?, "jobs")?;
-                builder = builder.set_jobs(jobs);
-            },
-
-            "--width" => {
-                let width = parse_usize(&args.next().ok_or("missing width")?, "width")?;
-                builder = builder.set_width(width);
-            },
-
-            "--height" => {
-                let height = parse_usize(&args.next().ok_or("missing height")?, "height")?;
-                builder = builder.set_width(height);
-            },
-
-            file => {
-                if Path::new(file).is_file() {
-                    if scene_file.is_none() {
-                        scene_file = Some(arg);
-                    } else if output_file.is_none() {
-                        output_file = Some(arg);
-                    } else {
-                        return Err(format!("Unexpected argument `{}`", file));
-                    }
-                } else {
-                    return Err(format!("File `{}` is missing", file));
-                }
-            }
-        }
-    }
-
-    let scene = scene_file.ok_or("Missing scene file")?;
-    let output = output_file.ok_or("Missing output file")?;
-
-    Ok(Opts {
+    let opts = Opts {
         render_config: builder.build(),
-        scene,
-        output,
-    })
-}
+        scene: scene.to_string(),
+        output: output.to_string()
+    };
 
-fn main() -> Result<(), String> {
-    let opts = parse_opts()?;
-
-    let scene = read(Path::new(&opts.scene))
-        .map_err(|_err| format!("Failed to read scene file `{}`", opts.scene))?;
-    let scene_str = String::from_utf8(scene)
-        .map_err(|_err| format!("failed to read scene file `{}`", opts.scene))?;
-    let yaml = yaml_rust::YamlLoader::load_from_str(scene_str.as_str());
-
-    println!("{:?}", yaml);
+    println!("config: {:?}", opts);
 
     Ok(())
 }
