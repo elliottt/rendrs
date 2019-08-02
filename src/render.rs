@@ -111,6 +111,24 @@ pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Recei
     recv
 }
 
+fn render_body<Body>(
+    idx: usize,
+    camera: Arc<Camera>,
+    cfg: Arc<Config>,
+    send: Sender<RenderedRow>,
+    mut body: Body
+) where Body: FnMut(Ray) -> Color,
+{
+    for y in (idx .. cfg.height).step_by(cfg.jobs) {
+        let mut row = Vec::with_capacity(cfg.width);
+        for x in 0 .. cfg.width {
+            row.push(body(camera.ray_for_pixel(x,y)));
+        }
+        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
+    }
+
+}
+
 fn render_job(
     scene: Arc<Scene>,
     camera: Arc<Camera>,
@@ -122,46 +140,37 @@ fn render_job(
 
     let light_weight = 1.0 / (scene.num_lights() as f32);
 
-    for y in (idx .. cfg.height).step_by(cfg.jobs) {
-        let mut row = Vec::with_capacity(cfg.width);
+    render_body(idx, camera, cfg.clone(), send, |ray| {
+        let mut pixel = Color::black();
+        if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
+            let pat = scene.get_pattern(res.material.0);
+            let mat = scene.get_material(res.material.1);
+            let normal = res.normal(|pt| scene.sdf(pt));
 
-        for x in 0 .. cfg.width {
-            let ray = camera.ray_for_pixel(x, y);
+            let obj_color = pat.color_at(get_pattern, &res.object_space_point);
 
-            let mut pixel = Color::black();
-            if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
-                let pat = scene.get_pattern(res.material.0);
-                let mat = scene.get_material(res.material.1);
-                let normal = res.normal(|pt| scene.sdf(pt));
+            // the direction towards the eye
+            let eyev = -ray.direction;
 
-                let obj_color = pat.color_at(get_pattern, &res.object_space_point);
+            for light in scene.iter_lights() {
+                let point = res.world_space_point + normal * 0.01;
+                let light_dir = light.position - point;
+                let dist = light_dir.magnitude();
 
-                // the direction towards the eye
-                let eyev = -ray.direction;
+                // check to see if the path to the light is obstructed
+                let light_visible = Ray::new(point, light_dir.normalize())
+                    .march(cfg.max_steps, 1.0, |pt| scene.sdf(pt))
+                    .map_or(true, |hit| hit.distance >= dist);
 
-                for light in scene.iter_lights() {
-                    let point = res.world_space_point + normal * 0.01;
-                    let light_dir = light.position - point;
-                    let dist = light_dir.magnitude();
+                pixel += mat.lighting(
+                    light, &obj_color, &res.world_space_point,
+                    &eyev, &normal, light_visible,
+                ) * light_weight;
 
-                    // check to see if the path to the light is obstructed
-                    let light_visible = Ray::new(point, light_dir.normalize())
-                        .march(cfg.max_steps, 1.0, |pt| scene.sdf(pt))
-                        .map_or(true, |hit| hit.distance >= dist);
-
-                    pixel += mat.lighting(
-                        light, &obj_color, &res.world_space_point,
-                        &eyev, &normal, light_visible,
-                    ) * light_weight;
-
-                }
             }
-
-            row.push(pixel);
         }
-
-        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
-    }
+        pixel
+    });
 }
 
 fn render_normals_job(
@@ -171,26 +180,17 @@ fn render_normals_job(
     idx: usize,
     send: Sender<RenderedRow>) {
 
-    for y in (idx .. cfg.height).step_by(cfg.jobs) {
-        let mut row = Vec::with_capacity(cfg.width);
-
-        for x in 0 .. cfg.width {
-            let ray = camera.ray_for_pixel(x, y);
-
-            let mut pixel = Color::black();
-            if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
-                let normal = res.normal(|pt| scene.sdf(pt));
-                pixel
-                    .set_r(0.5 + normal.x / 2.0)
-                    .set_g(0.5 + normal.y / 2.0)
-                    .set_b(0.5 + normal.z / 2.0);
-            }
-
-            row.push(pixel);
+    render_body(idx, camera, cfg.clone(), send, |ray| {
+        let mut pixel = Color::black();
+        if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
+            let normal = res.normal(|pt| scene.sdf(pt));
+            pixel
+                .set_r(0.5 + normal.x / 2.0)
+                .set_g(0.5 + normal.y / 2.0)
+                .set_b(0.5 + normal.z / 2.0);
         }
-
-        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
-    }
+        pixel
+    });
 
 }
 
@@ -203,23 +203,15 @@ fn render_steps_job(
 
     let step_max = cfg.max_steps as f32;
 
-    for y in (idx .. cfg.height).step_by(cfg.jobs) {
-        let mut row = Vec::with_capacity(cfg.width);
-
-        for x in 0 .. cfg.width {
-            let ray = camera.ray_for_pixel(x, y);
-
-            let mut pixel = Color::black();
-            if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
-                let step_val = 1.0 - (res.steps as f32) / step_max;
-                pixel.set_r(step_val).set_b(step_val);
-            }
-
-            row.push(pixel);
+    render_body(idx, camera, cfg.clone(), send, |ray| {
+        let mut pixel = Color::black();
+        if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
+            let step_val = 1.0 - (res.steps as f32) / step_max;
+            pixel.set_r(step_val).set_b(step_val);
         }
 
-        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
-    }
+        pixel
+    });
 
 }
 
