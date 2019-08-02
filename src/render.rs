@@ -78,7 +78,12 @@ pub struct Config {
     debug_mode: Option<DebugMode>,
 }
 
-pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Receiver<(usize,usize,Color)> {
+pub struct RenderedRow {
+    y: usize,
+    row: Vec<Color>,
+}
+
+pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Receiver<RenderedRow> {
 
     let (send,recv) = channel();
 
@@ -111,14 +116,16 @@ fn render_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: Sender<(usize,usize,Color)>) {
+    send: Sender<RenderedRow>) {
 
     let get_pattern = |pid| scene.get_pattern(pid);
 
     let light_weight = 1.0 / (scene.num_lights() as f32);
 
-    for x in 0 .. cfg.width {
-        for y in (idx .. cfg.height).step_by(cfg.jobs) {
+    for y in (idx .. cfg.height).step_by(cfg.jobs) {
+        let mut row = Vec::with_capacity(cfg.width);
+
+        for x in 0 .. cfg.width {
             let ray = camera.ray_for_pixel(x, y);
 
             let mut pixel = Color::black();
@@ -150,8 +157,10 @@ fn render_job(
                 }
             }
 
-            send.send((x,y,pixel)).expect("Failed to send pixel!");
+            row.push(pixel);
         }
+
+        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
     }
 }
 
@@ -160,10 +169,12 @@ fn render_normals_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: Sender<(usize,usize,Color)>) {
+    send: Sender<RenderedRow>) {
 
-    for x in 0 .. cfg.width {
-        for y in (idx .. cfg.height).step_by(cfg.jobs) {
+    for y in (idx .. cfg.height).step_by(cfg.jobs) {
+        let mut row = Vec::with_capacity(cfg.width);
+
+        for x in 0 .. cfg.width {
             let ray = camera.ray_for_pixel(x, y);
 
             let mut pixel = Color::black();
@@ -175,8 +186,10 @@ fn render_normals_job(
                     .set_b(0.5 + normal.z / 2.0);
             }
 
-            send.send((x,y,pixel)).expect("Failed to send pixel!");
+            row.push(pixel);
         }
+
+        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
     }
 
 }
@@ -186,12 +199,14 @@ fn render_steps_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: Sender<(usize,usize,Color)>) {
+    send: Sender<RenderedRow>) {
 
     let step_max = cfg.max_steps as f32;
 
-    for x in 0 .. cfg.width {
-        for y in (idx .. cfg.height).step_by(cfg.jobs) {
+    for y in (idx .. cfg.height).step_by(cfg.jobs) {
+        let mut row = Vec::with_capacity(cfg.width);
+
+        for x in 0 .. cfg.width {
             let ray = camera.ray_for_pixel(x, y);
 
             let mut pixel = Color::black();
@@ -200,21 +215,25 @@ fn render_steps_job(
                 pixel.set_r(step_val).set_b(step_val);
             }
 
-            send.send((x,y,pixel)).expect("Failed to send pixel!");
+            row.push(pixel);
         }
+
+        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
     }
 
 }
 
-pub fn write_canvas(cfg: Arc<Config>, recv: Receiver<(usize,usize,Color)>) -> Canvas {
+pub fn write_canvas(cfg: Arc<Config>, recv: Receiver<RenderedRow>) -> Canvas {
     let mut canvas = Canvas::new(cfg.width, cfg.height);
 
-    let expected = cfg.width * cfg.height;
+    let expected = cfg.height;
 
     for _ in 0 .. expected {
-        let (x,y,color) = recv.recv().expect("Failed to read all pixels!");
-        let pixel = canvas.get_mut(x,y).expect("Pixel out of bounds!");
-        *pixel = color
+        let row = recv.recv().expect("Failed to read all rows!");
+        for (x,color) in row.row.into_iter().enumerate() {
+            let pixel = canvas.get_mut(x,row.y).expect("Pixel out of bounds!");
+            *pixel = color;
+        }
     }
 
     canvas
