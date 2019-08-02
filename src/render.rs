@@ -11,7 +11,7 @@ use crate::{
     camera::Camera,
     canvas::{Canvas,Color},
     ray::Ray,
-    shapes::Scene,
+    scene::Scene,
 };
 
 #[derive(Debug)]

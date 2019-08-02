@@ -4,7 +4,7 @@ use nalgebra::Point3;
 use crate::canvas::Color;
 
 #[derive(Copy,Clone,Debug,PartialEq,Eq,PartialOrd,Ord)]
-pub struct PatternId(pub usize);
+pub struct PatternId(usize);
 
 #[derive(Debug)]
 pub struct Patterns {
@@ -66,6 +66,12 @@ impl Pattern {
                 }
             },
         }
+    }
+}
+
+impl Default for Pattern {
+    fn default() -> Self {
+        Pattern::Solid { color: Color::white() }
     }
 }
 

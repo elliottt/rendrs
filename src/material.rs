@@ -10,7 +10,27 @@ pub struct Light {
 }
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
-pub struct MaterialId(pub usize);
+pub struct MaterialId(usize);
+
+#[derive(Debug)]
+pub struct Materials {
+    materials: Vec::<Material>,
+}
+
+impl Materials {
+    pub fn new() -> Self {
+        Materials{ materials: Vec::with_capacity(10) }
+    }
+
+    pub fn add_material(&mut self, mat: Material) -> MaterialId {
+        self.materials.push(mat);
+        MaterialId(self.materials.len() - 1)
+    }
+
+    pub fn get_material(&self, mid: MaterialId) -> &Material {
+        unsafe { self.materials.get_unchecked(mid.0) }
+    }
+}
 
 #[derive(Clone,Debug)]
 pub struct Material {

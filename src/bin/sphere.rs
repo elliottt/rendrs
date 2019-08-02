@@ -8,25 +8,29 @@ use nalgebra::{Point3,Vector3,Matrix4};
 use rendrs::{
     camera::Camera,
     canvas::{Color},
-    shapes::{Scene,Shape},
+    shapes::{Shape,PrimShape},
+    scene::{Scene},
     pattern::{Pattern},
-    material::Light,
+    material::{Light,Material},
     render::{render,write_canvas,ConfigBuilder},
 };
 
 pub fn main() {
     let mut scene = Scene::new();
-    let mat = scene.default_material();
+
+    let mat = scene.add_material(Material::default());
+
     let blue = scene.add_pattern(Pattern::solid(Color::new(0.0, 0.0, 1.0)));
     let red = scene.add_pattern(Pattern::solid(Color::new(1.0, 0.0, 0.0)));
 
+    let sphere = scene.add(Shape::PrimShape{ shape: PrimShape::Sphere });
+    let xz_plane = scene.add(Shape::PrimShape{ shape: PrimShape::XZPlane });
 
     let white = scene.add_pattern(Pattern::solid(Color::white()));
     let black = scene.add_pattern(Pattern::solid(Color::black()));
     let striped = scene.add_pattern(Pattern::stripe(black, white));
 
     {
-        let sphere = scene.sphere();
         let red_sphere = scene.add(Shape::material(red, mat, sphere));
         let blue_sphere = scene.add(Shape::material(blue, mat, sphere));
         let a = scene.add(Shape::translation(&Vector3::new(-1.0, 0.0, 0.0), red_sphere));
@@ -39,7 +43,7 @@ pub fn main() {
     }
 
     {
-        let ground = scene.add(Shape::translation(&Vector3::new(0.0, -2.0, 0.0), scene.xz_plane()));
+        let ground = scene.add(Shape::translation(&Vector3::new(0.0, -2.0, 0.0), xz_plane));
         let striped_ground = scene.add(Shape::material(striped, mat, ground));
         scene.add_root(striped_ground);
     }
@@ -49,7 +53,7 @@ pub fn main() {
         let axis = Vector3::new(1.0, 0.0, 0.0);
         let trans = Matrix4::new_rotation(axis * angle)
             .append_translation(&Vector3::new(0.0, 0.0, 10.0));
-        let wall = scene.add(Shape::transform(&trans, scene.xz_plane()));
+        let wall = scene.add(Shape::transform(&trans, xz_plane));
         let blue_wall = scene.add(Shape::material(striped, mat, wall));
         scene.add_root(blue_wall);
     }

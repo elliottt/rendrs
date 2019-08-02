@@ -9,3 +9,4 @@ pub mod pattern;
 pub mod ray;
 pub mod render;
 pub mod shapes;
+pub mod scene;

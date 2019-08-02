@@ -5,9 +5,6 @@ extern crate yaml_rust;
 
 use std::{
     sync::{Arc},
-    env,
-    fs::read,
-    path::Path,
 };
 
 use clap::{Arg,App,ArgMatches};
@@ -20,7 +17,7 @@ struct Opts {
     output: String,
 }
 
-fn parse_usize(matches: &ArgMatches, label: &str, default: usize) -> Result<usize,String> {
+fn parse_usize(matches: &ArgMatches, label: &str) -> Result<usize,String> {
     matches
         .value_of(label)
         .expect(&format!("Is `{}` missing a default?", label))
@@ -75,9 +72,9 @@ fn main() -> Result<(),String> {
     let output = matches.value_of("OUTPUT").expect("Missing OUTPUT");
 
     let mut builder = ConfigBuilder::default()
-        .set_jobs(parse_usize(&matches, "jobs", cpus)?)
-        .set_width(parse_usize(&matches, "width", cpus)?)
-        .set_width(parse_usize(&matches, "height", cpus)?);
+        .set_jobs(parse_usize(&matches, "jobs")?)
+        .set_width(parse_usize(&matches, "width")?)
+        .set_width(parse_usize(&matches, "height")?);
 
     builder = match matches.value_of("debug") {
         Some("steps") => builder.set_debug_mode(DebugMode::Steps),
