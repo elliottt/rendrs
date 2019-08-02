@@ -230,10 +230,7 @@ pub fn write_canvas(cfg: Arc<Config>, recv: Receiver<RenderedRow>) -> Canvas {
 
     for _ in 0 .. expected {
         let row = recv.recv().expect("Failed to read all rows!");
-        for (x,color) in row.row.into_iter().enumerate() {
-            let pixel = canvas.get_mut(x,row.y).expect("Pixel out of bounds!");
-            *pixel = color;
-        }
+        canvas.blit_row(row.y, row.row);
     }
 
     canvas

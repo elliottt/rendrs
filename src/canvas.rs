@@ -176,6 +176,14 @@ impl Canvas {
         }
     }
 
+    pub fn blit_row(&mut self, y: usize, row: Vec<Color>) {
+        let start = y * self.width;
+        let slice = self.pixels.get_mut(start .. start + self.width).expect("Missing row");
+        for (pixel,color) in slice.into_iter().zip(row) {
+            *pixel = color;
+        }
+    }
+
     pub fn get(&self, x: usize, y: usize) -> Option<&Color> {
         self.index(x, y).map( |ix| unsafe { self.pixels.get_unchecked(ix) })
     }
