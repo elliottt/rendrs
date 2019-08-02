@@ -2,7 +2,7 @@
 use std::{
     sync::{
         Arc,
-        mpsc::{sync_channel,SyncSender,Receiver},
+        mpsc::{channel,Sender,Receiver},
     },
     thread,
 };
@@ -32,7 +32,6 @@ impl Default for ConfigBuilder {
                 height: 100,
                 max_steps: 100,
                 jobs: 1,
-                buffer_size: 1000,
                 debug_mode: None,
             }
         }
@@ -60,11 +59,6 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn set_buffer_size(mut self, size: usize) -> Self {
-        self.config.buffer_size = size;
-        self
-    }
-
     pub fn set_debug_mode(mut self, mode: DebugMode) -> Self {
         self.config.debug_mode = Some(mode);
         self
@@ -81,13 +75,12 @@ pub struct Config {
     height: usize,
     max_steps: usize,
     jobs: usize,
-    buffer_size: usize,
     debug_mode: Option<DebugMode>,
 }
 
 pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Receiver<(usize,usize,Color)> {
 
-    let (send,recv) = sync_channel(cfg.buffer_size);
+    let (send,recv) = channel();
 
     // start jobs
     for i in 0..cfg.jobs {
@@ -118,7 +111,7 @@ fn render_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: SyncSender<(usize,usize,Color)>) {
+    send: Sender<(usize,usize,Color)>) {
 
     let get_pattern = |pid| scene.get_pattern(pid);
 
@@ -167,7 +160,7 @@ fn render_normals_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: SyncSender<(usize,usize,Color)>) {
+    send: Sender<(usize,usize,Color)>) {
 
     for x in 0 .. cfg.width {
         for y in (idx .. cfg.height).step_by(cfg.jobs) {
@@ -193,7 +186,7 @@ fn render_steps_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: SyncSender<(usize,usize,Color)>) {
+    send: Sender<(usize,usize,Color)>) {
 
     let step_max = cfg.max_steps as f32;
 
