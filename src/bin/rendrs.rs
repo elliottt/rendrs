@@ -1,31 +1,30 @@
 
 extern crate clap;
 extern crate num_cpus;
-extern crate yaml_rust;
+extern crate failure;
 
 use std::{
     sync::{Arc},
 };
 
+use failure::Error;
+
 use clap::{Arg,App,ArgMatches};
-use rendrs::render::{ConfigBuilder,Config,DebugMode};
 
-#[derive(Debug)]
-struct Opts {
-    render_config: Arc<Config>,
-    scene: String,
-    output: String,
-}
+use rendrs::{
+    render::{ConfigBuilder,DebugMode,render,write_canvas},
+    scene::yaml,
+};
 
-fn parse_usize(matches: &ArgMatches, label: &str) -> Result<usize,String> {
-    matches
+fn parse_usize(matches: &ArgMatches, label: &str) -> Result<usize,Error> {
+    let val = matches
         .value_of(label)
         .expect(&format!("Is `{}` missing a default?", label))
-        .parse()
-        .map_err(|_| format!("Failed to parse option `{}`", label))
+        .parse()?;
+    Ok(val)
 }
 
-fn main() -> Result<(),String> {
+fn main() -> Result<(),Error> {
 
     let cpus = num_cpus::get();
     let cpu_str = cpus.to_string();
@@ -68,8 +67,8 @@ fn main() -> Result<(),String> {
                  .required(true))
             .get_matches();
 
-    let scene = matches.value_of("SCENE").expect("Missing SCENE");
-    let output = matches.value_of("OUTPUT").expect("Missing OUTPUT");
+    let scene_path = matches.value_of("SCENE").expect("Missing SCENE");
+    let output_path = matches.value_of("OUTPUT").expect("Missing OUTPUT");
 
     let mut builder = ConfigBuilder::default()
         .set_jobs(parse_usize(&matches, "jobs")?)
@@ -82,13 +81,11 @@ fn main() -> Result<(),String> {
         _ => builder,
     };
 
-    let opts = Opts {
-        render_config: builder.build(),
-        scene: scene.to_string(),
-        output: output.to_string()
-    };
+    let (scene,camera) = yaml::parser(scene_path)?;
 
-    println!("config: {:?}", opts);
+    let cfg = builder.build();
+    let recv = render(Arc::new(scene), Arc::new(camera), cfg.clone());
+    write_canvas(cfg, recv).save(output_path);
 
     Ok(())
 }

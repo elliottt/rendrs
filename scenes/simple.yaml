@@ -27,15 +27,19 @@ lights:
 scene:
 - sphere
 
-camera:
-  fov: 90.0
+---
 
-  position:
-    x: 0.0
-    y: 0.0
-    z: -5.0
+fov: 90.0
 
-  target:
-    x: 0.0
-    y: 0.0
-    z: 0.0
+width: 1000
+height: 1000
+
+position:
+  x: 0.0
+  y: 0.0
+  z: -5.0
+
+target:
+  x: 0.0
+  y: 0.0
+  z: 0.0

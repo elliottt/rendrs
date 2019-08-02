@@ -3,6 +3,7 @@ use nalgebra::{Point3,Matrix4};
 
 use crate::ray::Ray;
 
+#[derive(Debug)]
 pub struct Camera {
     width_px: usize,
     height_px: usize,
