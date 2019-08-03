@@ -36,47 +36,52 @@ impl Ray {
         -> Option<MarchResult<Mat>>
         where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
     {
-        // for over-relaxation sphere-tracing
+        // for over-relaxation sphere tracing
         let mut previous_radius = 0.0;
         let mut step_length = 0.0;
         let mut omega = 1.2;
 
         let mut pos = self.origin.clone();
         let mut total_dist = 0.0;
+
         for i in 0 .. max_steps {
             let res = sdf(&pos);
 
             let signed_radius = sign * res.distance;
             let radius = res.distance.abs();
 
-            if omega > 1.0 && (radius + previous_radius) < step_length {
-                // the step taken was too big (the new radius doesn't overlap the previous one)
+            // over-relaxation fails when the new radius doesn't overlap the previous one.
+            let sor_fail = omega > 1.0 &&
+                ((previous_radius + radius) < step_length || signed_radius < 0.0);
+
+            if sor_fail {
+                // travel back by the additional amount, and disable over-relaxation
                 step_length -= omega * step_length;
                 omega = 1.0;
             } else {
-                step_length = signed_radius * omega;
+
+                // since sof_fail is false, we know that the signed_radius was valid
+                if radius < Self::MIN_DIST {
+                    return Some(MarchResult{
+                        steps: i,
+                        distance: total_dist,
+                        object_space_point: res.object_space_point,
+                        world_space_point: pos,
+                        material: res.material,
+                    })
+                }
+
+                if total_dist > Self::MAX_DIST {
+                    break;
+                }
+
+                step_length = omega * signed_radius;
             }
 
             previous_radius = radius;
+
             total_dist += step_length;
-
-            // the ray has failed to hit anything in the scene
-            if total_dist >= Self::MAX_DIST {
-                return None
-            }
-
-            pos += res.distance * self.direction;
-
-            // the ray has gotten close enough to something to be considered a hit
-            if res.distance <= Self::MIN_DIST {
-                return Some(MarchResult{
-                    steps: i,
-                    distance: total_dist,
-                    object_space_point: res.object_space_point.clone(),
-                    world_space_point: pos,
-                    material: res.material,
-                })
-            }
+            pos += step_length * self.direction;
         }
 
         None
@@ -159,21 +164,24 @@ fn test_transform() {
 
 #[test]
 fn test_march() {
-    use crate::shapes::{Scene,Shape};
+    use crate::{shapes::{Shape,PrimShape},scene::Scene};
 
     let ray = Ray::new(Point3::new(0.0, 0.0, -5.0), Vector3::new(0.0, 0.0, 1.0));
 
     let mut scene = Scene::new();
-    let sphere = scene.sphere();
+    let sphere = scene.add(Shape::PrimShape{ shape: PrimShape::Sphere });
     let scaled = scene.add(Shape::uniform_scaling(2.0, sphere));
     let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere));
 
     // test an intersection
-    let result = ray.march(100, 1.0, |pt| scene.sdf_from(&scaled, pt)).expect("Failed to march ray");
+    let mut result = ray.march(4, 1.0, |pt| scene.sdf_from(sphere, pt)).expect("Failed to march ray");
+    assert_eq!(result.distance, 4.0);
+
+    result = ray.march(4, 1.0, |pt| scene.sdf_from(scaled, pt)).expect("Failed to march ray");
     assert_eq!(result.distance, 3.0);
 
     // test a miss
-    assert!(ray.march(100, 1.0, |pt| scene.sdf_from(&moved, pt)).is_none());
+    assert!(ray.march(100, 1.0, |pt| scene.sdf_from(moved, pt)).is_none());
 }
 
 #[test]
