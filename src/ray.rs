@@ -51,8 +51,7 @@ impl Ray {
             let radius = res.distance.abs();
 
             // over-relaxation fails when the new radius doesn't overlap the previous one.
-            let sor_fail = omega > 1.0 &&
-                ((previous_radius + radius) < step_length || signed_radius < 0.0);
+            let sor_fail = omega > 1.0 && (previous_radius + signed_radius) < step_length;
 
             if sor_fail {
                 // travel back by the additional amount, and disable over-relaxation
