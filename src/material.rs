@@ -34,10 +34,10 @@ impl Materials {
 
 #[derive(Clone,Debug)]
 pub struct Material {
-    ambient: f32,
-    diffuse: f32,
-    specular: f32,
-    shininess: f32,
+    pub ambient: f32,
+    pub diffuse: f32,
+    pub specular: f32,
+    pub shininess: f32,
 }
 
 impl Default for Material {

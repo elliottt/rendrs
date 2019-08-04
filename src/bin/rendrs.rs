@@ -81,7 +81,7 @@ fn main() -> Result<(),Error> {
         _ => builder,
     };
 
-    let (scene,camera) = yaml::parser(scene_path)?;
+    let (scene,camera) = yaml::parse(scene_path)?;
 
     let cfg = builder.build();
     let recv = render(Arc::new(scene), Arc::new(camera), cfg.clone());

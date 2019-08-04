@@ -33,8 +33,8 @@ patterns:
 
   - name: striped
     striped:
-      first: white
-      second: black
+    - white
+    - black
 
 objects:
   - name: sphere

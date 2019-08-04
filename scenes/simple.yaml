@@ -1,11 +1,27 @@
 # This is a simple scene with a single blue unit-sphere, centered at the origin,
 # and a light set back and above, in the same plane as the camera.
 patterns:
+- name: red
+  solid:
+    r: 1.0
+    g: 0.0
+    b: 0.0
+
 - name: blue
   solid:
     r: 0.0
     g: 0.0
     b: 1.0
+
+- name: stripes
+  striped:
+    - red
+    - blue
+
+- name: stripes2
+  striped:
+    - stripes
+    - blue
 
 materials:
 - name: default
@@ -27,19 +43,18 @@ lights:
 scene:
 - sphere
 
----
+cameras:
+- fov: 90.0
 
-fov: 90.0
-
-width: 1000
-height: 1000
-
-position:
-  x: 0.0
-  y: 0.0
-  z: -5.0
-
-target:
-  x: 0.0
-  y: 0.0
-  z: 0.0
+  width: 1000
+  height: 1000
+  
+  position:
+    x: 0.0
+    y: 0.0
+    z: -5.0
+  
+  target:
+    x: 0.0
+    y: 0.0
+    z: 0.0
