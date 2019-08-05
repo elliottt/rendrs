@@ -8,6 +8,7 @@ use crate::{
     shapes::{ShapeId,Shapes,Shape},
 };
 
+#[derive(Debug)]
 pub struct Scene {
     shapes: Shapes,
 

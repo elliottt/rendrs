@@ -4,6 +4,7 @@ use nalgebra::{Point3,Vector3};
 use crate::ray::reflect;
 use crate::canvas::Color;
 
+#[derive(Debug)]
 pub struct Light {
     pub position: Point3<f32>,
     pub intensity: Color,

@@ -40,20 +40,6 @@ fn main() -> Result<(),Error> {
                  .value_name("NUM_JOBS")
                  .help("Number of concurrent render jobs")
                  .takes_value(true))
-            .arg(Arg::with_name("width")
-                 .short("w")
-                 .long("width")
-                 .default_value("100")
-                 .value_name("PIXELS")
-                 .help("Width of the image in pixels")
-                 .takes_value(true))
-            .arg(Arg::with_name("height")
-                 .short("h")
-                 .long("height")
-                 .default_value("100")
-                 .value_name("PIXELS")
-                 .help("Height of the image in pixels")
-                 .takes_value(true))
             .arg(Arg::with_name("debug")
                  .long("debug")
                  .possible_values(&["steps", "normals"])
@@ -70,22 +56,30 @@ fn main() -> Result<(),Error> {
     let scene_path = matches.value_of("SCENE").expect("Missing SCENE");
     let output_path = matches.value_of("OUTPUT").expect("Missing OUTPUT");
 
-    let mut builder = ConfigBuilder::default()
-        .set_jobs(parse_usize(&matches, "jobs")?)
-        .set_width(parse_usize(&matches, "width")?)
-        .set_width(parse_usize(&matches, "height")?);
-
-    builder = match matches.value_of("debug") {
-        Some("steps") => builder.set_debug_mode(DebugMode::Steps),
-        Some("normals") => builder.set_debug_mode(DebugMode::Normals),
-        _ => builder,
+    let jobs = parse_usize(&matches, "jobs")?;
+    let debug = match matches.value_of("debug") {
+        Some("steps") => Some(DebugMode::Steps),
+        Some("normals") => Some(DebugMode::Normals),
+        _ => None,
     };
 
-    let (scene,camera) = yaml::parse(scene_path)?;
+    let (scene,cameras) = yaml::parse(scene_path)?;
+    let scene_ref = Arc::new(scene);
 
-    let cfg = builder.build();
-    let recv = render(Arc::new(scene), Arc::new(camera), cfg.clone());
-    write_canvas(cfg, recv).save(output_path);
+    for camera in cameras {
+        let mut builder = ConfigBuilder::default()
+            .set_jobs(jobs)
+            .set_width(camera.width_px)
+            .set_height(camera.height_px);
+
+        let cfg = match debug {
+            Some(ref mode) => builder.set_debug_mode(mode.clone()).build(),
+            None => builder.build(),
+        };
+
+        let recv = render(scene_ref.clone(), Arc::new(camera), cfg.clone());
+        write_canvas(cfg, recv).save(output_path);
+    }
 
     Ok(())
 }

@@ -5,8 +5,8 @@ use crate::ray::Ray;
 
 #[derive(Debug)]
 pub struct Camera {
-    width_px: usize,
-    height_px: usize,
+    pub width_px: usize,
+    pub height_px: usize,
     fov: f32,
     transform: Matrix4<f32>,
     inv_transform: Matrix4<f32>,

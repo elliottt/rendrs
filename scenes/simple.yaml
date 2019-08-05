@@ -7,54 +7,52 @@ patterns:
     g: 0.0
     b: 0.0
 
-- name: blue
+- name: white
   solid:
-    r: 0.0
-    g: 0.0
+    r: 1.0
+    g: 1.0
     b: 1.0
 
 - name: stripes
   striped:
     - red
-    - blue
-
-- name: stripes2
-  striped:
-    - stripes
-    - blue
-
-materials:
-- name: default
-  ambient: 0.9
-  diffuse: 0.9
-  specular: 0.9
-  shininess: 200.0
+    - white
 
 objects:
+- name: ground
+  plane:
+
 - name: sphere
   sphere:
 
+- name: striped-sphere
+  material:
+    pattern: stripes
+    object: sphere
+
 lights:
 - position:
-    x: 0.0
+    x: 2.0
     y: 5.0
     z: -1.0
 
 scene:
-- sphere
+- ground
+- striped-sphere
 
 cameras:
-- fov: 90.0
+- perspective:
+    width: 1000
+    height: 1000
 
-  width: 1000
-  height: 1000
-  
-  position:
-    x: 0.0
-    y: 0.0
-    z: -5.0
-  
-  target:
-    x: 0.0
-    y: 0.0
-    z: 0.0
+    fov: 90.0
+
+    position:
+      x: 0.0
+      y: 1.0
+      z: -5.0
+
+    target:
+      x: 0.0
+      y: 0.0
+      z: 0.0

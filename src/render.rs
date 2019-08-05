@@ -14,7 +14,7 @@ use crate::{
     scene::Scene,
 };
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum DebugMode {
     Normals,
     Steps,
