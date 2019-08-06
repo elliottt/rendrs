@@ -26,91 +26,123 @@ pub fn parse<P>(path: P)
     let bytes = String::from_utf8(fs::read(path)?)?;
     let parsed: Value = serde_yaml::from_str(bytes.as_str())?;
 
-    let scene = parse_scene(&parsed)?;
-    let cameras = parse_cameras(&parsed)?;
+    let ctx = Context::new(&parsed);
+    let scene = parse_scene(&ctx)?;
+    let cameras = parse_cameras(&ctx)?;
 
     Ok((scene,cameras))
 }
 
-fn parse_scene(parsed: &Value) -> Result<Scene,Error> {
+fn optional<A,Err>(res: Result<A,Err>) -> Option<A> {
+    if let Ok(a) = res {
+        Some(a)
+    } else {
+        None
+    }
+}
+
+/// Parser context.
+struct Context<'a> {
+    focus: &'a Value,
+}
+
+impl<'a> Context<'a> {
+    fn new<'b>(focus: &'b Value) -> Context<'b> {
+        Context { focus }
+    }
+
+    fn get_field(&self, label: &str) -> Result<Context<'a>,Error> {
+        self.focus.get(label).map_or_else(
+            || Err(format_err!("missing field `{}`", label)),
+            |val| Ok(Context::new(val)))
+    }
+
+    fn get_at(&self, index: usize) -> Result<Context<'a>,Error> {
+        self.focus.get(index).map_or_else(
+            || Err(format_err!("missing sequence entry `{}`", index)),
+            |val| Ok(Context::new(val)))
+    }
+
+    fn as_sequence(&self) -> Result<impl Iterator<Item=Context<'a>>,Error> {
+        let elems = self.focus.as_sequence().map_or_else(
+            || Err(format_err!("expected a sequence")),
+            |elems| Ok(elems))?;
+        Ok(elems.iter().map(|elem| Context::new(elem)))
+    }
+
+    fn as_f32(&self) -> Result<f32,Error> {
+        self.focus.as_f64().map_or_else(
+            || Err(format_err!("expected a float")),
+            |val| Ok(val as f32))
+    }
+
+    fn as_usize(&self) -> Result<usize,Error> {
+        self.focus.as_u64().map_or_else(
+            || Err(format_err!("expected an integer")),
+            |val| Ok(val as usize))
+    }
+
+    fn as_str(&self) -> Result<String,Error> {
+        self.focus.as_str().map_or_else(
+            || Err(format_err!("expected a string")),
+            |val| Ok(val.to_string()))
+    }
+}
+
+fn parse_scene(ctx: &Context) -> Result<Scene,Error> {
     let mut scene = Scene::new();
 
-    let pats = parsed.get("patterns").map_or_else(
+    let pats = optional(ctx.get_field("patterns")).map_or_else(
         || Ok(BTreeMap::new()),
-        |val| parse_pats(&mut scene, val))?;
+        |ctx| parse_pats(&ctx, &mut scene))?;
 
-    let mats = parsed.get("materials").map_or_else(
+    let mats = optional(ctx.get_field("materials")).map_or_else(
         || Ok(BTreeMap::new()),
-        |val| parse_mats(&mut scene, val))?;
+        |ctx| parse_mats(&ctx, &mut scene))?;
 
-    let objs = parsed.get("objects").map_or_else(
+    let objs = optional(ctx.get_field("objects")).map_or_else(
         || Ok(BTreeMap::new()),
-        |val| parse_objs(&mut scene, &pats, &mats, val))?;
+        |ctx| parse_objs(&ctx, &mut scene, &pats, &mats))?;
 
-    parsed.get("lights").map_or_else(
-        || Err(format_err!("No lights defined in the scene")),
-        |val| parse_lights(&mut scene, val))?;
+    parse_lights(&ctx.get_field("lights")?, &mut scene)?;
 
-    parsed.get("scene").map_or_else(
-        || Err(format_err!("No objects placed in the scene")),
-        |val| parse_roots(&mut scene, objs, val))?;
+    parse_roots(&ctx.get_field("scene")?, &mut scene, objs)?;
 
     Ok(scene)
 }
 
-fn parse_cameras(parsed: &Value) -> Result<Vec<Camera>,Error> {
-    let entries = parsed.get("cameras").map_or_else(
-        || Err(format_err!("`cameras` missing from scene")),
-        |val| val.as_sequence().map_or_else(
-            || Err(format_err!("`cameras` must be a sequence")),
-            |vals| Ok(vals)))?;
+fn parse_cameras(ctx: &Context) -> Result<Vec<Camera>,Error> {
 
-    let mut cameras = Vec::with_capacity(entries.len());
+    let entries = ctx.get_field("cameras")?.as_sequence()?;
+
+    let mut cameras = match entries.size_hint() {
+        (_, Some(upper)) => Vec::with_capacity(upper),
+        _ => Vec::new(),
+    };
     for entry in entries {
-        let camera = parse_camera(entry)?;
+        let camera = parse_camera(&entry)?;
         cameras.push(camera);
     }
 
     Ok(cameras)
 }
 
-fn parse_camera(parsed: &Value) -> Result<Camera,Error> {
-    if let Some(val) = parsed.get("perspective") {
-        parse_perspective(val)
+fn parse_camera(ctx: &Context) -> Result<Camera,Error> {
+    if let Ok(val) = ctx.get_field("perspective") {
+        parse_perspective(&val)
     } else {
         Err(format_err!("unknown camera type"))
     }
 }
 
-fn parse_perspective(val: &Value) -> Result<Camera,Error> {
-    let width = val.get("width").map_or_else(
-        || Err(format_err!("`width` field missing from `perspective`")),
-        |val| val.as_u64().map_or_else(
-            || Err(format_err!("`width` must be an integer")),
-            |val| Ok(val as usize)))?;
-
-    let height = val.get("height").map_or_else(
-        || Err(format_err!("`height` field missing from `perspective`")),
-        |val| val.as_u64().map_or_else(
-            || Err(format_err!("`height` must be an integer")),
-            |val| Ok(val as usize)))?;
-
-    let fov = val.get("fov").map_or_else(
-        || Err(format_err!("`fov` field missing from `perspective`")),
-        |val| val.as_f64().map_or_else(
-            || Err(format_err!("`fov` must be a float")),
-            |val| Ok(val as f32)))?;
-
-    let position = val.get("position").map_or_else(
-        || Err(format_err!("`position` missing from `perspective`")),
-        |val| parse_point3(val))?;
-
-    let target = val.get("target").map_or_else(
-        || Err(format_err!("`position` missing from `perspective`")),
-        |val| parse_point3(val))?;
+fn parse_perspective(ctx: &Context) -> Result<Camera,Error> {
+    let width = ctx.get_field("width")?.as_usize()?;
+    let height = ctx.get_field("height")?.as_usize()?;
+    let fov = ctx.get_field("fov")?.as_f32()?;
+    let position = parse_point3(&ctx.get_field("position")?)?;
+    let target = parse_point3(&ctx.get_field("target")?)?;
 
     let mut camera = Camera::new(width, height, fov);
-
     camera.set_transform(Matrix4::look_at_lh(&position, &target, &Vector3::new(0.0, 1.0, 0.0)));
 
     Ok(camera)
@@ -122,24 +154,22 @@ enum ParsedPat {
     Striped(String,String),
 }
 
-fn parse_pats(scene: &mut Scene, val: &Value)
+fn parse_pats(ctx: &Context, scene: &mut Scene)
     -> Result<BTreeMap<String,PatternId>, Error>
 {
 
-    let entries = val.as_sequence().map_or_else(
-        || Err(format_err!("`patterns` must be a sequence of pattern entries")),
-        |seq| Ok(seq))?;
+    let entries = ctx.as_sequence()?;
 
     let mut pat_map = BTreeMap::new();
 
     // build the work queue
-    let mut work = Vec::with_capacity(entries.len());
+    let mut work = match entries.size_hint() {
+        (_, Some(upper)) => Vec::with_capacity(upper),
+        _ => Vec::new(),
+    };
     for entry in entries {
-        let name = entry.get("name").and_then(|val| val.as_str()).map_or_else(
-            || Err(format_err!("`name` is required in each pattern")),
-            |name| Ok(name))?;
-
-        let parsed = parse_pat(entry)?;
+        let name = entry.get_field("name")?.as_str()?;
+        let parsed = parse_pat(&entry)?;
         match parsed {
             ParsedPat::Solid(color) => {
                 let pid = scene.add_pattern(Pattern::Solid{ color });
@@ -188,81 +218,60 @@ fn parse_pats(scene: &mut Scene, val: &Value)
     Ok(pat_map)
 }
 
-fn parse_pat(val: &Value) -> Result<ParsedPat,Error> {
-
-    if let Some(val) = val.get("solid") {
-        let color = parse_color(val)?;
-        return Ok(ParsedPat::Solid(color));
-    } else if let Some(val) = val.get("striped") {
-        let a = val.get(0).and_then(|val| val.as_str()).map_or_else(
-            || Err(format_err!("failed to parse name in `striped`")),
-            |name| Ok(name.to_string()))?;
-        let b = val.get(1).and_then(|val| val.as_str()).map_or_else(
-            || Err(format_err!("failed to parse name in `striped`")),
-            |name| Ok(name.to_string()))?;
-        return Ok(ParsedPat::Striped(a,b));
+fn parse_pat(ctx: &Context) -> Result<ParsedPat,Error> {
+    if let Ok(ctx) = ctx.get_field("solid") {
+        let color = parse_color(&ctx)?;
+        Ok(ParsedPat::Solid(color))
+    } else if let Ok(ctx) = ctx.get_field("striped") {
+        let a = ctx.get_at(0)?.as_str()?;
+        let b = ctx.get_at(1)?.as_str()?;
+        Ok(ParsedPat::Striped(a,b))
+    } else {
+        Err(format_err!("Unknown pattern type"))
     }
-
-    Err(format_err!("Unknown pattern type"))
 }
 
-fn parse_mats(scene: &mut Scene, val: &Value) -> Result<BTreeMap<String,MaterialId>,Error> {
-    let entries = val.as_sequence().map_or_else(
-        || Err(format_err!("`materials` must be a sequence of material entries")),
-        |seq| Ok(seq))?;
+fn parse_mats(ctx: &Context, scene: &mut Scene) -> Result<BTreeMap<String,MaterialId>,Error> {
+    let entries = ctx.as_sequence()?;
 
     let mut mat_map = BTreeMap::new();
 
     for entry in entries {
-        let name = entry.get("name").and_then(|val| val.as_str()).map_or_else(
-            || Err(format_err!("missing `name` from material entry")),
-            |val| Ok(val.to_string()))?;
-
-        let mid = parse_mat(scene, entry)?;
-
+        let name = entry.get_field("name")?.as_str()?;
+        let mid = parse_mat(&entry, scene)?;
         mat_map.insert(name, mid);
     }
 
     Ok(mat_map)
 }
 
-fn parse_mat(scene: &mut Scene, val: &Value) -> Result<MaterialId,Error> {
-    let ambient = val.get("ambient").and_then(|val| val.as_f64()).map_or_else(
-        || Err(format_err!("`ambient` missing from material")),
-        |val| Ok(val as f32))?;
-    let diffuse = val.get("diffuse").and_then(|val| val.as_f64()).map_or_else(
-        || Err(format_err!("`diffuse` missing from material")),
-        |val| Ok(val as f32))?;
-    let specular = val.get("specular").and_then(|val| val.as_f64()).map_or_else(
-        || Err(format_err!("`specular` missing from material")),
-        |val| Ok(val as f32))?;
-    let shininess = val.get("shininess").and_then(|val| val.as_f64()).map_or_else(
-        || Err(format_err!("`shininess` missing from material")),
-        |val| Ok(val as f32))?;
+fn parse_mat(ctx: &Context, scene: &mut Scene) -> Result<MaterialId,Error> {
+    let ambient = ctx.get_field("ambient")?.as_f32()?;
+    let diffuse = ctx.get_field("diffuse")?.as_f32()?;
+    let specular = ctx.get_field("specular")?.as_f32()?;
+    let shininess = ctx.get_field("shininess")?.as_f32()?;
     Ok(scene.add_material(Material{ ambient, diffuse, specular, shininess }))
 }
 
 fn parse_objs(
+    ctx: &Context,
     scene: &mut Scene,
     pats: &BTreeMap<String,PatternId>,
     mats: &BTreeMap<String,MaterialId>,
-    val: &Value
 ) -> Result<BTreeMap<String,ShapeId>,Error> {
-    let entries = val.as_sequence().map_or_else(
-        || Err(format_err!("`materials` must be a sequence of material entries")),
-        |seq| Ok(seq))?;
+    let entries = ctx.as_sequence()?;
 
     let mut obj_map = BTreeMap::new();
 
     // build up work queue
-    let mut work = Vec::with_capacity(entries.len());
+    let mut work = match entries.size_hint() {
+        (_, Some(upper)) => Vec::with_capacity(upper),
+        _ => Vec::new(),
+    };
+
     for entry in entries {
-        let name = entry.get("name").and_then(|val| val.as_str()).map_or_else(
-            || Err(format_err!("missing name for `object` definition")),
-            |val| Ok(val.to_string()))?;
-
-        let obj = parse_obj(entry)?;
-
+        let name = entry.get_field("name")?.as_str()?;
+        let obj = parse_obj(&entry)?;
         work.push((name, obj));
     }
 
@@ -335,63 +344,47 @@ enum ParsedObj {
     Material(Option<String>,Option<String>,String),
 }
 
-fn parse_obj(val: &Value) -> Result<ParsedObj,Error> {
-    if let Some(_) = val.get("sphere") {
+fn parse_obj(ctx: &Context) -> Result<ParsedObj,Error> {
+    if let Ok(_) = ctx.get_field("sphere") {
         Ok(ParsedObj::Sphere)
-    } else if let Some(_) = val.get("plane") {
+    } else if let Ok(_) = ctx.get_field("plane") {
         Ok(ParsedObj::Plane)
-    } else if let Some(args) = val.get("material") {
-        let pattern = args.get("pattern").and_then(|val| val.as_str()).map(|val| val.to_string());
-        let material = args.get("material").and_then(|val| val.as_str()).map(|val| val.to_string());
-        let name = args.get("object").map_or_else(
-            || Err(format_err!("`material` requires a `object`")),
-            |val| val.as_str().map_or_else(
-                || Err(format_err!("`object` must be a string")),
-                |val| Ok(val.to_string())))?;
+    } else if let Ok(args) = ctx.get_field("material") {
+        let pattern = optional(args.get_field("pattern")).map_or_else(
+            || Ok(None), |ctx| ctx.as_str().map(Some))?;
+        let material = optional(args.get_field("material")).map_or_else(
+            || Ok(None), |ctx| ctx.as_str().map(Some))?;
+        let name = args.get_field("object")?.as_str()?;
         Ok(ParsedObj::Material(pattern,material,name))
     } else {
         Err(format_err!("Unknown shape type"))
     }
 }
 
-fn parse_lights(scene: &mut Scene, val: &Value) -> Result<(),Error> {
-    val.as_sequence().map_or_else(
-        || Err(format_err!("`lights` must be a list of light descriptions")),
-        |lights| {
-            for light in lights {
-                parse_light(scene, light)?;
-            }
-            Ok(())
-        })
+fn parse_lights(ctx: &Context, scene: &mut Scene) -> Result<(),Error> {
+    let lights = ctx.as_sequence()?;
+    for light in lights {
+        parse_light(&light, scene)?;
+    }
+    Ok(())
 }
-fn parse_light(scene: &mut Scene, val: &Value) -> Result<(),Error> {
-    let position = val.get("position").map_or_else(
-        || Err(format_err!("`light` requires a `position`")),
-        parse_point3)?;
-
-    let intensity = val.get("intensity").map_or_else(
+fn parse_light(ctx: &Context, scene: &mut Scene) -> Result<(),Error> {
+    let position = parse_point3(&ctx.get_field("position")?)?;
+    let intensity = optional(ctx.get_field("intensity")).map_or_else(
         || Ok(Color::white()),
-        parse_color)?;
-
+        |ctx| parse_color(&ctx))?;
     scene.add_light(Light{ position, intensity });
-
     Ok(())
 }
 
 fn parse_roots(
+    ctx: &Context,
     scene: &mut Scene,
     objs: BTreeMap<String,ShapeId>,
-    val: &Value,
 ) -> Result<(),Error> {
-    let roots = val.as_sequence().map_or_else(
-        || Err(format_err!("`scene` must be a list of object names")),
-        |val| Ok(val))?;
-
+    let roots = ctx.as_sequence()?;
     for root in roots {
-        let name = root.as_str().map_or_else(
-            || Err(format_err!("elements of `scene` must be strings")),
-            |val| Ok(val.to_string()))?;
-
+        let name = root.as_str()?;
         if let Some(sid) = objs.get(&name) {
             scene.add_root(*sid);
         } else {
@@ -405,63 +398,24 @@ fn parse_roots(
 // Utility Parsers -------------------------------------------------------------
 
 /// Parse a color as either a hex value, or separate r, g, and b values.
-fn parse_color(val: &Value) -> Result<Color, Error> {
-    if let Some(val) = val.get("hex") {
-        let hex = val.as_u64().map_or_else(
-            || Err(format_err!("`hex` must be a hex number")),
-            |val| Ok(val))?;
-
-        let r = (((hex >> 16) & 0xff) as f32) / 255.0;
-        let g = (((hex >> 8) & 0xff) as f32) / 255.0;
-        let b = ((hex & 0xff) as f32) / 255.0;
-
+fn parse_color(ctx: &Context) -> Result<Color, Error> {
+    if let Ok(hex) = ctx.get_field("hex") {
+        let val = hex.as_usize()?;
+        let r = (((val >> 16) & 0xff) as f32) / 255.0;
+        let g = (((val >> 8) & 0xff) as f32) / 255.0;
+        let b = ((val & 0xff) as f32) / 255.0;
         Ok(Color::new(r,g,b))
     } else {
-        let r = val.get("r").and_then(|val| val.as_f64()).map_or_else(
-            || Err(format_err!("`r` missing from color spec")),
-            |val| Ok(val as f32))?;
-        let g = val.get("g").and_then(|val| val.as_f64()).map_or_else(
-            || Err(format_err!("`g` missing from color spec")),
-            |val| Ok(val as f32))?;
-        let b = val.get("b").and_then(|val| val.as_f64()).map_or_else(
-            || Err(format_err!("`b` missing from color spec")),
-            |val| Ok(val as f32))?;
+        let r = ctx.get_field("r")?.as_f32()?;
+        let g = ctx.get_field("g")?.as_f32()?;
+        let b = ctx.get_field("b")?.as_f32()?;
         Ok(Color::new(r,g,b))
     }
 }
 
-fn parse_point3(val: &Value) -> Result<Point3<f32>,Error> {
-    let mut pos = Point3::origin();
-
-    val.get("x").map_or_else(
-        || Err(format_err!("`x` missing")),
-        |val| val.as_f64().map_or_else(
-            || Err(format_err!("`x` must be a float")),
-            |val| {
-                pos.x = val as f32;
-                Ok(())
-            })
-        )?;
-
-    val.get("y").map_or_else(
-        || Err(format_err!("`x` missing")),
-        |val| val.as_f64().map_or_else(
-            || Err(format_err!("`x` must be a float")),
-            |val| {
-                pos.y = val as f32;
-                Ok(())
-            })
-        )?;
-
-    val.get("z").map_or_else(
-        || Err(format_err!("`z` missing")),
-        |val| val.as_f64().map_or_else(
-            || Err(format_err!("`z` must be a float")),
-            |val| {
-                pos.z = val as f32;
-                Ok(())
-            })
-        )?;
-
-    Ok(pos)
+fn parse_point3(ctx: &Context) -> Result<Point3<f32>,Error> {
+    let x = ctx.get_field("x")?.as_f32()?;
+    let y = ctx.get_field("y")?.as_f32()?;
+    let z = ctx.get_field("z")?.as_f32()?;
+    Ok(Point3::new(x,y,z))
 }
