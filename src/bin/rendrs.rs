@@ -67,7 +67,7 @@ fn main() -> Result<(),Error> {
     let scene_ref = Arc::new(scene);
 
     for camera in cameras {
-        let mut builder = ConfigBuilder::default()
+        let builder = ConfigBuilder::default()
             .set_jobs(jobs)
             .set_width(camera.width_px)
             .set_height(camera.height_px);

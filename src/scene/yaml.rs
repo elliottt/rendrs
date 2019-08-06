@@ -206,20 +206,6 @@ fn parse_pat(val: &Value) -> Result<ParsedPat,Error> {
     Err(format_err!("Unknown pattern type"))
 }
 
-fn parse_color(val: &Value) -> Result<Color, Error> {
-    let r = val.get("r").and_then(|val| val.as_f64()).map_or_else(
-        || Err(format_err!("`r` missing from color spec")),
-        |val| Ok(val as f32))?;
-    let g = val.get("g").and_then(|val| val.as_f64()).map_or_else(
-        || Err(format_err!("`g` missing from color spec")),
-        |val| Ok(val as f32))?;
-    let b = val.get("b").and_then(|val| val.as_f64()).map_or_else(
-        || Err(format_err!("`b` missing from color spec")),
-        |val| Ok(val as f32))?;
-
-    Ok(Color::new(r,g,b))
-}
-
 fn parse_mats(scene: &mut Scene, val: &Value) -> Result<BTreeMap<String,MaterialId>,Error> {
     let entries = val.as_sequence().map_or_else(
         || Err(format_err!("`materials` must be a sequence of material entries")),
@@ -392,6 +378,58 @@ fn parse_light(scene: &mut Scene, val: &Value) -> Result<(),Error> {
     Ok(())
 }
 
+fn parse_roots(
+    scene: &mut Scene,
+    objs: BTreeMap<String,ShapeId>,
+    val: &Value,
+) -> Result<(),Error> {
+    let roots = val.as_sequence().map_or_else(
+        || Err(format_err!("`scene` must be a list of object names")),
+        |val| Ok(val))?;
+
+    for root in roots {
+        let name = root.as_str().map_or_else(
+            || Err(format_err!("elements of `scene` must be strings")),
+            |val| Ok(val.to_string()))?;
+
+        if let Some(sid) = objs.get(&name) {
+            scene.add_root(*sid);
+        } else {
+            return Err(format_err!("object `{}` is not present", name));
+        }
+    }
+
+    Ok(())
+}
+
+// Utility Parsers -------------------------------------------------------------
+
+/// Parse a color as either a hex value, or separate r, g, and b values.
+fn parse_color(val: &Value) -> Result<Color, Error> {
+    if let Some(val) = val.get("hex") {
+        let hex = val.as_u64().map_or_else(
+            || Err(format_err!("`hex` must be a hex number")),
+            |val| Ok(val))?;
+
+        let r = (((hex >> 16) & 0xff) as f32) / 255.0;
+        let g = (((hex >> 8) & 0xff) as f32) / 255.0;
+        let b = ((hex & 0xff) as f32) / 255.0;
+
+        Ok(Color::new(r,g,b))
+    } else {
+        let r = val.get("r").and_then(|val| val.as_f64()).map_or_else(
+            || Err(format_err!("`r` missing from color spec")),
+            |val| Ok(val as f32))?;
+        let g = val.get("g").and_then(|val| val.as_f64()).map_or_else(
+            || Err(format_err!("`g` missing from color spec")),
+            |val| Ok(val as f32))?;
+        let b = val.get("b").and_then(|val| val.as_f64()).map_or_else(
+            || Err(format_err!("`b` missing from color spec")),
+            |val| Ok(val as f32))?;
+        Ok(Color::new(r,g,b))
+    }
+}
+
 fn parse_point3(val: &Value) -> Result<Point3<f32>,Error> {
     let mut pos = Point3::origin();
 
@@ -426,28 +464,4 @@ fn parse_point3(val: &Value) -> Result<Point3<f32>,Error> {
         )?;
 
     Ok(pos)
-}
-
-fn parse_roots(
-    scene: &mut Scene,
-    objs: BTreeMap<String,ShapeId>,
-    val: &Value,
-) -> Result<(),Error> {
-    let roots = val.as_sequence().map_or_else(
-        || Err(format_err!("`scene` must be a list of object names")),
-        |val| Ok(val))?;
-
-    for root in roots {
-        let name = root.as_str().map_or_else(
-            || Err(format_err!("elements of `scene` must be strings")),
-            |val| Ok(val.to_string()))?;
-
-        if let Some(sid) = objs.get(&name) {
-            scene.add_root(*sid);
-        } else {
-            return Err(format_err!("object `{}` is not present", name));
-        }
-    }
-
-    Ok(())
 }

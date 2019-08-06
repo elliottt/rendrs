@@ -3,15 +3,11 @@
 patterns:
 - name: red
   solid:
-    r: 1.0
-    g: 0.0
-    b: 0.0
+    hex: 0xff0000
 
 - name: white
   solid:
-    r: 1.0
-    g: 1.0
-    b: 1.0
+    hex: 0xffffff
 
 - name: stripes
   striped:
