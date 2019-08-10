@@ -276,21 +276,13 @@ fn parse_objs(
     let mut work = pq.work;
     let mut next = Vec::with_capacity(work.len());
     while !work.is_empty() {
-        let mut progress = false;
+        let start_len = work.len();
 
         while let Some((name,parsed)) = work.pop() {
             match parsed {
-                ParsedObj::Sphere => {
-                    let sid = scene.add(Shape::PrimShape{ shape: PrimShape::Sphere });
+                ParsedObj::PrimShape{ prim } => {
+                    let sid = scene.add(Shape::PrimShape{ shape: prim });
                     obj_map.insert(name,sid);
-                    progress = true;
-                    continue;
-                },
-
-                ParsedObj::Plane => {
-                    let sid = scene.add(Shape::PrimShape{ shape: PrimShape::XZPlane });
-                    obj_map.insert(name,sid);
-                    progress = true;
                     continue;
                 },
 
@@ -316,7 +308,6 @@ fn parse_objs(
                             node: *oid,
                         });
                         obj_map.insert(name,sid);
-                        progress = true;
                         continue;
                     }
                 },
@@ -338,7 +329,43 @@ fn parse_objs(
                         let sid = scene.add(Shape::transform(&trans, *oid));
 
                         obj_map.insert(name,sid);
-                        progress = true;
+                        continue;
+                    }
+                },
+
+                ParsedObj::Union{ ref objects } => {
+                    let mut resolved = Vec::with_capacity(objects.len());
+                    let mut all_resolved = true;
+                    for obj in objects {
+                        if let Some(oid) = obj_map.get(obj) {
+                            resolved.push(*oid);
+                        } else {
+                            all_resolved = false;
+                            break;
+                        }
+                    }
+
+                    if all_resolved {
+                        let sid = scene.add(Shape::union(resolved));
+                        obj_map.insert(name,sid);
+                        continue;
+                    }
+                },
+
+                ParsedObj::Subtract{ ref first, ref second } => {
+                    if let Some(aid) = obj_map.get(first) {
+                        if let Some(bid) = obj_map.get(second) {
+                            let sid = scene.add(Shape::subtract(*aid, *bid));
+                            obj_map.insert(name,sid);
+                            continue;
+                        }
+                    }
+                },
+
+                ParsedObj::UniformScale{ ref amount, ref object } => {
+                    if let Some(oid) = obj_map.get(object) {
+                        let sid = scene.add(Shape::uniform_scaling(*amount, *oid));
+                        obj_map.insert(name, sid);
                         continue;
                     }
                 },
@@ -347,7 +374,7 @@ fn parse_objs(
             next.push((name,parsed));
         }
 
-        if !progress {
+        if start_len == next.len() {
             return Err(format_err!("invalid objects: naming cycle, or missing named object"));
         }
 
@@ -358,8 +385,9 @@ fn parse_objs(
 }
 
 enum ParsedObj {
-    Sphere,
-    Plane,
+    PrimShape{
+        prim: PrimShape,
+    },
     Material{ 
         pattern: Option<String>,
         material: Option<String>,
@@ -369,6 +397,17 @@ enum ParsedObj {
         translation: Option<Vector3<f32>>,
         rotation: Option<(Vector3<f32>,f32)>,
         object: ObjName
+    },
+    Union{
+        objects: Vec<ObjName>,
+    },
+    Subtract{
+        first: ObjName,
+        second: ObjName,
+    },
+    UniformScale{
+        amount: f32,
+        object: ObjName,
     },
 }
 
@@ -404,10 +443,16 @@ fn parse_obj(
     work: &mut ParseQueue,
     name: ObjName,
 ) -> Result<(),Error> {
-    if let Ok(_) = ctx.get_field("sphere") {
-        work.push(name,ParsedObj::Sphere);
-    } else if let Ok(_) = ctx.get_field("plane") {
-        work.push(name,ParsedObj::Plane);
+    if let Ok(args) = ctx.get_field("prim") {
+        let sort = args.as_str()?;
+        match sort.as_str() {
+            "sphere" =>
+                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Sphere }),
+            "plane" =>
+                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::XZPlane }),
+            other =>
+                return Err(format_err!("unknown primitive `{}`", other)),
+        };
     } else if let Ok(args) = ctx.get_field("material") {
         let pattern = optional(args.get_field("pattern")).map_or_else(
             || Ok(None), |ctx| ctx.as_str().map(Some))?;
@@ -422,6 +467,21 @@ fn parse_obj(
             || Ok(None), |ctx| parse_rotation(&ctx).map(Some))?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name, ParsedObj::Transform{ translation, rotation, object });
+    } else if let Ok(args) = ctx.get_field("union") {
+        let mut objects = Vec::new();
+        let entries = args.as_sequence()?;
+        for entry in entries {
+            objects.push(parse_subtree(&entry, work)?);
+        }
+        work.push(name, ParsedObj::Union{ objects });
+    } else if let Ok(args) = ctx.get_field("subtract") {
+        let first = parse_subtree(&args.get_at(0)?, work)?;
+        let second = parse_subtree(&args.get_at(1)?, work)?;
+        work.push(name, ParsedObj::Subtract{ first, second });
+    } else if let Ok(args) = ctx.get_field("uniform-scale") {
+        let amount = args.get_field("amount")?.as_f32()?;
+        let object = parse_subtree(&args.get_field("object")?, work)?;
+        work.push(name, ParsedObj::UniformScale{ amount, object });
     } else {
         return Err(format_err!("Unknown shape type"));
     }
@@ -498,23 +558,40 @@ fn parse_color(ctx: &Context) -> Result<Color, Error> {
 }
 
 fn parse_point3(ctx: &Context) -> Result<Point3<f32>,Error> {
-    let x = ctx.get_field("x")?.as_f32()?;
-    let y = ctx.get_field("y")?.as_f32()?;
-    let z = ctx.get_field("z")?.as_f32()?;
+    let x = optional(ctx.get_field("x")).map_or_else(
+        || Ok(0.0), |ctx| ctx.as_f32())?;
+    let y = optional(ctx.get_field("y")).map_or_else(
+        || Ok(0.0), |ctx| ctx.as_f32())?;
+    let z = optional(ctx.get_field("z")).map_or_else(
+        || Ok(0.0), |ctx| ctx.as_f32())?;
     Ok(Point3::new(x,y,z))
 }
 
 fn parse_vector3(ctx: &Context) -> Result<Vector3<f32>,Error> {
-    let x = ctx.get_field("x")?.as_f32()?;
-    let y = ctx.get_field("y")?.as_f32()?;
-    let z = ctx.get_field("z")?.as_f32()?;
+    let x = optional(ctx.get_field("x")).map_or_else(
+        || Ok(0.0), |ctx| ctx.as_f32())?;
+    let y = optional(ctx.get_field("y")).map_or_else(
+        || Ok(0.0), |ctx| ctx.as_f32())?;
+    let z = optional(ctx.get_field("z")).map_or_else(
+        || Ok(0.0), |ctx| ctx.as_f32())?;
     Ok(Vector3::new(x,y,z))
 }
 
 fn parse_rotation(ctx: &Context) -> Result<(Vector3<f32>,f32),Error> {
     let vec = parse_vector3(ctx)?;
-    let angle = ctx.get_field("angle")?.as_f32()?;
+    let angle = parse_angle(ctx)?;
     Ok((vec,angle))
+}
+
+/// Parses either `radians` or `degrees` out of the context, with a preference for `radians`.
+fn parse_angle(ctx: &Context) -> Result<f32,Error> {
+    if let Ok(args) = ctx.get_field("radians") {
+        args.as_f32()
+    } else if let Ok(args) = ctx.get_field("degrees") {
+        args.as_f32().map(|val| std::f32::consts::PI * val / 180.0)
+    } else {
+        Err(format_err!("missing `radians` or `degrees`"))
+    }
 }
 
 fn parse_obj_name(ctx: &Context) -> Result<ObjName,Error> {
