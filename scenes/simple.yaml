@@ -31,6 +31,15 @@ objects:
   prim: plane
 
 - name: striped-sphere
+  material:
+    pattern: stripes
+    object:
+      uniform-scale:
+        amount: 2.0
+        object:
+          prim: sphere
+
+- name: striped-sphere
   transform:
     translation:
       y: 1.0
@@ -38,19 +47,21 @@ objects:
       z: 1.0
       degrees: 45
     object:
-      material:
-        pattern: stripes
-        object:
-          uniform-scale:
-            amount: 2.0
-            object:
-              prim: sphere
+      union:
+      - transform:
+          object: striped-sphere
+          translation:
+            x: 1.0
+      - transform:
+          object: striped-sphere
+          translation:
+            x: -1.0
 
 lights:
 - position:
-    x: 2.0
-    y: 5.0
-    z: -1.0
+    x: 5.0
+    y: 10.0
+    z: -10.0
 
 scene:
 - wall
