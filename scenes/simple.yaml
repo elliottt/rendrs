@@ -8,6 +8,13 @@ patterns:
     - solid:
         hex: 0xffffff
 
+- name: fade
+  gradient:
+    - solid:
+        hex: 0xff0000
+    - solid:
+        hex: 0xffffff
+
 objects:
 - name: wall
   transform:
@@ -19,10 +26,16 @@ objects:
       degrees: -90
 
     object:
-      prim: plane
+      material:
+        pattern: stripes
+        object:
+          prim: plane
 
 - name: ground
-  prim: plane
+  material:
+    pattern: fade
+    object:
+      prim: plane
 
 - name: big-sphere
   uniform-scale:

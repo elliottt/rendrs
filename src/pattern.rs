@@ -72,7 +72,7 @@ impl Pattern {
                 } else {
                     let a = store(*first).color_at(store, point);
                     let b = store(*second).color_at(store, point);
-                    (a * point.x) + (b * (1.0 - point.x))
+                    (a * (1.0 - point.x)) + (b * point.x)
                 }
             },
 
