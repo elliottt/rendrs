@@ -1,7 +1,7 @@
 
 use failure::{Error,format_err};
 use serde_yaml::Value;
-use nalgebra::{Point3,Vector3,Matrix4};
+use nalgebra::{Unit,Point3,Vector3,Matrix4};
 
 use std::{
     collections::BTreeMap,
@@ -86,6 +86,10 @@ impl<'a> Context<'a> {
         self.focus.as_str().map_or_else(
             || Err(format_err!("expected a string")),
             |val| Ok(val.to_string()))
+    }
+
+    fn is_hash(&self) -> bool {
+        self.focus.is_mapping()
     }
 }
 
@@ -258,23 +262,18 @@ fn parse_objs(
     scene: &mut Scene,
     pats: &BTreeMap<String,PatternId>,
     mats: &BTreeMap<String,MaterialId>,
-) -> Result<BTreeMap<String,ShapeId>,Error> {
+) -> Result<BTreeMap<ObjName,ShapeId>,Error> {
     let entries = ctx.as_sequence()?;
 
-    let mut obj_map = BTreeMap::new();
-
     // build up work queue
-    let mut work = match entries.size_hint() {
-        (_, Some(upper)) => Vec::with_capacity(upper),
-        _ => Vec::new(),
-    };
-
+    let mut pq = ParseQueue::new();
     for entry in entries {
-        let name = entry.get_field("name")?.as_str()?;
-        let obj = parse_obj(&entry)?;
-        work.push((name, obj));
+        let name = parse_obj_name(&entry.get_field("name")?)?;
+        parse_obj(&entry, &mut pq, name)?;
     }
 
+    let mut obj_map = BTreeMap::new();
+    let mut work = pq.work;
     let mut next = Vec::with_capacity(work.len());
     while !work.is_empty() {
         let mut progress = false;
@@ -295,7 +294,7 @@ fn parse_objs(
                     continue;
                 },
 
-                ParsedObj::Material(ref pattern,ref material,ref object) => {
+                ParsedObj::Material{ ref pattern, ref material, ref object } => {
                     if let Some(oid) = obj_map.get(object) {
                         let pid = match pattern {
                             None => Ok(scene.default_pattern),
@@ -322,7 +321,27 @@ fn parse_objs(
                     }
                 },
 
-                _ => {},
+                ParsedObj::Transform{ ref translation, ref rotation, ref object } => {
+                    if let Some(oid) = obj_map.get(object) {
+                        let mut trans =
+                            if let Some((vec,angle)) = rotation {
+                                let axis = Unit::new_normalize(vec.clone());
+                                Matrix4::from_axis_angle(&axis, *angle)
+                            } else {
+                                Matrix4::identity()
+                            };
+
+                        if let Some(vec) = translation {
+                            trans = trans.append_translation(vec);
+                        }
+
+                        let sid = scene.add(Shape::transform(&trans, *oid));
+
+                        obj_map.insert(name,sid);
+                        progress = true;
+                        continue;
+                    }
+                },
             }
 
             next.push((name,parsed));
@@ -341,23 +360,87 @@ fn parse_objs(
 enum ParsedObj {
     Sphere,
     Plane,
-    Material(Option<String>,Option<String>,String),
+    Material{ 
+        pattern: Option<String>,
+        material: Option<String>,
+        object: ObjName,
+    },
+    Transform{
+        translation: Option<Vector3<f32>>,
+        rotation: Option<(Vector3<f32>,f32)>,
+        object: ObjName
+    },
 }
 
-fn parse_obj(ctx: &Context) -> Result<ParsedObj,Error> {
+#[derive(Eq,PartialEq,Ord,PartialOrd,Debug,Clone)]
+enum ObjName{
+    String(String),
+    Fresh(usize),
+}
+
+struct ParseQueue {
+    next: usize,
+    work: Vec<(ObjName,ParsedObj)>,
+}
+
+impl ParseQueue {
+    fn new() -> Self {
+        ParseQueue { next: 0, work: Vec::new() }
+    }
+
+    fn fresh_name(&mut self) -> ObjName {
+        let name = ObjName::Fresh(self.next);
+        self.next += 1;
+        name
+    }
+
+    fn push(&mut self, name: ObjName, val: ParsedObj) {
+        self.work.push((name,val))
+    }
+}
+
+fn parse_obj(
+    ctx: &Context,
+    work: &mut ParseQueue,
+    name: ObjName,
+) -> Result<(),Error> {
     if let Ok(_) = ctx.get_field("sphere") {
-        Ok(ParsedObj::Sphere)
+        work.push(name,ParsedObj::Sphere);
     } else if let Ok(_) = ctx.get_field("plane") {
-        Ok(ParsedObj::Plane)
+        work.push(name,ParsedObj::Plane);
     } else if let Ok(args) = ctx.get_field("material") {
         let pattern = optional(args.get_field("pattern")).map_or_else(
             || Ok(None), |ctx| ctx.as_str().map(Some))?;
         let material = optional(args.get_field("material")).map_or_else(
             || Ok(None), |ctx| ctx.as_str().map(Some))?;
-        let name = args.get_field("object")?.as_str()?;
-        Ok(ParsedObj::Material(pattern,material,name))
+        let object = parse_subtree(&args.get_field("object")?, work)?;
+        work.push(name,ParsedObj::Material{ pattern, material, object });
+    } else if let Ok(args) = ctx.get_field("transform") {
+        let translation = optional(args.get_field("translation")).map_or_else(
+            || Ok(None), |ctx| parse_vector3(&ctx).map(Some))?;
+        let rotation = optional(args.get_field("rotation")).map_or_else(
+            || Ok(None), |ctx| parse_rotation(&ctx).map(Some))?;
+        let object = parse_subtree(&args.get_field("object")?, work)?;
+        work.push(name, ParsedObj::Transform{ translation, rotation, object });
     } else {
-        Err(format_err!("Unknown shape type"))
+        return Err(format_err!("Unknown shape type"));
+    }
+
+    Ok(())
+}
+
+fn parse_subtree(
+    ctx: &Context,
+    work: &mut ParseQueue
+) -> Result<ObjName,Error> {
+    if let Ok(obj_ref) = parse_obj_name(ctx) {
+        Ok(obj_ref)
+    } else if ctx.is_hash() {
+        let fresh = work.fresh_name();
+        parse_obj(ctx, work, fresh.clone())?;
+        Ok(fresh)
+    } else {
+        Err(format_err!("Unable to parse `object`"))
     }
 }
 
@@ -380,15 +463,16 @@ fn parse_light(ctx: &Context, scene: &mut Scene) -> Result<(),Error> {
 fn parse_roots(
     ctx: &Context,
     scene: &mut Scene,
-    objs: BTreeMap<String,ShapeId>,
+    objs: BTreeMap<ObjName,ShapeId>,
 ) -> Result<(),Error> {
     let roots = ctx.as_sequence()?;
     for root in roots {
-        let name = root.as_str()?;
+        let name = parse_obj_name(&root)?;
         if let Some(sid) = objs.get(&name) {
             scene.add_root(*sid);
         } else {
-            return Err(format_err!("object `{}` is not present", name));
+            // TODO: don't use the debug formatter here
+            return Err(format_err!("object `{:?}` is not present", name));
         }
     }
 
@@ -418,4 +502,22 @@ fn parse_point3(ctx: &Context) -> Result<Point3<f32>,Error> {
     let y = ctx.get_field("y")?.as_f32()?;
     let z = ctx.get_field("z")?.as_f32()?;
     Ok(Point3::new(x,y,z))
+}
+
+fn parse_vector3(ctx: &Context) -> Result<Vector3<f32>,Error> {
+    let x = ctx.get_field("x")?.as_f32()?;
+    let y = ctx.get_field("y")?.as_f32()?;
+    let z = ctx.get_field("z")?.as_f32()?;
+    Ok(Vector3::new(x,y,z))
+}
+
+fn parse_rotation(ctx: &Context) -> Result<(Vector3<f32>,f32),Error> {
+    let vec = parse_vector3(ctx)?;
+    let angle = ctx.get_field("angle")?.as_f32()?;
+    Ok((vec,angle))
+}
+
+fn parse_obj_name(ctx: &Context) -> Result<ObjName,Error> {
+    let name = ctx.as_str()?;
+    Ok(ObjName::String(name))
 }

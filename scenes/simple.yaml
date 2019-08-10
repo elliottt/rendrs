@@ -18,13 +18,22 @@ objects:
 - name: ground
   plane:
 
-- name: sphere
-  sphere:
-
 - name: striped-sphere
-  material:
-    pattern: stripes
-    object: sphere
+  transform:
+    translation:
+      x: 0.0
+      y: 1.0
+      z: 0.0
+    rotation:
+      x: 0.0
+      y: 0.0
+      z: 1.0
+      angle: 0.7
+    object:
+      material:
+        pattern: stripes
+        object:
+          sphere:
 
 lights:
 - position:
