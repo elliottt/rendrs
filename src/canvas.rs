@@ -105,6 +105,14 @@ impl Add for &Color {
     }
 }
 
+impl Add for Color {
+    type Output = Color;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        &self + &rhs
+    }
+}
+
 impl Mul for &Color {
 
     type Output = Color;

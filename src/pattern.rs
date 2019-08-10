@@ -33,6 +33,12 @@ pub enum Pattern {
         color: Color,
     },
 
+    /// Fade from the first pattern to the second from 0 - 1.
+    Gradient{
+        first: PatternId,
+        second: PatternId,
+    },
+
     /// Striped
     Stripe{
         first: PatternId,
@@ -49,13 +55,25 @@ impl Pattern {
         Pattern::Stripe{ first, second }
     }
 
-    pub fn color_at<'a,Pats>(&'a self, store: Pats, point: &Point3<f32>)
-        -> &'a Color
+    pub fn color_at<'a,Pats>(&'a self, store: &Pats, point: &Point3<f32>)
+        -> Color
         where Pats: Fn(PatternId) -> &'a Pattern
     {
         match self {
             Pattern::Solid{ color } => {
-                &color
+                color.clone()
+            },
+
+            Pattern::Gradient{ first, second } => {
+                if point.x < 0.0 {
+                    store(*first).color_at(store, point)
+                } else if point.x > 1.0 {
+                    store(*second).color_at(store, point)
+                } else {
+                    let a = store(*first).color_at(store, point);
+                    let b = store(*second).color_at(store, point);
+                    (a * point.x) + (b * (1.0 - point.x))
+                }
             },
 
             Pattern::Stripe{ first, second } => {
@@ -82,7 +100,7 @@ fn test_stripes() {
     let white = store.add_pattern(Pattern::solid(Color::white()));
     let tex = Pattern::stripe(black, white);
     let lookup = |pid| store.get_pattern(pid);
-    assert_eq!(tex.color_at(lookup, &Point3::new(0.0, 0.0, 0.0)), &Color::black());
-    assert_eq!(tex.color_at(lookup, &Point3::new(1.0, 0.0, 0.0)), &Color::white());
-    assert_eq!(tex.color_at(lookup, &Point3::new(2.5, 0.0, 0.0)), &Color::black());
+    assert_eq!(tex.color_at(&lookup, &Point3::new(0.0, 0.0, 0.0)), Color::black());
+    assert_eq!(tex.color_at(&lookup, &Point3::new(1.0, 0.0, 0.0)), Color::white());
+    assert_eq!(tex.color_at(&lookup, &Point3::new(2.5, 0.0, 0.0)), Color::black());
 }

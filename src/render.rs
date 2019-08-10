@@ -147,7 +147,7 @@ fn render_job(
             let mat = scene.get_material(res.material.1);
             let normal = res.normal(|pt| scene.sdf(pt));
 
-            let obj_color = pat.color_at(get_pattern, &res.object_space_point);
+            let obj_color = pat.color_at(&get_pattern, &res.object_space_point);
 
             // the direction towards the eye
             let eyev = -ray.direction;

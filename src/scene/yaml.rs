@@ -93,6 +93,35 @@ impl<'a> Context<'a> {
     }
 }
 
+/// Parsed names, plus fresh names for nested structures.
+#[derive(Eq,PartialEq,Ord,PartialOrd,Debug,Clone)]
+enum ParsedName{
+    String(String),
+    Fresh(usize),
+}
+
+/// A queue of parsed objects with names to resolve.
+struct ParseQueue<T> {
+    next: usize,
+    work: Vec<(ParsedName,T)>,
+}
+
+impl<T> ParseQueue<T> {
+    fn new() -> Self {
+        ParseQueue { next: 0, work: Vec::new() }
+    }
+
+    fn fresh_name(&mut self) -> ParsedName {
+        let name = ParsedName::Fresh(self.next);
+        self.next += 1;
+        name
+    }
+
+    fn push(&mut self, name: ParsedName, val: T) {
+        self.work.push((name,val))
+    }
+}
+
 fn parse_scene(ctx: &Context) -> Result<Scene,Error> {
     let mut scene = Scene::new();
 
@@ -154,12 +183,21 @@ fn parse_perspective(ctx: &Context) -> Result<Camera,Error> {
 
 #[derive(Debug)]
 enum ParsedPat {
-    Solid(Color),
-    Striped(String,String),
+    Solid{
+        color: Color
+    },
+    Striped{
+        first: ParsedName,
+        second: ParsedName,
+    },
+    Gradient{
+        first: ParsedName,
+        second: ParsedName,
+    },
 }
 
 fn parse_pats(ctx: &Context, scene: &mut Scene)
-    -> Result<BTreeMap<String,PatternId>, Error>
+    -> Result<BTreeMap<ParsedName,PatternId>, Error>
 {
 
     let entries = ctx.as_sequence()?;
@@ -167,71 +205,99 @@ fn parse_pats(ctx: &Context, scene: &mut Scene)
     let mut pat_map = BTreeMap::new();
 
     // build the work queue
-    let mut work = match entries.size_hint() {
-        (_, Some(upper)) => Vec::with_capacity(upper),
-        _ => Vec::new(),
-    };
+    let mut pq = ParseQueue::new();
     for entry in entries {
         let name = entry.get_field("name")?.as_str()?;
-        let parsed = parse_pat(&entry)?;
-        match parsed {
-            ParsedPat::Solid(color) => {
-                let pid = scene.add_pattern(Pattern::Solid{ color });
-                pat_map.insert(name.to_string(), pid);
-            },
-
-            _ => {
-                work.push((name,parsed));
-            },
-        }
+        parse_pat(&entry, &mut pq, ParsedName::String(name))?;
     }
 
+    let mut work = pq.work;
     let mut next = Vec::with_capacity(work.len());
     while !work.is_empty() {
-        let mut progress = false;
+        let start_len = work.len();
 
         while let Some((name,parsed)) = work.pop() {
             match parsed {
-                ParsedPat::Striped(ref a, ref b) => {
-                    if let Some(first) = pat_map.get(a) {
-                        if let Some(second) = pat_map.get(b) {
+                ParsedPat::Solid{ ref color } => {
+                    let pid = scene.add_pattern(Pattern::Solid{ color: color.clone() });
+                    pat_map.insert(name, pid);
+                    continue;
+                },
+
+                ParsedPat::Striped{ ref first, ref second } => {
+                    if let Some(a) = pat_map.get(first) {
+                        if let Some(b) = pat_map.get(second) {
                             let pid = scene.add_pattern(Pattern::Stripe{
-                                first: *first,
-                                second: *second
+                                first: *a,
+                                second: *b,
                             });
-                            pat_map.insert(name.to_string(), pid);
-                            progress = true;
+                            pat_map.insert(name, pid);
                             continue;
                         }
                     }
                 },
 
-                _ => {},
+                ParsedPat::Gradient{ ref first, ref second } => {
+                    if let Some(a) = pat_map.get(first) {
+                        if let Some(b) = pat_map.get(second) {
+                            let pid = scene.add_pattern(Pattern::Gradient{
+                                first: *a,
+                                second: *b,
+                            });
+                            pat_map.insert(name, pid);
+                            continue;
+                        }
+                    }
+                },
             }
 
             next.push((name,parsed));
         }
 
-        std::mem::swap(&mut next, &mut work);
-
-        if !progress {
+        if start_len == next.len() {
             return Err(format_err!("invalid patterns: naming cycle, or missing named pattern"));
         }
+
+        std::mem::swap(&mut next, &mut work);
     }
 
     Ok(pat_map)
 }
 
-fn parse_pat(ctx: &Context) -> Result<ParsedPat,Error> {
+fn parse_pat(
+    ctx: &Context,
+    work: &mut ParseQueue<ParsedPat>,
+    name: ParsedName,
+) -> Result<(),Error> {
     if let Ok(ctx) = ctx.get_field("solid") {
         let color = parse_color(&ctx)?;
-        Ok(ParsedPat::Solid(color))
+        work.push(name, ParsedPat::Solid{ color });
+    } else if let Ok(ctx) = ctx.get_field("gradient") {
+        let first = parse_pat_subtree(&ctx.get_at(0)?, work)?;
+        let second = parse_pat_subtree(&ctx.get_at(1)?, work)?;
+        work.push(name, ParsedPat::Gradient{ first, second });
     } else if let Ok(ctx) = ctx.get_field("striped") {
-        let a = ctx.get_at(0)?.as_str()?;
-        let b = ctx.get_at(1)?.as_str()?;
-        Ok(ParsedPat::Striped(a,b))
+        let first = parse_pat_subtree(&ctx.get_at(0)?, work)?;
+        let second = parse_pat_subtree(&ctx.get_at(1)?, work)?;
+        work.push(name, ParsedPat::Striped{ first, second });
     } else {
-        Err(format_err!("Unknown pattern type"))
+        return Err(format_err!("Unknown pattern type"))
+    }
+    Ok(())
+}
+
+fn parse_pat_subtree(
+    ctx: &Context,
+    work: &mut ParseQueue<ParsedPat>,
+) -> Result<ParsedName,Error> {
+    if let Ok(name) = ctx.as_str() {
+        Ok(ParsedName::String(name.to_string()))
+    } else if ctx.is_hash() {
+        let name = work.fresh_name();
+        parse_pat(ctx, work, name.clone())?;
+        Ok(name.clone())
+    } else {
+        Err(format_err!("unable to parse pattern"))
     }
 }
 
@@ -260,9 +326,9 @@ fn parse_mat(ctx: &Context, scene: &mut Scene) -> Result<MaterialId,Error> {
 fn parse_objs(
     ctx: &Context,
     scene: &mut Scene,
-    pats: &BTreeMap<String,PatternId>,
+    pats: &BTreeMap<ParsedName,PatternId>,
     mats: &BTreeMap<String,MaterialId>,
-) -> Result<BTreeMap<ObjName,ShapeId>,Error> {
+) -> Result<BTreeMap<ParsedName,ShapeId>,Error> {
     let entries = ctx.as_sequence()?;
 
     // build up work queue
@@ -292,7 +358,7 @@ fn parse_objs(
                             None => Ok(scene.default_pattern),
                             Some(ref name) =>
                                 pats.get(name).map_or_else(
-                                    || Err(format_err!("missing pattern `{}`", name)),
+                                    || Err(format_err!("missing pattern `{:?}`", name)),
                                     |val| Ok(*val)),
                         }?;
                         let mid = match material {
@@ -389,59 +455,32 @@ enum ParsedObj {
         prim: PrimShape,
     },
     Material{ 
-        pattern: Option<String>,
+        pattern: Option<ParsedName>,
         material: Option<String>,
-        object: ObjName,
+        object: ParsedName,
     },
     Transform{
         translation: Option<Vector3<f32>>,
         rotation: Option<(Vector3<f32>,f32)>,
-        object: ObjName
+        object: ParsedName
     },
     Union{
-        objects: Vec<ObjName>,
+        objects: Vec<ParsedName>,
     },
     Subtract{
-        first: ObjName,
-        second: ObjName,
+        first: ParsedName,
+        second: ParsedName,
     },
     UniformScale{
         amount: f32,
-        object: ObjName,
+        object: ParsedName,
     },
-}
-
-#[derive(Eq,PartialEq,Ord,PartialOrd,Debug,Clone)]
-enum ObjName{
-    String(String),
-    Fresh(usize),
-}
-
-struct ParseQueue {
-    next: usize,
-    work: Vec<(ObjName,ParsedObj)>,
-}
-
-impl ParseQueue {
-    fn new() -> Self {
-        ParseQueue { next: 0, work: Vec::new() }
-    }
-
-    fn fresh_name(&mut self) -> ObjName {
-        let name = ObjName::Fresh(self.next);
-        self.next += 1;
-        name
-    }
-
-    fn push(&mut self, name: ObjName, val: ParsedObj) {
-        self.work.push((name,val))
-    }
 }
 
 fn parse_obj(
     ctx: &Context,
-    work: &mut ParseQueue,
-    name: ObjName,
+    work: &mut ParseQueue<ParsedObj>,
+    name: ParsedName,
 ) -> Result<(),Error> {
     if let Ok(args) = ctx.get_field("prim") {
         let sort = args.as_str()?;
@@ -455,7 +494,7 @@ fn parse_obj(
         };
     } else if let Ok(args) = ctx.get_field("material") {
         let pattern = optional(args.get_field("pattern")).map_or_else(
-            || Ok(None), |ctx| ctx.as_str().map(Some))?;
+            || Ok(None), |ctx| ctx.as_str().map(|name| Some(ParsedName::String(name))))?;
         let material = optional(args.get_field("material")).map_or_else(
             || Ok(None), |ctx| ctx.as_str().map(Some))?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
@@ -491,8 +530,8 @@ fn parse_obj(
 
 fn parse_subtree(
     ctx: &Context,
-    work: &mut ParseQueue
-) -> Result<ObjName,Error> {
+    work: &mut ParseQueue<ParsedObj>
+) -> Result<ParsedName,Error> {
     if let Ok(obj_ref) = parse_obj_name(ctx) {
         Ok(obj_ref)
     } else if ctx.is_hash() {
@@ -523,7 +562,7 @@ fn parse_light(ctx: &Context, scene: &mut Scene) -> Result<(),Error> {
 fn parse_roots(
     ctx: &Context,
     scene: &mut Scene,
-    objs: BTreeMap<ObjName,ShapeId>,
+    objs: BTreeMap<ParsedName,ShapeId>,
 ) -> Result<(),Error> {
     let roots = ctx.as_sequence()?;
     for root in roots {
@@ -594,7 +633,7 @@ fn parse_angle(ctx: &Context) -> Result<f32,Error> {
     }
 }
 
-fn parse_obj_name(ctx: &Context) -> Result<ObjName,Error> {
+fn parse_obj_name(ctx: &Context) -> Result<ParsedName,Error> {
     let name = ctx.as_str()?;
-    Ok(ObjName::String(name))
+    Ok(ParsedName::String(name))
 }

@@ -1,18 +1,12 @@
 # This is a simple scene with a single blue unit-sphere, centered at the origin,
 # and a light set back and above, in the same plane as the camera.
 patterns:
-- name: red
-  solid:
-    hex: 0xff0000
-
-- name: white
-  solid:
-    hex: 0xffffff
-
 - name: stripes
   striped:
-    - red
-    - white
+    - solid:
+        hex: 0xff0000
+    - solid:
+        hex: 0xffffff
 
 objects:
 - name: wall
