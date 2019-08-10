@@ -30,14 +30,16 @@ objects:
 - name: ground
   prim: plane
 
+- name: big-sphere
+  uniform-scale:
+    amount: 2.0
+    object:
+      prim: sphere
+
 - name: striped-sphere
   material:
     pattern: stripes
-    object:
-      uniform-scale:
-        amount: 2.0
-        object:
-          prim: sphere
+    object: big-sphere
 
 - name: striped-sphere
   transform:
@@ -47,15 +49,22 @@ objects:
       z: 1.0
       degrees: 45
     object:
-      union:
-      - transform:
-          object: striped-sphere
-          translation:
-            x: 1.0
-      - transform:
-          object: striped-sphere
-          translation:
-            x: -1.0
+
+      # There's a problem here: the object-space point is not computed relative
+      # to the union, but to the individual object of the union. It needs to be
+      # put back into the space of the union to do the texturing correctly.
+      material:
+        pattern: stripes
+        object:
+          union:
+          - transform:
+              object: striped-sphere
+              translation:
+                x: 1.0
+          - transform:
+              object: striped-sphere
+              translation:
+                x: -1.0
 
 lights:
 - position:
