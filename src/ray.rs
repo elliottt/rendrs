@@ -13,6 +13,7 @@ pub struct Ray {
     pub direction: Vector3<f32>,
 }
 
+#[derive(Debug)]
 pub struct SDFResult<Mat> {
     pub distance: f32,
     pub object_space_point: Point3<f32>,
@@ -34,53 +35,31 @@ impl Ray {
 
     pub fn march<SDF,Mat>(&self, max_steps: usize, sign: f32, sdf: SDF)
         -> Option<MarchResult<Mat>>
-        where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>,
+        where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>
     {
-        // for over-relaxation sphere tracing
-        let mut previous_radius = 0.0;
-        let mut step_length = 0.0;
-        let mut omega = 1.2;
-
         let mut pos = self.origin.clone();
-        let mut total_dist = 0.0;
-
+        let mut total_dist: f32 = 0.0;
         for i in 0 .. max_steps {
             let res = sdf(&pos);
-
             let signed_radius = sign * res.distance;
-            let radius = res.distance.abs();
 
-            // over-relaxation fails when the new radius doesn't overlap the previous one.
-            let sor_fail = omega > 1.0 && (previous_radius + signed_radius) < step_length;
-
-            if sor_fail {
-                // travel back by the additional amount, and disable over-relaxation
-                step_length -= omega * step_length;
-                omega = 1.0;
-            } else {
-
-                // since sof_fail is false, we know that the signed_radius was valid
-                if radius < Self::MIN_DIST {
-                    return Some(MarchResult{
-                        steps: i,
-                        distance: total_dist,
-                        object_space_point: res.object_space_point,
-                        world_space_point: pos,
-                        material: res.material,
-                    })
-                }
-
-                if total_dist > Self::MAX_DIST {
-                    break;
-                }
-
-                step_length = omega * signed_radius;
+            if signed_radius < Self::MIN_DIST {
+                return Some(MarchResult{
+                    steps: i,
+                    distance: total_dist,
+                    object_space_point: res.object_space_point,
+                    world_space_point: pos,
+                    material: res.material,
+                })
             }
 
-            previous_radius = radius;
+            total_dist += signed_radius;
 
-            total_dist += step_length;
-            pos += step_length * self.direction;
+            if total_dist > Self::MAX_DIST {
+                break;
+            }
+
+            pos += signed_radius * self.direction;
         }
 
         None

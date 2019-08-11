@@ -30,7 +30,7 @@ impl Default for ConfigBuilder {
             config: Config {
                 width: 100,
                 height: 100,
-                max_steps: 100,
+                max_steps: 200,
                 jobs: 1,
                 debug_mode: None,
             }
