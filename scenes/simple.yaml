@@ -1,84 +1,25 @@
 # This is a simple scene with a single blue unit-sphere, centered at the origin,
 # and a light set back and above, in the same plane as the camera.
 patterns:
-- name: stripes
-  striped:
-    - solid:
-        hex: 0xff0000
-    - solid:
-        hex: 0xffffff
-
-- name: fade
-  gradient:
-    - solid:
-        hex: 0xff0000
-    - solid:
-        hex: 0xffffff
+- name: blue
+  solid:
+    hex: 0x0000ff
 
 objects:
-- name: wall
-  transform:
-    translation:
-      z: 3.0
-
-    rotation:
-      x: 1.0
-      degrees: -90
-
-    object:
-      material:
-        pattern: stripes
-        object:
-          prim: plane
-
-- name: ground
+- name: ball
   material:
-    pattern: fade
-    object:
-      prim: plane
-
-- name: big-sphere
-  uniform-scale:
-    amount: 2.0
+    pattern: blue
     object:
       prim: sphere
 
-- name: striped-sphere
-  material:
-    pattern: stripes
-    object: big-sphere
-
-- name: striped-sphere
-  transform:
-    translation:
-      y: 1.0
-    rotation:
-      z: 1.0
-      degrees: 45
-    object:
-      material:
-        pattern: fade
-        object:
-          union:
-          - transform:
-              object: striped-sphere
-              translation:
-                x: 1.0
-          - transform:
-              object: striped-sphere
-              translation:
-                x: -1.0
-
 lights:
 - position:
-    x: 5.0
-    y: 10.0
-    z: -10.0
+    x: 0.0
+    y: 2.0
+    z: -2.0
 
 scene:
-- wall
-- ground
-- striped-sphere
+- ball
 
 cameras:
 - perspective:
