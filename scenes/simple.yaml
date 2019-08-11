@@ -26,7 +26,8 @@ cameras:
     width: 1000
     height: 1000
 
-    fov: 90.0
+    fov:
+      degrees: 90.0
 
     position:
       x: 0.0

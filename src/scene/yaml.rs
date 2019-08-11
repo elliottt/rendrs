@@ -171,7 +171,7 @@ fn parse_camera(ctx: &Context) -> Result<Camera,Error> {
 fn parse_perspective(ctx: &Context) -> Result<Camera,Error> {
     let width = ctx.get_field("width")?.as_usize()?;
     let height = ctx.get_field("height")?.as_usize()?;
-    let fov = ctx.get_field("fov")?.as_f32()?;
+    let fov = parse_angle(&ctx.get_field("fov")?)?;
     let position = parse_point3(&ctx.get_field("position")?)?;
     let target = parse_point3(&ctx.get_field("target")?)?;
 
