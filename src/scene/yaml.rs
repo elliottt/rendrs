@@ -194,6 +194,19 @@ enum ParsedPat {
         first: ParsedName,
         second: ParsedName,
     },
+    Circles{
+        first: ParsedName,
+        second: ParsedName,
+    },
+    Checkers{
+        first: ParsedName,
+        second: ParsedName,
+    },
+    Transform{
+        translation: Option<Vector3<f32>>,
+        rotation: Option<(Vector3<f32>,f32)>,
+        pattern: ParsedName,
+    }
 }
 
 fn parse_pats(ctx: &Context, scene: &mut Scene)
@@ -227,10 +240,7 @@ fn parse_pats(ctx: &Context, scene: &mut Scene)
                 ParsedPat::Striped{ ref first, ref second } => {
                     if let Some(a) = pat_map.get(first) {
                         if let Some(b) = pat_map.get(second) {
-                            let pid = scene.add_pattern(Pattern::Stripe{
-                                first: *a,
-                                second: *b,
-                            });
+                            let pid = scene.add_pattern(Pattern::stripe(*a, *b));
                             pat_map.insert(name, pid);
                             continue;
                         }
@@ -240,13 +250,50 @@ fn parse_pats(ctx: &Context, scene: &mut Scene)
                 ParsedPat::Gradient{ ref first, ref second } => {
                     if let Some(a) = pat_map.get(first) {
                         if let Some(b) = pat_map.get(second) {
-                            let pid = scene.add_pattern(Pattern::Gradient{
-                                first: *a,
-                                second: *b,
-                            });
+                            let pid = scene.add_pattern(Pattern::gradient(*a, *b));
                             pat_map.insert(name, pid);
                             continue;
                         }
+                    }
+                },
+
+                ParsedPat::Circles{ ref first, ref second } => {
+                    if let Some(a) = pat_map.get(first) {
+                        if let Some(b) = pat_map.get(second) {
+                            let pid = scene.add_pattern(Pattern::circles(*a, *b));
+                            pat_map.insert(name, pid);
+                            continue;
+                        }
+                    }
+                },
+
+                ParsedPat::Checkers{ ref first, ref second } => {
+                    if let Some(a) = pat_map.get(first) {
+                        if let Some(b) = pat_map.get(second) {
+                            let pid = scene.add_pattern(Pattern::checkers(*a, *b));
+                            pat_map.insert(name, pid);
+                            continue;
+                        }
+                    }
+                },
+
+                ParsedPat::Transform{ ref translation, ref rotation, ref pattern } => {
+                    if let Some(cid) = pat_map.get(pattern) {
+                        let mut trans =
+                            if let Some((vec,angle)) = rotation {
+                                let axis = Unit::new_normalize(vec.clone());
+                                Matrix4::from_axis_angle(&axis, *angle)
+                            } else {
+                                Matrix4::identity()
+                            };
+
+                        if let Some(vec) = translation {
+                            trans = trans.append_translation(vec);
+                        }
+
+                        let pid = scene.add_pattern(Pattern::transform(trans, *cid));
+                        pat_map.insert(name, pid);
+                        continue;
                     }
                 },
             }
@@ -280,6 +327,21 @@ fn parse_pat(
         let first = parse_pat_subtree(&ctx.get_at(0)?, work)?;
         let second = parse_pat_subtree(&ctx.get_at(1)?, work)?;
         work.push(name, ParsedPat::Striped{ first, second });
+    } else if let Ok(ctx) = ctx.get_field("circles") {
+        let first = parse_pat_subtree(&ctx.get_at(0)?, work)?;
+        let second = parse_pat_subtree(&ctx.get_at(1)?, work)?;
+        work.push(name, ParsedPat::Circles{ first, second });
+    } else if let Ok(ctx) = ctx.get_field("checkers") {
+        let first = parse_pat_subtree(&ctx.get_at(0)?, work)?;
+        let second = parse_pat_subtree(&ctx.get_at(1)?, work)?;
+        work.push(name, ParsedPat::Checkers{ first, second });
+    } else if let Ok(ctx) = ctx.get_field("transform") {
+        let translation = optional(ctx.get_field("translation")).map_or_else(
+            || Ok(None), |ctx| parse_vector3(&ctx).map(Some))?;
+        let rotation = optional(ctx.get_field("rotation")).map_or_else(
+            || Ok(None), |ctx| parse_rotation(&ctx).map(Some))?;
+        let pattern = parse_pat_subtree(&ctx.get_field("pattern")?, work)?;
+        work.push(name, ParsedPat::Transform{ translation, rotation, pattern });
     } else {
         return Err(format_err!("Unknown pattern type"))
     }

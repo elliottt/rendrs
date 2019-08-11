@@ -1,5 +1,5 @@
 
-use nalgebra::Point3;
+use nalgebra::{Vector2,Point3,Matrix4};
 
 use crate::canvas::Color;
 
@@ -43,7 +43,26 @@ pub enum Pattern {
     Stripe{
         first: PatternId,
         second: PatternId,
-    }
+    },
+
+    /// Circles of width one
+    Circles{
+        first: PatternId,
+        second: PatternId,
+    },
+
+    /// 3D Checkerboard
+    Checkers{
+        first: PatternId,
+        second: PatternId,
+    },
+
+    /// Transformation
+    Transform{
+        // the inverse of the supplied matrix
+        transform: Matrix4<f32>,
+        pattern: PatternId,
+    },
 }
 
 impl Pattern {
@@ -51,8 +70,25 @@ impl Pattern {
         Pattern::Solid{ color }
     }
 
+    pub fn gradient(first: PatternId, second: PatternId) -> Self {
+        Pattern::Gradient{ first, second }
+    }
+
     pub fn stripe(first: PatternId, second: PatternId) -> Self {
         Pattern::Stripe{ first, second }
+    }
+
+    pub fn circles(first: PatternId, second: PatternId) -> Self {
+        Pattern::Circles{ first, second }
+    }
+
+    pub fn checkers(first: PatternId, second: PatternId) -> Self {
+        Pattern::Checkers{ first, second }
+    }
+
+    pub fn transform(matrix: Matrix4<f32>, pattern: PatternId) -> Self {
+        let inv = matrix.try_inverse().expect("Unable to invert transformation matrix");
+        Pattern::Transform{ transform: inv, pattern }
     }
 
     pub fn color_at<'a,Pats>(&'a self, store: &Pats, point: &Point3<f32>)
@@ -77,12 +113,35 @@ impl Pattern {
             },
 
             Pattern::Stripe{ first, second } => {
-                if (point.x.floor() as isize) % 2 == 0 {
+                if point.x.floor() % 2.0 == 0.0 {
                     store(*first).color_at(store, point)
                 } else {
                     store(*second).color_at(store, point)
                 }
             },
+
+            Pattern::Circles{ first, second } => {
+                let dist = Vector2::new(point.x, point.z).magnitude();
+                if dist.floor() % 2.0 == 0.0 {
+                    store(*first).color_at(store, point)
+                } else {
+                    store(*second).color_at(store, point)
+                }
+            },
+
+            Pattern::Checkers{ first, second } => {
+                let val = (point.x.floor() + point.y.floor() + point.z.floor()) as isize;
+                if val % 2 == 0 {
+                    store(*first).color_at(store, point)
+                } else {
+                    store(*second).color_at(store, point)
+                }
+            },
+
+            Pattern::Transform{ transform, pattern } => {
+                let new_point = transform.transform_point(point);
+                store(*pattern).color_at(store, &new_point)
+            }
         }
     }
 }
