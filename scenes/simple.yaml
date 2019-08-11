@@ -56,12 +56,8 @@ objects:
       z: 1.0
       degrees: 45
     object:
-
-      # There's a problem here: the object-space point is not computed relative
-      # to the union, but to the individual object of the union. It needs to be
-      # put back into the space of the union to do the texturing correctly.
       material:
-        pattern: stripes
+        pattern: fade
         object:
           union:
           - transform:

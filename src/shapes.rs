@@ -104,11 +104,16 @@ impl Shape {
             },
 
             Shape::Union{nodes} => {
-                nodes
+                let mut res = nodes
                     .iter()
                     .map(|node| scene.sdf_from(*node, point))
                     .min_by(|a,b| a.distance.partial_cmp(&b.distance).expect("failed to compare"))
-                    .expect("Missing nodes to union")
+                    .expect("Missing nodes to union");
+
+                // override the object space coordinate to be relative to the whole group, not the
+                // individual where the hit occurred
+                res.object_space_point = point.clone();
+                res
             },
 
             Shape::Subtract{ first, second } => {
