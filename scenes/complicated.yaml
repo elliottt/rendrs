@@ -1,0 +1,105 @@
+
+# vim: sw=2 et
+patterns:
+- name: blue
+  solid:
+    hex: 0x0000ff
+
+- name: red
+  solid:
+    hex: 0xff0000
+
+- name: stripes
+  striped:
+    - solid:
+        hex: 0xffffff
+    - solid:
+        hex: 0x000000
+
+objects:
+- name: red-sphere
+  material:
+    pattern: red
+    object:
+      prim: sphere
+
+- name: blue-sphere
+  material:
+    pattern: blue
+    object:
+      prim: sphere
+
+- name: combination
+  subtract:
+    - union:
+      - transform:
+          translation:
+            x: 1.0
+          object:
+            uniform-scale:
+              amount: 2.0
+              object: blue-sphere
+
+      - transform:
+          translation:
+            x: -1.0
+          object: red-sphere
+
+    - transform:
+        translation:
+          y: 1.0
+          z: -1.0
+        object:
+          prim: sphere
+
+- name: wall
+  transform:
+    translation:
+      z: 10.0
+    rotation:
+      x: 1.0
+      degrees: -90.0
+    object:
+      material:
+        pattern: stripes
+        object:
+          prim: plane
+
+- name: ground
+  transform:
+    translation:
+      y: -2.0
+    object:
+      material:
+        pattern: stripes
+        object:
+          prim: plane
+
+lights:
+- position:
+    x: 5.0
+    y: 10.0
+    z: -10.0
+
+scene:
+- combination
+- ground
+- wall
+
+cameras:
+- perspective:
+    width: 1000
+    height: 1000
+
+    fov:
+      degrees: 90.0
+
+    position:
+      x: 0.0
+      y: 0.0
+      z: -5.0
+
+    target:
+      x: 0.0
+      y: 0.0
+      z: 0.0
