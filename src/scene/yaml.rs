@@ -549,6 +549,8 @@ fn parse_obj(
         match sort.as_str() {
             "sphere" =>
                 work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Sphere }),
+            "cylinder" =>
+                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Cylinder }),
             "plane" =>
                 work.push(name,ParsedObj::PrimShape{ prim: PrimShape::XZPlane }),
             other =>

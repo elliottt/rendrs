@@ -1,5 +1,5 @@
 
-use nalgebra::{Vector3,Point3,Matrix4};
+use nalgebra::{Vector2,Vector3,Point3,Matrix4};
 
 use crate::material::{MaterialId};
 use crate::pattern::{PatternId};
@@ -34,6 +34,9 @@ pub enum PrimShape {
     /// The unit sphere
     Sphere,
 
+    /// The unit cylinder
+    Cylinder,
+
     /// X-Z plane
     XZPlane,
 }
@@ -44,6 +47,11 @@ impl PrimShape {
             PrimShape::Sphere => {
                 let magnitude = Vector3::new(point.x, point.y, point.z).magnitude();
                 magnitude - 1.0
+            },
+
+            PrimShape::Cylinder => {
+                let xz_mag = Vector2::new(point.x, point.z).magnitude();
+                (xz_mag - 1.0).max(point.y.abs() - 1.0)
             },
 
             PrimShape::XZPlane => {
