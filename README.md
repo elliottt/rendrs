@@ -5,7 +5,7 @@ A ray-marching based ray-tracer written in rust.
 ## Examples
 
 ```sh
-$ cargo run --bin spheres --release
+$ cargo run --release examples/complicated.yaml output.png
 ```
 
 ![](examples/spheres.png)
