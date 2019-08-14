@@ -16,15 +16,21 @@ patterns:
     - solid:
         hex: 0x000000
 
+materials:
+- name: reflective
+  reflective: 0.1
+
 objects:
 - name: red-sphere
   material:
+    material: reflective
     pattern: red
     object:
       prim: sphere
 
 - name: blue-sphere
   material:
+    material: reflective
     pattern: blue
     object:
       prim: sphere

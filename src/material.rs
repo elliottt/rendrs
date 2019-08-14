@@ -1,7 +1,7 @@
 
 use nalgebra::{Point3,Vector3};
 
-use crate::ray::reflect;
+use crate::ray::{reflect};
 use crate::canvas::Color;
 
 #[derive(Debug)]
@@ -39,6 +39,7 @@ pub struct Material {
     pub diffuse: f32,
     pub specular: f32,
     pub shininess: f32,
+    pub reflective: f32,
 }
 
 impl Default for Material {
@@ -48,6 +49,7 @@ impl Default for Material {
             diffuse: 0.9,
             specular: 0.9,
             shininess: 200.0,
+            reflective: 0.0,
         }
     }
 }
@@ -58,13 +60,9 @@ impl Material {
         diffuse: f32,
         specular: f32,
         shininess: f32,
+        reflective: f32,
     ) -> Self {
-        Material{ ambient, diffuse, specular, shininess }
-    }
-
-    pub fn set_shininess(mut self, shininess: f32) -> Self {
-        self.shininess = shininess;
-        self
+        Material{ ambient, diffuse, specular, shininess, reflective }
     }
 
     pub fn lighting(

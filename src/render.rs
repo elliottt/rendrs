@@ -7,10 +7,14 @@ use std::{
     thread,
 };
 
+use nalgebra::{Point3,Vector3};
+
 use crate::{
     camera::Camera,
     canvas::{Canvas,Color},
-    ray::Ray,
+    material::{Light,Material},
+    pattern::Pattern,
+    ray::{reflect,Ray},
     scene::Scene,
 };
 
@@ -33,6 +37,7 @@ impl Default for ConfigBuilder {
                 max_steps: 200,
                 jobs: 1,
                 debug_mode: None,
+                max_reflections: 1,
             }
         }
     }
@@ -64,6 +69,11 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn set_max_reflections(mut self, max_reflections: usize) -> Self {
+        self.config.max_reflections = max_reflections;
+        self
+    }
+
     pub fn build(self) -> Arc<Config> {
         Arc::new(self.config)
     }
@@ -76,6 +86,7 @@ pub struct Config {
     max_steps: usize,
     jobs: usize,
     debug_mode: Option<DebugMode>,
+    max_reflections: usize,
 }
 
 pub struct RenderedRow {
@@ -136,41 +147,124 @@ fn render_job(
     idx: usize,
     send: Sender<RenderedRow>) {
 
-    let get_pattern = |pid| scene.get_pattern(pid);
+    let world = World::new(cfg.clone(), scene);
 
-    let light_weight = 1.0 / (scene.num_lights() as f32);
+    render_body(idx, camera, cfg, send, |ray| {
+        if let Some(hit) = find_hit(&world, &ray, 1.0) {
+            shade_hit(&world, &hit, 0)
+        } else {
+            Color::black()
+        }
+    });
+}
 
-    render_body(idx, camera, cfg.clone(), send, |ray| {
-        let mut pixel = Color::black();
-        if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
-            let pat = scene.get_pattern(res.material.0);
-            let mat = scene.get_material(res.material.1);
-            let normal = res.normal(|pt| scene.sdf(pt));
+struct World {
+    cfg: Arc<Config>,
+    scene: Arc<Scene>,
+    light_weight: f32,
+}
 
-            let obj_color = pat.color_at(&get_pattern, &res.object_space_point);
+impl World {
+    fn new(cfg: Arc<Config>, scene: Arc<Scene>) -> Self {
+        let light_weight = 1.0 / (scene.num_lights() as f32);
+        World{ cfg, scene, light_weight }
+    }
+}
+
+#[derive(Debug)]
+struct Hit<'a> {
+    object_space_point: Point3<f32>,
+    world_space_point: Point3<f32>,
+    normal: Vector3<f32>,
+    reflectv: Vector3<f32>,
+    eyev: Vector3<f32>,
+    material: &'a Material,
+    pattern: &'a Pattern,
+    sign: f32,
+}
+
+impl<'a> Hit<'a> {
+    fn reflection(&self) -> Ray {
+        // start the origin along the ray a bit
+        let origin = self.world_space_point + self.reflectv * 0.01;
+        Ray::new(origin, self.reflectv.clone())
+    }
+}
+
+/// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
+/// `None`.
+fn find_hit<'a>(world: &'a World, ray: &Ray, sign: f32) -> Option<Hit<'a>> {
+    ray.march(world.cfg.max_steps, sign, |pt| world.scene.sdf(pt)).map(|res| {
+        let normal = res.normal(|pt| world.scene.sdf(pt));
+        Hit{
+            object_space_point: res.object_space_point,
+            world_space_point: res.world_space_point,
+            normal,
+
+            reflectv: reflect(&ray.direction, &normal),
 
             // the direction towards the eye
-            let eyev = -ray.direction;
+            eyev: -ray.direction,
 
-            for light in scene.iter_lights() {
-                let point = res.world_space_point + normal * 0.01;
-                let light_dir = light.position - point;
-                let dist = light_dir.magnitude();
+            material: world.scene.get_material(res.material.1),
+            pattern: world.scene.get_pattern(res.material.0),
 
-                // check to see if the path to the light is obstructed
-                let light_visible = Ray::new(point, light_dir.normalize())
-                    .march(cfg.max_steps, 1.0, |pt| scene.sdf(pt))
-                    .map_or(true, |hit| hit.distance >= dist);
-
-                pixel += mat.lighting(
-                    light, &obj_color, &res.world_space_point,
-                    &eyev, &normal, light_visible,
-                ) * light_weight;
-
-            }
+            sign: sign,
         }
-        pixel
-    });
+    })
+}
+
+/// Shade the color according to the material properties, and light.
+fn shade_hit(
+    world: &World,
+    hit: &Hit,
+    reflection_count: usize,
+) -> Color {
+    let color = hit.pattern.color_at(&|pid| world.scene.get_pattern(pid), &hit.object_space_point);
+
+    let mut output = Color::black();
+
+    for light in world.scene.iter_lights() {
+        output += hit.material.lighting(
+                light, &color, &hit.world_space_point,
+                &hit.eyev, &hit.normal, light_visible(&world, &hit, light)
+            ) * world.light_weight;
+    }
+
+    let reflected =
+        if reflection_count < world.cfg.max_reflections {
+            reflected_color(world, hit, reflection_count)
+        } else {
+            Color::black()
+        };
+
+    output + reflected
+}
+
+/// Compute the color from a reflection.
+fn reflected_color(world: &World, hit: &Hit, reflection_count: usize) -> Color {
+    let reflective = hit.material.reflective;
+    if reflective <= 0.0 {
+        Color::black()
+    } else {
+        let ray = hit.reflection();
+        find_hit(world, &ray, hit.sign).map_or_else(
+            || Color::black(),
+            |refl_hit| shade_hit(world, &refl_hit, reflection_count + 1) * reflective)
+    }
+}
+
+/// A predicate that tests whether or not a light is visible from a hit in the scene.
+fn light_visible(world: &World, hit: &Hit, light: &Light) -> bool {
+    // move slightly away from the surface that was contacted
+    let point = hit.world_space_point + hit.normal * 0.01;
+    let light_dir = light.position - point;
+    let dist = light_dir.magnitude();
+
+    // check to see if the path to the light is obstructed
+    Ray::new(point, light_dir.normalize())
+        .march(world.cfg.max_steps, 1.0, |pt| world.scene.sdf(pt))
+        .map_or_else(|| true, |res| res.distance >= dist)
 }
 
 fn render_normals_job(

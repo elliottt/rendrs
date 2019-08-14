@@ -378,11 +378,20 @@ fn parse_mats(ctx: &Context, scene: &mut Scene) -> Result<BTreeMap<String,Materi
 }
 
 fn parse_mat(ctx: &Context, scene: &mut Scene) -> Result<MaterialId,Error> {
-    let ambient = ctx.get_field("ambient")?.as_f32()?;
-    let diffuse = ctx.get_field("diffuse")?.as_f32()?;
-    let specular = ctx.get_field("specular")?.as_f32()?;
-    let shininess = ctx.get_field("shininess")?.as_f32()?;
-    Ok(scene.add_material(Material{ ambient, diffuse, specular, shininess }))
+    let def = Material::default();
+
+    let ambient = optional(ctx.get_field("ambient")).map_or_else(
+        || Ok(def.ambient), |ctx| ctx.as_f32())?;
+    let diffuse = optional(ctx.get_field("diffuse")).map_or_else(
+        || Ok(def.diffuse), |ctx| ctx.as_f32())?;
+    let specular = optional(ctx.get_field("specular")).map_or_else(
+        || Ok(def.specular), |ctx| ctx.as_f32())?;
+    let shininess = optional(ctx.get_field("shininess")).map_or_else(
+        || Ok(def.shininess), |ctx| ctx.as_f32())?;
+    let reflective = optional(ctx.get_field("reflective")).map_or_else(
+        || Ok(def.reflective), |ctx| ctx.as_f32())?;
+
+    Ok(scene.add_material(Material{ ambient, diffuse, specular, shininess, reflective }))
 }
 
 fn parse_objs(
