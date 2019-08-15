@@ -19,7 +19,7 @@ patterns:
 materials:
 - name: reflective
   reflective: 0.1
-  transparent: 0.5
+  transparent: 0.0
   refractive_index: 1.5
 
 objects:
