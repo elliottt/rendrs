@@ -59,7 +59,7 @@ impl Camera {
         let origin = self.inv_transform.transform_point(&Point3::origin());
         let dir = (pixel - origin).normalize();
 
-        Ray::new(origin, dir)
+        Ray::new(origin, dir, 1.0)
     }
 
     /// Set the view transformation.

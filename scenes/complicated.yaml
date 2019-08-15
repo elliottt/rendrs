@@ -19,6 +19,8 @@ patterns:
 materials:
 - name: reflective
   reflective: 0.1
+  transparent: 0.5
+  refractive_index: 1.5
 
 objects:
 - name: red-sphere

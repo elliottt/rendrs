@@ -69,7 +69,7 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn set_max_reflections(mut self, max_reflections: usize) -> Self {
+    pub fn set_max_reflections(mut self, max_reflections: isize) -> Self {
         self.config.max_reflections = max_reflections;
         self
     }
@@ -86,7 +86,7 @@ pub struct Config {
     max_steps: usize,
     jobs: usize,
     debug_mode: Option<DebugMode>,
-    max_reflections: usize,
+    max_reflections: isize,
 }
 
 pub struct RenderedRow {
@@ -178,23 +178,24 @@ struct Hit<'a> {
     normal: Vector3<f32>,
     reflectv: Vector3<f32>,
     eyev: Vector3<f32>,
+    refractive_index: f32,
     material: &'a Material,
     pattern: &'a Pattern,
     sign: f32,
 }
 
 impl<'a> Hit<'a> {
-    fn reflection(&self) -> Ray {
+    fn reflection_ray(&self) -> Ray {
         // start the origin along the ray a bit
         let origin = self.world_space_point + self.reflectv * 0.01;
-        Ray::new(origin, self.reflectv.clone())
+        Ray::new(origin, self.reflectv.clone(), self.sign)
     }
 }
 
 /// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
 /// `None`.
-fn find_hit<'a>(world: &'a World, ray: &Ray, sign: f32) -> Option<Hit<'a>> {
-    ray.march(world.cfg.max_steps, sign, |pt| world.scene.sdf(pt)).map(|res| {
+fn find_hit<'a>(world: &'a World, ray: &Ray, refractive_index: f32) -> Option<Hit<'a>> {
+    ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt)).map(|res| {
         let normal = res.normal(|pt| world.scene.sdf(pt));
         Hit{
             object_space_point: res.object_space_point,
@@ -206,10 +207,13 @@ fn find_hit<'a>(world: &'a World, ray: &Ray, sign: f32) -> Option<Hit<'a>> {
             // the direction towards the eye
             eyev: -ray.direction,
 
+            // the refractive index of the source medium
+            refractive_index,
+
             material: world.scene.get_material(res.material.1),
             pattern: world.scene.get_pattern(res.material.0),
 
-            sign: sign,
+            sign: ray.sign,
         }
     })
 }
@@ -218,7 +222,7 @@ fn find_hit<'a>(world: &'a World, ray: &Ray, sign: f32) -> Option<Hit<'a>> {
 fn shade_hit(
     world: &World,
     hit: &Hit,
-    reflection_count: usize,
+    reflection_count: isize,
 ) -> Color {
     let color = hit.pattern.color_at(&|pid| world.scene.get_pattern(pid), &hit.object_space_point);
 
@@ -231,26 +235,37 @@ fn shade_hit(
             ) * world.light_weight;
     }
 
-    let reflected =
+    let additional =
         if reflection_count < world.cfg.max_reflections {
-            reflected_color(world, hit, reflection_count)
+            reflected_color(world, hit, reflection_count) +
+                refracted_color(world, hit, reflection_count - 2)
         } else {
             Color::black()
         };
 
-    output + reflected
+    output + additional
 }
 
 /// Compute the color from a reflection.
-fn reflected_color(world: &World, hit: &Hit, reflection_count: usize) -> Color {
+fn reflected_color(world: &World, hit: &Hit, reflection_count: isize) -> Color {
     let reflective = hit.material.reflective;
     if reflective <= 0.0 {
         Color::black()
     } else {
-        let ray = hit.reflection();
-        find_hit(world, &ray, hit.sign).map_or_else(
+        let ray = hit.reflection_ray();
+        find_hit(world, &ray, hit.refractive_index).map_or_else(
             || Color::black(),
             |refl_hit| shade_hit(world, &refl_hit, reflection_count + 1) * reflective)
+    }
+}
+
+/// Compute the additional color due to refraction.
+fn refracted_color(world: &World, hit: &Hit, reflection_count: isize) -> Color {
+    let transparent = hit.material.transparent;
+    if transparent <= 0.0 {
+        Color::black()
+    } else {
+        Color::white()
     }
 }
 
@@ -262,8 +277,8 @@ fn light_visible(world: &World, hit: &Hit, light: &Light) -> bool {
     let dist = light_dir.magnitude();
 
     // check to see if the path to the light is obstructed
-    Ray::new(point, light_dir.normalize())
-        .march(world.cfg.max_steps, 1.0, |pt| world.scene.sdf(pt))
+    Ray::new(point, light_dir.normalize(), hit.sign)
+        .march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
         .map_or_else(|| true, |res| res.distance >= dist)
 }
 
@@ -276,7 +291,7 @@ fn render_normals_job(
 
     render_body(idx, camera, cfg.clone(), send, |ray| {
         let mut pixel = Color::black();
-        if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
+        if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
             let normal = res.normal(|pt| scene.sdf(pt));
             pixel
                 .set_r(0.5 + normal.x / 2.0)
@@ -299,7 +314,7 @@ fn render_steps_job(
 
     render_body(idx, camera, cfg.clone(), send, |ray| {
         let mut pixel = Color::black();
-        if let Some(res) = ray.march(cfg.max_steps, 1.0, |pt| scene.sdf(pt)) {
+        if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
             let step_val = 1.0 - (res.steps as f32) / step_max;
             pixel.set_r(step_val).set_b(step_val);
         }

@@ -390,8 +390,19 @@ fn parse_mat(ctx: &Context, scene: &mut Scene) -> Result<MaterialId,Error> {
         || Ok(def.shininess), |ctx| ctx.as_f32())?;
     let reflective = optional(ctx.get_field("reflective")).map_or_else(
         || Ok(def.reflective), |ctx| ctx.as_f32())?;
-
-    Ok(scene.add_material(Material{ ambient, diffuse, specular, shininess, reflective }))
+    let transparent = optional(ctx.get_field("transparent")).map_or_else(
+        || Ok(def.transparent), |ctx| ctx.as_f32())?;
+    let refractive_index = optional(ctx.get_field("refractive-index")).map_or_else(
+        || Ok(def.refractive_index), |ctx| ctx.as_f32())?;
+    Ok(scene.add_material(Material::new(
+                ambient,
+                diffuse,
+                specular,
+                shininess,
+                reflective,
+                transparent,
+                refractive_index,
+            )))
 }
 
 fn parse_objs(

@@ -40,6 +40,8 @@ pub struct Material {
     pub specular: f32,
     pub shininess: f32,
     pub reflective: f32,
+    pub transparent: f32,
+    pub refractive_index: f32
 }
 
 impl Default for Material {
@@ -50,6 +52,8 @@ impl Default for Material {
             specular: 0.9,
             shininess: 200.0,
             reflective: 0.0,
+            transparent: 0.0,
+            refractive_index: 1.0,
         }
     }
 }
@@ -61,8 +65,18 @@ impl Material {
         specular: f32,
         shininess: f32,
         reflective: f32,
+        transparent: f32,
+        refractive_index: f32,
     ) -> Self {
-        Material{ ambient, diffuse, specular, shininess, reflective }
+        Material{
+            ambient,
+            diffuse,
+            specular,
+            shininess,
+            reflective,
+            transparent,
+            refractive_index,
+        }
     }
 
     pub fn lighting(

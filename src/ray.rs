@@ -11,6 +11,7 @@ pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
 pub struct Ray {
     pub origin: Point3<f32>,
     pub direction: Vector3<f32>,
+    pub sign: f32,
 }
 
 #[derive(Debug)]
@@ -25,15 +26,15 @@ impl Ray {
     pub const MIN_DIST: f32 = 0.001;
     pub const MAX_DIST: f32 = 100.0;
 
-    pub fn new(origin: Point3<f32>, direction: Vector3<f32>) -> Self {
-        Ray{ origin, direction }
+    pub fn new(origin: Point3<f32>, direction: Vector3<f32>, sign: f32) -> Self {
+        Ray{ origin, direction, sign }
     }
 
     pub fn position(&self, t: f32) -> Point3<f32> {
         self.origin + (self.direction * t)
     }
 
-    pub fn march<SDF,Mat>(&self, max_steps: usize, sign: f32, sdf: SDF)
+    pub fn march<SDF,Mat>(&self, max_steps: usize, sdf: SDF)
         -> Option<MarchResult<Mat>>
         where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>
     {
@@ -41,7 +42,7 @@ impl Ray {
         let mut total_dist: f32 = 0.0;
         for i in 0 .. max_steps {
             let res = sdf(&pos);
-            let signed_radius = sign * res.distance;
+            let signed_radius = self.sign * res.distance;
 
             if signed_radius < Self::MIN_DIST {
                 return Some(MarchResult{
@@ -69,7 +70,7 @@ impl Ray {
     pub fn transform(&self, matrix: &Matrix4<f32>) -> Self {
         let origin = matrix.transform_point(&self.origin);
         let direction = matrix.transform_vector(&self.direction);
-        Self::new(origin, direction)
+        Self::new(origin, direction, self.sign)
     }
 
 }
@@ -110,7 +111,7 @@ impl<Mat> MarchResult<Mat> {
 
 #[test]
 fn test_position() {
-    let p = Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
+    let p = Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0), 1.0);
 
     assert_eq!(p.position(0.0), p.origin);
     assert_eq!(p.position(1.0), Point3::new(0.0, 1.0, 0.0));
@@ -119,7 +120,7 @@ fn test_position() {
 
 #[test]
 fn test_transform() {
-    let p = Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0));
+    let p = Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 1.0, 0.0), 1.0);
 
     {
         let m = Matrix4::new_translation(&Vector3::new(0.0, 1.0, 0.0));
@@ -144,7 +145,7 @@ fn test_transform() {
 fn test_march() {
     use crate::{shapes::{Shape,PrimShape},scene::Scene};
 
-    let ray = Ray::new(Point3::new(0.0, 0.0, -5.0), Vector3::new(0.0, 0.0, 1.0));
+    let ray = Ray::new(Point3::new(0.0, 0.0, -5.0), Vector3::new(0.0, 0.0, 1.0), 1.0);
 
     let mut scene = Scene::new();
     let sphere = scene.add(Shape::PrimShape{ shape: PrimShape::Sphere });
@@ -152,14 +153,14 @@ fn test_march() {
     let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere));
 
     // test an intersection
-    let mut result = ray.march(4, 1.0, |pt| scene.sdf_from(sphere, pt)).expect("Failed to march ray");
+    let mut result = ray.march(4, |pt| scene.sdf_from(sphere, pt)).expect("Failed to march ray");
     assert_eq!(result.distance, 4.0);
 
-    result = ray.march(4, 1.0, |pt| scene.sdf_from(scaled, pt)).expect("Failed to march ray");
+    result = ray.march(4, |pt| scene.sdf_from(scaled, pt)).expect("Failed to march ray");
     assert_eq!(result.distance, 3.0);
 
     // test a miss
-    assert!(ray.march(100, 1.0, |pt| scene.sdf_from(moved, pt)).is_none());
+    assert!(ray.march(100, |pt| scene.sdf_from(moved, pt)).is_none());
 }
 
 #[test]
