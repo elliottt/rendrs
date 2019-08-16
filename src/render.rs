@@ -37,7 +37,7 @@ impl Default for ConfigBuilder {
                 max_steps: 200,
                 jobs: 1,
                 debug_mode: None,
-                max_reflections: 1,
+                max_reflections: 10,
             }
         }
     }

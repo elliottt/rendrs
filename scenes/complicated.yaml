@@ -18,9 +18,11 @@ patterns:
 
 materials:
 - name: reflective
-  reflective: 0.1
-  transparent: 0.0
-  refractive_index: 1.5
+  reflective: 0.2
+  specular: 0.9
+
+- name: wall-material
+  specular: 0.0
 
 objects:
 - name: red-sphere
@@ -69,6 +71,7 @@ objects:
       degrees: -90.0
     object:
       material:
+        material: wall-material
         pattern: stripes
         object:
           prim: plane

@@ -17,17 +17,22 @@ patterns:
         hex: 0xff2351
 
 materials:
-- name: floor
+- name: matte
   specular: 0.0
 
 - name: glass
   transparent: 0.5
-  refractive-index: 1.1
-  specular: 0.0
+  refractive-index: 1.2
+  specular: 0.9
+
+- name: reflective
+  reflective: 0.2
+  specular: 0.9
 
 objects:
 - name: cylinder
   material:
+    material: reflective
     pattern: blue
     object:
       transform:
@@ -41,11 +46,20 @@ objects:
     material: glass
     pattern: ball
     object:
-      prim: sphere
+      transform:
+        translation:
+          y: 1
+          x: 1.5
+          z: -1
+        object:
+          uniform-scale:
+            amount: 2.0
+            object:
+              prim: sphere
 
 - name: floor
   material:
-    material: floor
+    material: matte
     pattern: checkers
     object:
       transform:
@@ -54,16 +68,31 @@ objects:
         object:
           prim: plane
 
+- name: wall
+  material:
+    material: matte
+    pattern: checkers
+    object:
+      transform:
+        translation:
+          z: 5.0
+        rotation:
+          x: 1.0
+          degrees: -90
+        object:
+          prim: plane
+
 lights:
 - position:
     x: 0.0
-    y: 2.0
-    z: -2.0
+    y: 10.0
+    z: -5.0
 
 scene:
 - cylinder
 - ball
 - floor
+- wall
 
 cameras:
 - perspective:
