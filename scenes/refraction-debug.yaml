@@ -1,0 +1,84 @@
+# vim: et sw=2
+
+patterns:
+- name: blue
+  solid:
+    hex: 0x5158ff
+
+- name: ball
+  solid:
+    hex: 0xffb3df
+
+- name: checkers
+  checkers:
+    - solid:
+        hex: 0xfff666
+    - solid:
+        hex: 0xff2351
+
+materials:
+- name: floor
+  specular: 0.0
+
+- name: glass
+  transparent: 0.5
+  refractive-index: 1.1
+  specular: 0.0
+
+objects:
+- name: cylinder
+  material:
+    pattern: blue
+    object:
+      transform:
+        translation:
+          z: 3.0
+        object:
+          prim: cylinder
+
+- name: ball
+  material:
+    material: glass
+    pattern: ball
+    object:
+      prim: sphere
+
+- name: floor
+  material:
+    material: floor
+    pattern: checkers
+    object:
+      transform:
+        translation:
+          y: -1.0
+        object:
+          prim: plane
+
+lights:
+- position:
+    x: 0.0
+    y: 2.0
+    z: -2.0
+
+scene:
+- cylinder
+- ball
+- floor
+
+cameras:
+- perspective:
+    width: 1000
+    height: 1000
+
+    fov:
+      degrees: 90.0
+
+    position:
+      x: 2.0
+      y: 2.0
+      z: -5.0
+
+    target:
+      x: 0.0
+      y: 0.0
+      z: 0.0

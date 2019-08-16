@@ -219,7 +219,7 @@ impl<'a> Hit<'a> {
     }
 
     fn refraction_ray(&self) -> Option<Ray> {
-        let n_ratio = self.material.refractive_index / self.refractive_index;
+        let n_ratio = self.refractive_index / self.material.refractive_index;
         let cos_i = self.eyev.dot(&self.normal);
         let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
 
