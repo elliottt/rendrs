@@ -41,7 +41,7 @@ pub struct Material {
     pub shininess: f32,
     pub reflective: f32,
     pub transparent: f32,
-    pub refractive_index: f32
+    pub refractive_index: f32,
 }
 
 impl Default for Material {

@@ -12,9 +12,9 @@ use nalgebra::{Point3,Vector3};
 use crate::{
     camera::Camera,
     canvas::{Canvas,Color},
-    material::{Light,Material},
-    pattern::Pattern,
-    ray::{reflect,Ray},
+    material::{Light,MaterialId,Material},
+    pattern::{PatternId,Pattern},
+    ray::{reflect,Ray,MarchResult},
     scene::Scene,
 };
 
@@ -185,18 +185,13 @@ struct Hit<'a> {
 }
 
 impl<'a> Hit<'a> {
-    fn reflection_ray(&self) -> Ray {
-        // start the origin along the ray a bit
-        let origin = self.world_space_point + self.reflectv * 0.01;
-        Ray::new(origin, self.reflectv.clone(), self.sign)
-    }
-}
-
-/// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
-/// `None`.
-fn find_hit<'a>(world: &'a World, ray: &Ray, refractive_index: f32) -> Option<Hit<'a>> {
-    ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt)).map(|res| {
-        let normal = res.normal(|pt| world.scene.sdf(pt));
+    fn new<'b>(
+        world: &'b World,
+        ray: &Ray,
+        refractive_index: f32,
+        res: MarchResult<(PatternId,MaterialId)>,
+    ) -> Hit<'b> {
+        let normal = ray.sign * res.normal(|pt| world.scene.sdf(pt));
         Hit{
             object_space_point: res.object_space_point,
             world_space_point: res.world_space_point,
@@ -215,7 +210,36 @@ fn find_hit<'a>(world: &'a World, ray: &Ray, refractive_index: f32) -> Option<Hi
 
             sign: ray.sign,
         }
-    })
+    }
+
+    fn reflection_ray(&self) -> Ray {
+        // start the origin along the ray a bit
+        let origin = self.world_space_point + self.reflectv * 0.01;
+        Ray::new(origin, self.reflectv.clone(), self.sign)
+    }
+
+    fn refraction_ray(&self) -> Option<Ray> {
+        let n_ratio = self.material.refractive_index / self.refractive_index;
+        let cos_i = self.eyev.dot(&self.normal);
+        let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
+
+        if sin2_t > 1.0 {
+            None
+        } else {
+            let cos_t = (1.0 - sin2_t).sqrt();
+            let direction = self.normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio;
+
+            let origin = self.world_space_point + direction * 0.01;
+            Some(Ray::new(origin, direction, -self.sign))
+        }
+    }
+}
+
+/// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
+/// `None`.
+fn find_hit<'a>(world: &'a World, ray: &Ray, refractive_index: f32) -> Option<Hit<'a>> {
+    ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
+        .map(|res| Hit::new(world, ray, refractive_index, res))
 }
 
 /// Shade the color according to the material properties, and light.
@@ -237,8 +261,9 @@ fn shade_hit(
 
     let additional =
         if reflection_count < world.cfg.max_reflections {
-            reflected_color(world, hit, reflection_count) +
-                refracted_color(world, hit, reflection_count - 2)
+            let refl = reflected_color(world, hit, reflection_count);
+            let refrac = refracted_color(world, hit, reflection_count);
+            refl + refrac
         } else {
             Color::black()
         };
@@ -265,9 +290,23 @@ fn refracted_color(world: &World, hit: &Hit, reflection_count: isize) -> Color {
     if transparent <= 0.0 {
         Color::black()
     } else {
-        Color::white()
+        hit.refraction_ray()
+            .and_then(|internal_ray|
+                find_hit(world, &internal_ray, hit.material.refractive_index))
+            .and_then(|mut internal_hit| {
+                // TODO: big hack, what if we aren't just exiting this object?
+                internal_hit.material = hit.material;
+                internal_hit
+                    .refraction_ray()
+                    .and_then(|external_ray|
+                        find_hit(world, &external_ray, internal_hit.material.refractive_index))
+            })
+            .map_or_else(
+                || Color::black(),
+                |external_hit| shade_hit(world, &external_hit, reflection_count+1) * transparent)
     }
 }
+
 
 /// A predicate that tests whether or not a light is visible from a hit in the scene.
 fn light_visible(world: &World, hit: &Hit, light: &Light) -> bool {
