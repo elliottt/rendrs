@@ -9,3 +9,10 @@ $ cargo run --release examples/complicated.yaml output.png
 ```
 
 ![](examples/spheres.png)
+
+
+```sh
+$ cargo run --release examples/complicated.yaml output.png
+```
+
+![](examples/refraction.png)
