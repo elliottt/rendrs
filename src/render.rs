@@ -12,8 +12,8 @@ use nalgebra::{Point3,Vector3};
 use crate::{
     camera::Camera,
     canvas::{Canvas,Color},
-    material::{Light,MaterialId,Material},
-    pattern::{PatternId,Pattern},
+    material::{Light,Material},
+    pattern::{Pattern},
     ray::{reflect,Ray,MarchResult},
     scene::Scene,
 };
@@ -189,7 +189,7 @@ impl<'a> Hit<'a> {
         world: &'b World,
         ray: &Ray,
         refractive_index: f32,
-        res: MarchResult<(PatternId,MaterialId)>,
+        res: MarchResult,
     ) -> Hit<'b> {
         let normal = ray.sign * res.normal(|pt| world.scene.sdf(pt));
         Hit{
@@ -205,8 +205,8 @@ impl<'a> Hit<'a> {
             // the refractive index of the source medium
             refractive_index,
 
-            material: world.scene.get_material(res.material.1),
-            pattern: world.scene.get_pattern(res.material.0),
+            material: world.scene.get_material(res.material),
+            pattern: world.scene.get_pattern(res.pattern),
 
             sign: ray.sign,
         }

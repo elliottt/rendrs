@@ -1,6 +1,11 @@
 
 use nalgebra::{Matrix4,Point3,Vector3};
 
+use crate::{
+    material::{MaterialId},
+    pattern::{PatternId},
+};
+
 /// Reflect a vector through a normal.
 pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
     let dot = vec.dot(normal);
@@ -15,10 +20,11 @@ pub struct Ray {
 }
 
 #[derive(Debug)]
-pub struct SDFResult<Mat> {
+pub struct SDFResult {
     pub distance: f32,
     pub object_space_point: Point3<f32>,
-    pub material: Mat,
+    pub material: MaterialId,
+    pub pattern: PatternId,
 }
 
 impl Ray {
@@ -34,9 +40,9 @@ impl Ray {
         self.origin + (self.direction * t)
     }
 
-    pub fn march<SDF,Mat>(&self, max_steps: usize, sdf: SDF)
-        -> Option<MarchResult<Mat>>
-        where SDF: Fn(&Point3<f32>) -> SDFResult<Mat>
+    pub fn march<SDF>(&self, max_steps: usize, sdf: SDF)
+        -> Option<MarchResult>
+        where SDF: Fn(&Point3<f32>) -> SDFResult
     {
         let mut pos = self.origin.clone();
         let mut total_dist: f32 = 0.0;
@@ -51,6 +57,7 @@ impl Ray {
                     object_space_point: res.object_space_point,
                     world_space_point: pos,
                     material: res.material,
+                    pattern: res.pattern,
                 })
             }
 
@@ -76,23 +83,20 @@ impl Ray {
 }
 
 #[derive(Debug)]
-pub struct MarchResult<Mat> {
+pub struct MarchResult {
     pub steps: usize,
     pub distance: f32,
     pub object_space_point: Point3<f32>,
     pub world_space_point: Point3<f32>,
-    pub material: Mat,
+    pub material: MaterialId,
+    pub pattern: PatternId,
 }
 
-impl<Mat> MarchResult<Mat> {
+impl MarchResult {
 
     /// Compute the normal to this result
-    ///
-    /// NOTE: the variable M here is different from Mat, to underscore the fact that the material
-    /// is not used in the computation of the normal.
-    pub fn normal<SDF,M>(&self, sdf: SDF)
-        -> Vector3<f32>
-        where SDF: Fn(&Point3<f32>) -> SDFResult<M>,
+    pub fn normal<SDF>(&self, sdf: SDF) -> Vector3<f32>
+        where SDF: Fn(&Point3<f32>) -> SDFResult,
     {
         let res = sdf(&self.world_space_point);
         let offset = Vector3::new(0.001, 0.0, 0.0);

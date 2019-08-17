@@ -101,13 +101,14 @@ pub enum Shape {
 }
 
 impl Shape {
-    pub fn sdf<'a>(&self, scene: &'a Scene, point: &Point3<f32>) -> SDFResult<(PatternId,MaterialId)> {
+    pub fn sdf(&self, scene: &Scene, point: &Point3<f32>) -> SDFResult {
         match self {
             Shape::PrimShape{ shape } => {
                 SDFResult{
                     distance: shape.sdf(point),
                     object_space_point: point.clone(),
-                    material: (scene.default_pattern,scene.default_material),
+                    material: scene.default_material,
+                    pattern: scene.default_pattern,
                 }
             },
 
@@ -145,7 +146,8 @@ impl Shape {
 
             Shape::Material{ pattern, material, node } => {
                 let mut res = scene.sdf_from(*node, point);
-                res.material = (*pattern,*material);
+                res.material = *material;
+                res.pattern = *pattern;
                 res
             }
         }

@@ -81,7 +81,7 @@ impl Scene {
         self.materials.get_material(mid)
     }
 
-    pub fn sdf(&self, point: &Point3<f32>) -> SDFResult<(PatternId,MaterialId)> {
+    pub fn sdf(&self, point: &Point3<f32>) -> SDFResult {
         self.world
             .iter()
             .map(|root| self.sdf_from(root.clone(), point))
@@ -89,7 +89,7 @@ impl Scene {
             .expect("Empty world")
     }
 
-    pub fn sdf_from(&self, root: ShapeId, point: &Point3<f32>) -> SDFResult<(PatternId,MaterialId)> {
+    pub fn sdf_from(&self, root: ShapeId, point: &Point3<f32>) -> SDFResult {
         self.shapes.get_shape(root).sdf(self, point)
     }
 
