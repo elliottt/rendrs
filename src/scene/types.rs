@@ -53,6 +53,10 @@ impl Scene {
         self.world.push(node);
     }
 
+    pub fn get_shape(&self, shape: ShapeId) -> &'_ Shape {
+        self.shapes.get_shape(shape)
+    }
+
     pub fn add_light(&mut self, light: Light) {
         self.lights.push(light);
     }
@@ -90,7 +94,15 @@ impl Scene {
     }
 
     pub fn sdf_from(&self, root: ShapeId, point: &Point3<f32>) -> SDFResult {
-        self.shapes.get_shape(root).sdf(self, point)
+        let mut result = SDFResult{
+            distance: std::f32::INFINITY,
+            object_space_point: point.clone(),
+            object_id: root,
+            material: self.default_material,
+            pattern: self.default_pattern,
+        };
+        self.get_shape(root).sdf(self, point, &mut result);
+        result
     }
 
 }

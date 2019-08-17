@@ -101,54 +101,53 @@ pub enum Shape {
 }
 
 impl Shape {
-    pub fn sdf(&self, scene: &Scene, point: &Point3<f32>) -> SDFResult {
+    pub fn sdf(&self, scene: &Scene, point: &Point3<f32>, result: &mut SDFResult) {
         match self {
             Shape::PrimShape{ shape } => {
-                SDFResult{
-                    distance: shape.sdf(point),
-                    object_space_point: point.clone(),
-                    material: scene.default_material,
-                    pattern: scene.default_pattern,
-                }
+                result.distance = shape.sdf(point);
+                result.object_space_point = point.clone();
             },
 
             Shape::Union{nodes} => {
-                let mut res = nodes
-                    .iter()
-                    .map(|node| scene.sdf_from(*node, point))
-                    .min_by(|a,b| a.distance.partial_cmp(&b.distance).expect("failed to compare"))
-                    .expect("Missing nodes to union");
+                let mut tmp = result.clone();
 
-                // override the object space coordinate to be relative to the whole group, not the
-                // individual where the hit occurred
-                res.object_space_point = point.clone();
-                res
+                for node in nodes {
+                    scene.get_shape(*node).sdf(scene, point, &mut tmp);
+                    if tmp.distance < result.distance {
+                        result.distance = tmp.distance;
+                        result.material = tmp.material;
+                        result.pattern = tmp.pattern;
+                    }
+                }
             },
 
             Shape::Subtract{ first, second } => {
-                let mut ra = scene.sdf_from(*first, point);
-                let rb = scene.sdf_from(*second, point);
-                ra.distance = f32::max(ra.distance, -rb.distance);
-                ra
+                // figure out the distance for the part being subtracted
+                let dist = {
+                    let mut tmp = result.clone();
+                    scene.get_shape(*second).sdf(scene, point, &mut tmp);
+                    tmp.distance
+                };
+
+                scene.get_shape(*first).sdf(scene, point, result);
+                result.distance = f32::max(result.distance, -dist);
             },
 
             Shape::Transform{ matrix, node } => {
                 let p = matrix.transform_point(point);
-                scene.sdf_from(*node, &p)
+                scene.get_shape(*node).sdf(scene, &p, result);
             },
 
             Shape::UniformScale{ amount, node } => {
                 let p = point / *amount;
-                let mut res = scene.sdf_from(*node, &p);
-                res.distance *= amount;
-                res
+                scene.get_shape(*node).sdf(scene, &p, result);
+                result.distance *= amount;
             },
 
             Shape::Material{ pattern, material, node } => {
-                let mut res = scene.sdf_from(*node, point);
-                res.material = *material;
-                res.pattern = *pattern;
-                res
+                scene.get_shape(*node).sdf(scene, point, result);
+                result.material = *material;
+                result.pattern = *pattern;
             }
         }
     }

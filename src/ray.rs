@@ -4,6 +4,7 @@ use nalgebra::{Matrix4,Point3,Vector3};
 use crate::{
     material::{MaterialId},
     pattern::{PatternId},
+    shapes::{ShapeId},
 };
 
 /// Reflect a vector through a normal.
@@ -19,10 +20,11 @@ pub struct Ray {
     pub sign: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct SDFResult {
     pub distance: f32,
     pub object_space_point: Point3<f32>,
+    pub object_id: ShapeId,
     pub material: MaterialId,
     pub pattern: PatternId,
 }
