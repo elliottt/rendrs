@@ -150,7 +150,7 @@ fn render_job(
 
     let world = World::new(cfg.clone(), scene);
 
-    let mut containers = Containers::new(cfg.max_reflections);
+    let mut containers = Containers::new();
 
     render_body(idx, camera, cfg, send, |ray| {
         containers.clear();
@@ -174,18 +174,20 @@ impl World {
 }
 
 /// Objects that a ray is within during refraction processing.
+#[derive(Debug,Clone)]
 struct Container {
     object: ShapeId,
     refractive_index: f32,
 }
 
+#[derive(Debug,Clone)]
 struct Containers {
     containers: Vec<Container>,
 }
 
 impl Containers {
-    fn new(size: usize) -> Self {
-        Containers{ containers: Vec::with_capacity(size) }
+    fn new() -> Self {
+        Containers{ containers: Vec::new() }
     }
 
     fn clear(&mut self) {
@@ -370,7 +372,7 @@ fn shade_hit(
 /// Compute the color from a reflection.
 fn reflected_color(
     world: &World,
-    containers: &mut Containers,
+    containers: &Containers,
     hit: &Hit,
     reflection_count: usize,
 ) -> Color {
@@ -378,17 +380,18 @@ fn reflected_color(
     if reflective <= 0.0 || !hit.outside {
         Color::black()
     } else {
+        let mut containers = containers.clone();
         let ray = hit.reflection_ray();
-        find_hit(world, containers, &ray).map_or_else(
+        find_hit(world, &mut containers, &ray).map_or_else(
             || Color::black(),
-            |refl_hit| shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective)
+            |refl_hit| shade_hit(world, &mut containers, &refl_hit, reflection_count + 1) * reflective)
     }
 }
 
 /// Compute the additional color due to refraction.
 fn refracted_color(
     world: &World,
-    containers: &mut Containers,
+    containers: &Containers,
     hit: &Hit,
     reflection_count: usize
 ) -> Color {
@@ -396,18 +399,21 @@ fn refracted_color(
     if transparent <= 0.0 {
         Color::black()
     } else {
+        let mut containers = containers.clone();
         hit.refraction_ray()
             .and_then(|ray| {
-                find_hit(world, containers, &ray)
+                find_hit(world, &mut containers, &ray)
             })
             .map_or_else(
                 || Color::black(),
-                |refr_hit| shade_hit(world, containers, &refr_hit, reflection_count+1) * transparent)
+                |refr_hit| shade_hit(world, &mut containers, &refr_hit, reflection_count+1) * transparent)
     }
 }
 
 
 /// A predicate that tests whether or not a light is visible from a hit in the scene.
+///
+/// TODO: this currently considers transparent objects to be opaque
 fn light_visible(world: &World, hit: &Hit, light: &Light) -> bool {
     // move slightly away from the surface that was contacted
     let point = hit.world_space_point + hit.normal * 0.01;

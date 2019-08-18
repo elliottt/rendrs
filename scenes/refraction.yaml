@@ -29,7 +29,7 @@ materials:
 
 - name: glass
   transparent: 0.8
-  reflective: 0.0
+  reflective: 0.2
   refractive-index: 1.5
   specular: 0.9
 
