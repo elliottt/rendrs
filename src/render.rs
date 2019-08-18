@@ -16,6 +16,7 @@ use crate::{
     pattern::{Pattern},
     ray::{reflect,Ray,MarchResult},
     scene::Scene,
+    shapes::ShapeId,
 };
 
 #[derive(Debug,Clone)]
@@ -69,7 +70,7 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn set_max_reflections(mut self, max_reflections: isize) -> Self {
+    pub fn set_max_reflections(mut self, max_reflections: usize) -> Self {
         self.config.max_reflections = max_reflections;
         self
     }
@@ -86,7 +87,7 @@ pub struct Config {
     max_steps: usize,
     jobs: usize,
     debug_mode: Option<DebugMode>,
-    max_reflections: isize,
+    max_reflections: usize,
 }
 
 pub struct RenderedRow {
@@ -149,12 +150,13 @@ fn render_job(
 
     let world = World::new(cfg.clone(), scene);
 
+    let mut containers = Containers::new(cfg.max_reflections);
+
     render_body(idx, camera, cfg, send, |ray| {
-        if let Some(hit) = find_hit(&world, &ray, 1.0) {
-            shade_hit(&world, &hit, 0)
-        } else {
-            Color::black()
-        }
+        containers.clear();
+        find_hit(&world, &mut containers, &ray).map_or_else(
+            || Color::black(),
+            |hit| shade_hit(&world, &mut containers, &hit, 0))
     });
 }
 
@@ -171,6 +173,77 @@ impl World {
     }
 }
 
+/// Objects that a ray is within during refraction processing.
+struct Container {
+    object: ShapeId,
+    refractive_index: f32,
+}
+
+struct Containers {
+    containers: Vec<Container>,
+}
+
+impl Containers {
+    fn new(size: usize) -> Self {
+        Containers{ containers: Vec::with_capacity(size) }
+    }
+
+    fn clear(&mut self) {
+        self.containers.clear();
+    }
+
+    fn is_empty(&self) -> bool {
+        self.containers.is_empty()
+    }
+
+    fn refractive_index(&self) -> f32 {
+        self.containers.last().map_or_else(
+            || 1.0,
+            |container| container.refractive_index)
+    }
+
+    /// Returns `-1.0` when the ray originated from within another object, or 1.0 when it is
+    /// outside.
+    fn determine_sign(&self) -> f32 {
+        if self.containers.is_empty() {
+            1.0
+        } else {
+            -1.0
+        }
+    }
+
+    /// Determine the n1/n2 refractive indices for a hit involving a transparent object, and return
+    /// a boolean that indicates if the ray is leaving the object.
+    fn process_hit(&mut self, object: ShapeId, refractive_index: f32) -> (f32,f32) {
+        let n1 = self.refractive_index();
+
+        // if the object is already in the set, find its index.
+        let existing_ix = self.containers
+            .iter()
+            .enumerate()
+            .find_map( |arg| {
+                if arg.1.object == object {
+                    Some(arg.0)
+                } else {
+                    None
+                }
+            });
+
+        match existing_ix {
+            Some(ix) => {
+                // the object exists, so remove it.
+                self.containers.remove(ix);
+            },
+            None =>
+                self.containers.push(Container{ object, refractive_index }),
+        }
+
+        let n2 = self.refractive_index();
+
+        return (n1,n2)
+    }
+}
+
 #[derive(Debug)]
 struct Hit<'a> {
     object_space_point: Point3<f32>,
@@ -178,20 +251,35 @@ struct Hit<'a> {
     normal: Vector3<f32>,
     reflectv: Vector3<f32>,
     eyev: Vector3<f32>,
-    refractive_index: f32,
     material: &'a Material,
     pattern: &'a Pattern,
+    n1: f32,
+    n2: f32,
     sign: f32,
+    outside: bool,
 }
 
 impl<'a> Hit<'a> {
     fn new<'b>(
         world: &'b World,
+        containers: &mut Containers,
         ray: &Ray,
-        refractive_index: f32,
         res: MarchResult,
     ) -> Hit<'b> {
+
+        let outside = containers.is_empty();
+
+        let material = world.scene.get_material(res.material);
+
+        let (n1,n2) = if material.transparent > 0.0 {
+            containers.process_hit(res.object_id, material.refractive_index)
+        } else {
+            let val = containers.refractive_index();
+            (val,val)
+        };
+
         let normal = ray.sign * res.normal(|pt| world.scene.sdf(pt));
+
         Hit{
             object_space_point: res.object_space_point,
             world_space_point: res.world_space_point,
@@ -202,13 +290,16 @@ impl<'a> Hit<'a> {
             // the direction towards the eye
             eyev: -ray.direction,
 
-            // the refractive index of the source medium
-            refractive_index,
-
-            material: world.scene.get_material(res.material),
+            material: material,
             pattern: world.scene.get_pattern(res.pattern),
 
-            sign: ray.sign,
+            // refraction information
+            n1,
+            n2,
+
+            sign: containers.determine_sign(),
+
+            outside,
         }
     }
 
@@ -219,7 +310,7 @@ impl<'a> Hit<'a> {
     }
 
     fn refraction_ray(&self) -> Option<Ray> {
-        let n_ratio = self.refractive_index / self.material.refractive_index;
+        let n_ratio = self.n1 / self.n2;
         let cos_i = self.eyev.dot(&self.normal);
         let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
 
@@ -227,26 +318,31 @@ impl<'a> Hit<'a> {
             None
         } else {
             let cos_t = (1.0 - sin2_t).sqrt();
-            let direction = self.normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio;
+            let direction = (self.normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio).normalize();
 
             let origin = self.world_space_point + direction * 0.01;
-            Some(Ray::new(origin, direction, -self.sign))
+            Some(Ray::new(origin, direction, self.sign))
         }
     }
 }
 
 /// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
 /// `None`.
-fn find_hit<'a>(world: &'a World, ray: &Ray, refractive_index: f32) -> Option<Hit<'a>> {
+fn find_hit<'a>(
+    world: &'a World,
+    containers: &mut Containers,
+    ray: &Ray
+) -> Option<Hit<'a>> {
     ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
-        .map(|res| Hit::new(world, ray, refractive_index, res))
+        .map(|res| Hit::new(world, containers, ray, res))
 }
 
 /// Shade the color according to the material properties, and light.
 fn shade_hit(
     world: &World,
+    containers: &mut Containers,
     hit: &Hit,
-    reflection_count: isize,
+    reflection_count: usize,
 ) -> Color {
     let color = hit.pattern.color_at(&|pid| world.scene.get_pattern(pid), &hit.object_space_point);
 
@@ -261,8 +357,8 @@ fn shade_hit(
 
     let additional =
         if reflection_count < world.cfg.max_reflections {
-            let refl = reflected_color(world, hit, reflection_count);
-            let refrac = refracted_color(world, hit, reflection_count);
+            let refl = reflected_color(world, containers, hit, reflection_count);
+            let refrac = refracted_color(world, containers, hit, reflection_count);
             refl + refrac
         } else {
             Color::black()
@@ -272,38 +368,41 @@ fn shade_hit(
 }
 
 /// Compute the color from a reflection.
-fn reflected_color(world: &World, hit: &Hit, reflection_count: isize) -> Color {
+fn reflected_color(
+    world: &World,
+    containers: &mut Containers,
+    hit: &Hit,
+    reflection_count: usize,
+) -> Color {
     let reflective = hit.material.reflective;
-    if reflective <= 0.0 {
+    if reflective <= 0.0 || !hit.outside {
         Color::black()
     } else {
         let ray = hit.reflection_ray();
-        find_hit(world, &ray, hit.refractive_index).map_or_else(
+        find_hit(world, containers, &ray).map_or_else(
             || Color::black(),
-            |refl_hit| shade_hit(world, &refl_hit, reflection_count + 1) * reflective)
+            |refl_hit| shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective)
     }
 }
 
 /// Compute the additional color due to refraction.
-fn refracted_color(world: &World, hit: &Hit, reflection_count: isize) -> Color {
+fn refracted_color(
+    world: &World,
+    containers: &mut Containers,
+    hit: &Hit,
+    reflection_count: usize
+) -> Color {
     let transparent = hit.material.transparent;
     if transparent <= 0.0 {
         Color::black()
     } else {
         hit.refraction_ray()
-            .and_then(|internal_ray|
-                find_hit(world, &internal_ray, hit.material.refractive_index))
-            .and_then(|mut internal_hit| {
-                // TODO: big hack, what if we aren't just exiting this object?
-                internal_hit.material = hit.material;
-                internal_hit
-                    .refraction_ray()
-                    .and_then(|external_ray|
-                        find_hit(world, &external_ray, internal_hit.material.refractive_index))
+            .and_then(|ray| {
+                find_hit(world, containers, &ray)
             })
             .map_or_else(
                 || Color::black(),
-                |external_hit| shade_hit(world, &external_hit, reflection_count+1) * transparent)
+                |refr_hit| shade_hit(world, containers, &refr_hit, reflection_count+1) * transparent)
     }
 }
 

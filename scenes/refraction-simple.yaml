@@ -7,7 +7,7 @@ patterns:
 
 - name: ball
   solid:
-    hex: 0xffb3df
+    hex: 0xffffff
 
 - name: wall
   checkers:
@@ -21,38 +21,19 @@ patterns:
     - solid:
         hex: 0xfff666
     - solid:
-        hex: 0xffb3df
+        hex: 0x5158ff
 
 materials:
 - name: matte
   specular: 0.0
 
 - name: glass
-  transparent: 0.8
-  reflective: 0.0
+  transparent: 1.0
+  # reflective: 0.2
   refractive-index: 1.5
   specular: 0.9
 
-- name: reflective
-  reflective: 0.2
-  specular: 0.9
-
 objects:
-- name: cylinder
-  material:
-    material: reflective
-    pattern: blue
-    object:
-      transform:
-        translation:
-          x: -1.5
-          z: 3.0
-        object:
-          uniform-scale:
-            amount: 2.0
-            object:
-              prim: cylinder
-
 - name: ball
   material:
     material: glass
@@ -60,25 +41,14 @@ objects:
     object:
       transform:
         translation:
-          y: 1
+          y: 0
           x: 2.5
-          z: -5
+          z: 0
         object:
           uniform-scale:
-            amount: 2.0
+            amount: 5.0
             object:
               prim: sphere
-
-- name: floor
-  material:
-    material: matte
-    pattern: floor
-    object:
-      transform:
-        translation:
-          y: -1.0
-        object:
-          prim: plane
 
 - name: wall
   material:
@@ -87,24 +57,34 @@ objects:
     object:
       transform:
         translation:
-          z: 5.0
+          z: 20.0
         rotation:
           x: 1.0
           degrees: -90
         object:
           prim: plane
 
+- name: floor
+  material:
+    material: matte
+    pattern: floor
+    object:
+      transform:
+        translation:
+          y: -4.5
+        object:
+          prim: plane
+
 lights:
 - position:
     x: 0.0
-    y: 10.0
-    z: -5.0
+    y: 15.0
+    z: -8.0
 
 scene:
-- cylinder
 - ball
-- floor
 - wall
+- floor
 
 cameras:
 - perspective:
@@ -115,11 +95,11 @@ cameras:
       degrees: 90.0
 
     position:
-      x: 2.0
+      x: 0.0
       y: 2.0
-      z: -10.0
+      z: -15.0
 
     target:
       x: 0.0
-      y: 0.0
+      y: 2.0
       z: 0.0

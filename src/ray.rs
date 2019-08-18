@@ -56,6 +56,7 @@ impl Ray {
                 return Some(MarchResult{
                     steps: i,
                     distance: total_dist,
+                    object_id: res.object_id,
                     object_space_point: res.object_space_point,
                     world_space_point: pos,
                     material: res.material,
@@ -88,6 +89,7 @@ impl Ray {
 pub struct MarchResult {
     pub steps: usize,
     pub distance: f32,
+    pub object_id: ShapeId,
     pub object_space_point: Point3<f32>,
     pub world_space_point: Point3<f32>,
     pub material: MaterialId,
