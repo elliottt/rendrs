@@ -7,7 +7,7 @@ patterns:
 
 - name: ball
   solid:
-    hex: 0xffb3df
+    hex: 0x000000
 
 - name: wall
   checkers:
@@ -28,10 +28,9 @@ materials:
   specular: 0.0
 
 - name: glass
-  transparent: 0.8
-  reflective: 0.2
-  refractive-index: 1.5
-  specular: 0.9
+  transparent: 1.0
+  reflective: 1.0
+  refractive-index: 1.9
 
 - name: reflective
   reflective: 0.2

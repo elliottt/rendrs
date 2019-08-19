@@ -150,13 +150,12 @@ fn render_job(
 
     let world = World::new(cfg.clone(), scene);
 
-    let mut containers = Containers::new();
+    let containers = Containers::new();
 
     render_body(idx, camera, cfg, send, |ray| {
-        containers.clear();
-        find_hit(&world, &mut containers, &ray).map_or_else(
+        find_hit(&world, &containers, &ray).map_or_else(
             || Color::black(),
-            |hit| shade_hit(&world, &mut containers, &hit, 0))
+            |hit| shade_hit(&world, &containers, &hit, 0))
     });
 }
 
@@ -190,14 +189,6 @@ impl Containers {
         Containers{ containers: Vec::new() }
     }
 
-    fn clear(&mut self) {
-        self.containers.clear();
-    }
-
-    fn is_empty(&self) -> bool {
-        self.containers.is_empty()
-    }
-
     fn refractive_index(&self) -> f32 {
         self.containers.last().map_or_else(
             || 1.0,
@@ -216,8 +207,10 @@ impl Containers {
 
     /// Determine the n1/n2 refractive indices for a hit involving a transparent object, and return
     /// a boolean that indicates if the ray is leaving the object.
-    fn process_hit(&mut self, object: ShapeId, refractive_index: f32) -> (f32,f32) {
+    fn process_hit(&mut self, object: ShapeId, refractive_index: f32) -> (bool,f32,f32) {
         let n1 = self.refractive_index();
+
+        let mut leaving = false;
 
         // if the object is already in the set, find its index.
         let existing_ix = self.containers
@@ -225,6 +218,7 @@ impl Containers {
             .enumerate()
             .find_map( |arg| {
                 if arg.1.object == object {
+                    leaving = true;
                     Some(arg.0)
                 } else {
                     None
@@ -242,7 +236,7 @@ impl Containers {
 
         let n2 = self.refractive_index();
 
-        return (n1,n2)
+        return (leaving,n1,n2)
     }
 }
 
@@ -257,36 +251,37 @@ struct Hit<'a> {
     pattern: &'a Pattern,
     n1: f32,
     n2: f32,
-    sign: f32,
-    outside: bool,
+    leaving: bool,
+    containers: Containers,
 }
 
 impl<'a> Hit<'a> {
     fn new<'b>(
         world: &'b World,
-        containers: &mut Containers,
+        containers: &Containers,
         ray: &Ray,
         res: MarchResult,
     ) -> Hit<'b> {
 
-        let outside = containers.is_empty();
-
         let material = world.scene.get_material(res.material);
 
-        let (n1,n2) = if material.transparent > 0.0 {
+        let mut containers = containers.clone();
+
+        let (leaving,n1,n2) = if material.transparent > 0.0 {
             containers.process_hit(res.object_id, material.refractive_index)
         } else {
             let val = containers.refractive_index();
-            (val,val)
+            (false,val,val)
         };
 
-        let normal = ray.sign * res.normal(|pt| world.scene.sdf(pt));
+        let normal = res.normal(|pt| world.scene.sdf(pt));
 
         Hit{
             object_space_point: res.object_space_point,
             world_space_point: res.world_space_point,
             normal,
 
+            // this doesn't need to be computed here
             reflectv: reflect(&ray.direction, &normal),
 
             // the direction towards the eye
@@ -299,40 +294,79 @@ impl<'a> Hit<'a> {
             n1,
             n2,
 
-            sign: containers.determine_sign(),
+            leaving,
 
-            outside,
+            containers,
         }
     }
 
-    fn reflection_ray(&self) -> Ray {
+    fn reflection_ray(&self, containers: &Containers) -> Ray {
         // start the origin along the ray a bit
         let origin = self.world_space_point + self.reflectv * 0.01;
-        Ray::new(origin, self.reflectv.clone(), self.sign)
+        Ray::new(origin, self.reflectv.clone(), containers.determine_sign())
     }
 
-    fn refraction_ray(&self) -> Option<Ray> {
+    fn refraction_ray(&self, containers: &Containers) -> Option<Ray> {
+        // the normal must point inside when the refraction ray originated within the object
+        let refrac_normal =
+            if self.leaving {
+                -self.normal
+            } else {
+                self.normal
+            };
+
         let n_ratio = self.n1 / self.n2;
-        let cos_i = self.eyev.dot(&self.normal);
+        let cos_i = self.eyev.dot(&refrac_normal);
         let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
 
         if sin2_t > 1.0 {
             None
         } else {
             let cos_t = (1.0 - sin2_t).sqrt();
-            let direction = (self.normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio).normalize();
+            let direction = (refrac_normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio).normalize();
 
             let origin = self.world_space_point + direction * 0.01;
-            Some(Ray::new(origin, direction, self.sign))
+            Some(Ray::new(origin, direction, containers.determine_sign()))
         }
     }
+
+    fn schlick(&self) -> f32 {
+        schlick(&self.eyev, &self.normal, self.n1, self.n2)
+    }
+}
+
+fn schlick(eyev: &Vector3<f32>, normal: &Vector3<f32>, n1: f32, n2: f32) -> f32 {
+    let mut cos = eyev.dot(&normal);
+
+    // total internal reflection
+    if n1 > n2 {
+        let n = n1 / n2;
+        let sin2_t = n.powi(2) * (1.0 - cos.powi(2));
+        if sin2_t > 1.0 {
+            return 1.0;
+        }
+
+        cos = (1.0 - sin2_t).sqrt();
+    }
+
+    let r0 = ((n1 - n2) / (n1 + n2)).powi(2);
+    (r0 + (1.0 - r0) * (1.0 - cos).powi(5)).min(1.0)
+}
+
+#[test]
+fn test_schlick() {
+    let reflectance = schlick(&Vector3::new(0.0, 0.0, -1.0), &Vector3::new(0.0, 0.0, -1.0), 1.0, 1.5);
+    assert!(reflectance - 0.04 < 0.001, format!("{} != {}", reflectance, 0.04));
+
+    let reflectance = schlick(&Vector3::new(0.0, 0.0, -1.0), &Vector3::new(1.0, 0.0, 0.0), 1.0, 1.5);
+    assert!(reflectance - 1.0 < 0.001, format!("{} != {}", reflectance, 1.0));
 }
 
 /// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
 /// `None`.
 fn find_hit<'a>(
     world: &'a World,
-    containers: &mut Containers,
+    containers: &Containers,
     ray: &Ray
 ) -> Option<Hit<'a>> {
     ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
@@ -342,7 +376,7 @@ fn find_hit<'a>(
 /// Shade the color according to the material properties, and light.
 fn shade_hit(
     world: &World,
-    containers: &mut Containers,
+    containers: &Containers,
     hit: &Hit,
     reflection_count: usize,
 ) -> Color {
@@ -357,16 +391,19 @@ fn shade_hit(
             ) * world.light_weight;
     }
 
-    let additional =
-        if reflection_count < world.cfg.max_reflections {
-            let refl = reflected_color(world, containers, hit, reflection_count);
-            let refrac = refracted_color(world, containers, hit, reflection_count);
-            refl + refrac
-        } else {
-            Color::black()
-        };
+    if reflection_count < world.cfg.max_reflections {
+        let refl = reflected_color(world, containers, hit, reflection_count);
+        let refrac = refracted_color(world, &hit.containers, hit, reflection_count);
 
-    output + additional
+        if hit.material.reflective > 0.0 && hit.material.transparent > 0.0 {
+            let reflectance = hit.schlick();
+            output + refl * reflectance + refrac * (1.0 - reflectance)
+        } else {
+            output + refl + refrac
+        }
+    } else {
+        output
+    }
 }
 
 /// Compute the color from a reflection.
@@ -377,14 +414,13 @@ fn reflected_color(
     reflection_count: usize,
 ) -> Color {
     let reflective = hit.material.reflective;
-    if reflective <= 0.0 || !hit.outside {
+    if reflective <= 0.0 || hit.leaving {
         Color::black()
     } else {
-        let mut containers = containers.clone();
-        let ray = hit.reflection_ray();
-        find_hit(world, &mut containers, &ray).map_or_else(
+        let ray = hit.reflection_ray(containers);
+        find_hit(world, &containers, &ray).map_or_else(
             || Color::black(),
-            |refl_hit| shade_hit(world, &mut containers, &refl_hit, reflection_count + 1) * reflective)
+            |refl_hit| shade_hit(world, &containers, &refl_hit, reflection_count + 1) * reflective)
     }
 }
 
@@ -399,14 +435,11 @@ fn refracted_color(
     if transparent <= 0.0 {
         Color::black()
     } else {
-        let mut containers = containers.clone();
-        hit.refraction_ray()
-            .and_then(|ray| {
-                find_hit(world, &mut containers, &ray)
-            })
+        hit.refraction_ray(containers)
+            .and_then(|ray| find_hit(world, &containers, &ray))
             .map_or_else(
                 || Color::black(),
-                |refr_hit| shade_hit(world, &mut containers, &refr_hit, reflection_count+1) * transparent)
+                |refr_hit| shade_hit(world, &containers, &refr_hit, reflection_count+1) * transparent)
     }
 }
 
@@ -421,7 +454,7 @@ fn light_visible(world: &World, hit: &Hit, light: &Light) -> bool {
     let dist = light_dir.magnitude();
 
     // check to see if the path to the light is obstructed
-    Ray::new(point, light_dir.normalize(), hit.sign)
+    Ray::new(point, light_dir.normalize(), 1.0)
         .march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
         .map_or_else(|| true, |res| res.distance >= dist)
 }
