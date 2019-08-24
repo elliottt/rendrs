@@ -152,15 +152,18 @@ impl Shape {
             },
 
             Shape::Subtract{ first, second } => {
-                // figure out the distance for the part being subtracted
-                let dist = {
-                    let mut tmp = result.clone();
-                    scene.get_shape(*second).sdf(scene, point, &mut tmp);
-                    tmp.distance
-                };
-
                 scene.get_shape(*first).sdf(scene, point, result);
-                result.distance = f32::max(result.distance, -dist);
+
+                // figure out the distance for the part being subtracted
+                let mut tmp = result.clone();
+                scene.get_shape(*second).sdf(scene, point, &mut tmp);
+                let sub = -tmp.distance;
+
+                if result.distance <= sub {
+                    result.distance = sub;
+                    result.material = tmp.material;
+                    result.pattern = tmp.pattern;
+                }
             },
 
             Shape::Transform{ matrix, node } => {
