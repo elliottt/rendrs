@@ -73,15 +73,10 @@ impl PrimShape {
 
 }
 
-#[macro_export]
-macro_rules! assert_eq_f32 {
-    ( $x:expr, $y:expr ) => {
-        assert!(($x - $y) <= 0.001, format!("\n  left: `{}`\n right: `{}`", $x, $y))
-    }
-}
-
 #[test]
 fn test_cube() {
+    use crate::assert_eq_f32;
+
     let shape = PrimShape::Cube;
     {
         let point = Point3::new(1.0, 0.0, 0.0);

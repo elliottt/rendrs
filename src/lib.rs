@@ -13,3 +13,4 @@ pub mod ray;
 pub mod render;
 pub mod shapes;
 pub mod scene;
+pub mod test_utils;

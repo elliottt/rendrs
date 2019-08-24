@@ -151,6 +151,7 @@ fn test_transform() {
 
 #[test]
 fn test_march() {
+    use crate::assert_eq_f32;
     use crate::{shapes::{Shape,PrimShape},scene::Scene};
 
     let ray = Ray::new(Point3::new(0.0, 0.0, -5.0), Vector3::new(0.0, 0.0, 1.0), 1.0);
@@ -162,10 +163,10 @@ fn test_march() {
 
     // test an intersection
     let mut result = ray.march(4, |pt| scene.sdf_from(sphere, pt)).expect("Failed to march ray");
-    assert_eq!(result.distance, 4.0);
+    assert_eq_f32!(result.distance, 4.0);
 
     result = ray.march(4, |pt| scene.sdf_from(scaled, pt)).expect("Failed to march ray");
-    assert_eq!(result.distance, 3.0);
+    assert_eq_f32!(result.distance, 3.0);
 
     // test a miss
     assert!(ray.march(100, |pt| scene.sdf_from(moved, pt)).is_none());
@@ -173,6 +174,8 @@ fn test_march() {
 
 #[test]
 fn test_reflect() {
+    use crate::assert_eq_f32;
+
     {
         let v = Vector3::new(1.0, -1.0, 0.0);
         let normal = Vector3::new(0.0, 1.0, 0.0);
@@ -185,8 +188,8 @@ fn test_reflect() {
         let normal = Vector3::new(s2d2, s2d2, 0.0);
         let r = reflect(&v, &normal);
 
-        assert!(r.x - 1.0 < std::f32::EPSILON);
-        assert!(r.y < std::f32::EPSILON);
-        assert_eq!(r.z, 0.0);
+        assert_eq_f32!(r.x, 1.0);
+        assert_eq_f32!(r.y, 0.0);
+        assert_eq_f32!(r.z, 0.0);
     }
 }
