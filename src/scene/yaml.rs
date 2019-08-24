@@ -573,6 +573,8 @@ fn parse_obj(
                 work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Cylinder }),
             "plane" =>
                 work.push(name,ParsedObj::PrimShape{ prim: PrimShape::XZPlane }),
+            "cube" =>
+                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Cube }),
             other =>
                 return Err(format_err!("unknown primitive `{}`", other)),
         };

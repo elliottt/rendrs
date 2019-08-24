@@ -37,6 +37,9 @@ pub enum PrimShape {
     /// The unit cylinder
     Cylinder,
 
+    /// The unit cube
+    Cube,
+
     /// X-Z plane
     XZPlane,
 }
@@ -54,12 +57,44 @@ impl PrimShape {
                 (xz_mag - 1.0).max(point.y.abs() - 1.0)
             },
 
+            PrimShape::Cube => {
+                let x = point.x.abs() - 1.0;
+                let y = point.y.abs() - 1.0;
+                let z = point.z.abs() - 1.0;
+                let diff = x.max(y.max(z)).min(0.0);
+                Vector3::new(x.max(0.0), y.max(0.0), z.max(0.0)).magnitude() + diff
+            },
+
             PrimShape::XZPlane => {
                 point.y
             }
         }
     }
 
+}
+
+#[macro_export]
+macro_rules! assert_eq_f32 {
+    ( $x:expr, $y:expr ) => {
+        assert!(($x - $y) <= 0.001, format!("\n  left: `{}`\n right: `{}`", $x, $y))
+    }
+}
+
+#[test]
+fn test_cube() {
+    let shape = PrimShape::Cube;
+    {
+        let point = Point3::new(1.0, 0.0, 0.0);
+        assert_eq_f32!(shape.sdf(&point), 0.0);
+    }
+    {
+        let point = Point3::new(0.5, 0.0, 0.0);
+        assert_eq_f32!(shape.sdf(&point), -0.5);
+    }
+    {
+        let point = Point3::new(0.0, 0.0, 0.0);
+        assert_eq_f32!(shape.sdf(&point), -1.0);
+    }
 }
 
 #[derive(Debug,Clone)]

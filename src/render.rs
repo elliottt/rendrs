@@ -414,7 +414,7 @@ fn reflected_color(
     reflection_count: usize,
 ) -> Color {
     let reflective = hit.material.reflective;
-    if reflective <= 0.0 || hit.leaving {
+    if reflective <= 0.0 {
         Color::black()
     } else {
         let ray = hit.reflection_ray(containers);
