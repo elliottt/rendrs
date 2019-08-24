@@ -517,6 +517,14 @@ fn parse_objs(
                         continue;
                     }
                 },
+
+                ParsedObj::Onion{ ref thickness, ref object } => {
+                    if let Some(oid) = obj_map.get(object) {
+                        let sid = scene.add(Shape::onion(*thickness, *oid));
+                        obj_map.insert(name, sid);
+                        continue;
+                    }
+                },
             }
 
             next.push((name,parsed));
@@ -555,6 +563,10 @@ enum ParsedObj {
     },
     UniformScale{
         amount: f32,
+        object: ParsedName,
+    },
+    Onion{
+        thickness: f32,
         object: ParsedName,
     },
 }
@@ -607,6 +619,10 @@ fn parse_obj(
         let amount = args.get_field("amount")?.as_f32()?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name, ParsedObj::UniformScale{ amount, object });
+    } else if let Ok(args) = ctx.get_field("onion") {
+        let thickness = args.get_field("thickness")?.as_f32()?;
+        let object = parse_subtree(&args.get_field("object")?, work)?;
+        work.push(name, ParsedObj::Onion{ thickness, object });
     } else {
         return Err(format_err!("Unknown shape type"));
     }

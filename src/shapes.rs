@@ -128,6 +128,12 @@ pub enum Shape {
         material: MaterialId,
         node: ShapeId,
     },
+
+    /// Onion the object
+    Onion{
+        thickness: f32,
+        node: ShapeId,
+    }
 }
 
 impl Shape {
@@ -181,7 +187,12 @@ impl Shape {
                 scene.get_shape(*node).sdf(scene, point, result);
                 result.material = *material;
                 result.pattern = *pattern;
-            }
+            },
+
+            Shape::Onion{ thickness, node } => {
+                scene.get_shape(*node).sdf(scene, point, result);
+                result.distance = result.distance.abs() - thickness;
+            },
         }
     }
 
@@ -214,5 +225,9 @@ impl Shape {
 
     pub fn material(pattern: PatternId, material: MaterialId, node: ShapeId) -> Self {
         Shape::Material{ pattern, material, node }
+    }
+
+    pub fn onion(thickness: f32, node: ShapeId) -> Self {
+        Shape::Onion{ thickness, node }
     }
 }
