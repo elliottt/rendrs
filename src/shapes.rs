@@ -73,25 +73,6 @@ impl PrimShape {
 
 }
 
-#[test]
-fn test_cube() {
-    use crate::assert_eq_f32;
-
-    let shape = PrimShape::Cube;
-    {
-        let point = Point3::new(1.0, 0.0, 0.0);
-        assert_eq_f32!(shape.sdf(&point), 0.0);
-    }
-    {
-        let point = Point3::new(0.5, 0.0, 0.0);
-        assert_eq_f32!(shape.sdf(&point), -0.5);
-    }
-    {
-        let point = Point3::new(0.0, 0.0, 0.0);
-        assert_eq_f32!(shape.sdf(&point), -1.0);
-    }
-}
-
 #[derive(Debug,Clone)]
 pub enum Shape {
     /// The unit sphere
@@ -229,5 +210,24 @@ impl Shape {
 
     pub fn onion(thickness: f32, node: ShapeId) -> Self {
         Shape::Onion{ thickness, node }
+    }
+}
+
+#[test]
+fn test_cube() {
+    use crate::assert_eq_f32;
+
+    let shape = PrimShape::Cube;
+    {
+        let point = Point3::new(1.0, 0.0, 0.0);
+        assert_eq_f32!(shape.sdf(&point), 0.0);
+    }
+    {
+        let point = Point3::new(0.5, 0.0, 0.0);
+        assert_eq_f32!(shape.sdf(&point), -0.5);
+    }
+    {
+        let point = Point3::new(0.0, 0.0, 0.0);
+        assert_eq_f32!(shape.sdf(&point), -1.0);
     }
 }
