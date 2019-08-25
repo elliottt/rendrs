@@ -86,7 +86,7 @@ impl Pattern {
         Pattern::Checkers{ first, second }
     }
 
-    pub fn transform(matrix: Matrix4<f32>, pattern: PatternId) -> Self {
+    pub fn transform(matrix: &Matrix4<f32>, pattern: PatternId) -> Self {
         let inv = matrix.try_inverse().expect("Unable to invert transformation matrix");
         Pattern::Transform{ transform: inv, pattern }
     }

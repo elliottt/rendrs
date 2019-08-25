@@ -203,8 +203,7 @@ enum ParsedPat {
         second: ParsedName,
     },
     Transform{
-        translation: Option<Vector3<f32>>,
-        rotation: Option<(Vector3<f32>,f32)>,
+        transform: Matrix4<f32>,
         pattern: ParsedName,
     }
 }
@@ -277,21 +276,9 @@ fn parse_pats(ctx: &Context, scene: &mut Scene)
                     }
                 },
 
-                ParsedPat::Transform{ ref translation, ref rotation, ref pattern } => {
+                ParsedPat::Transform{ ref transform, ref pattern } => {
                     if let Some(cid) = pat_map.get(pattern) {
-                        let mut trans =
-                            if let Some((vec,angle)) = rotation {
-                                let axis = Unit::new_normalize(vec.clone());
-                                Matrix4::from_axis_angle(&axis, *angle)
-                            } else {
-                                Matrix4::identity()
-                            };
-
-                        if let Some(vec) = translation {
-                            trans = trans.append_translation(vec);
-                        }
-
-                        let pid = scene.add_pattern(Pattern::transform(trans, *cid));
+                        let pid = scene.add_pattern(Pattern::transform(transform, *cid));
                         pat_map.insert(name, pid);
                         continue;
                     }
@@ -336,12 +323,9 @@ fn parse_pat(
         let second = parse_pat_subtree(&ctx.get_at(1)?, work)?;
         work.push(name, ParsedPat::Checkers{ first, second });
     } else if let Ok(ctx) = ctx.get_field("transform") {
-        let translation = optional(ctx.get_field("translation")).map_or_else(
-            || Ok(None), |ctx| parse_vector3(&ctx).map(Some))?;
-        let rotation = optional(ctx.get_field("rotation")).map_or_else(
-            || Ok(None), |ctx| parse_rotation(&ctx).map(Some))?;
+        let transform = parse_transform(&ctx)?;
         let pattern = parse_pat_subtree(&ctx.get_field("pattern")?, work)?;
-        work.push(name, ParsedPat::Transform{ translation, rotation, pattern });
+        work.push(name, ParsedPat::Transform{ transform, pattern });
     } else {
         return Err(format_err!("Unknown pattern type"))
     }
@@ -460,22 +444,9 @@ fn parse_objs(
                     }
                 },
 
-                ParsedObj::Transform{ ref translation, ref rotation, ref object } => {
+                ParsedObj::Transform{ ref transform, ref object } => {
                     if let Some(oid) = obj_map.get(object) {
-                        let mut trans =
-                            if let Some((vec,angle)) = rotation {
-                                let axis = Unit::new_normalize(vec.clone());
-                                Matrix4::from_axis_angle(&axis, *angle)
-                            } else {
-                                Matrix4::identity()
-                            };
-
-                        if let Some(vec) = translation {
-                            trans = trans.append_translation(vec);
-                        }
-
-                        let sid = scene.add(Shape::transform(&trans, *oid));
-
+                        let sid = scene.add(Shape::transform(transform, *oid));
                         obj_map.insert(name,sid);
                         continue;
                     }
@@ -578,8 +549,7 @@ enum ParsedObj {
         object: ParsedName,
     },
     Transform{
-        translation: Option<Vector3<f32>>,
-        rotation: Option<(Vector3<f32>,f32)>,
+        transform: Matrix4<f32>,
         object: ParsedName
     },
     Union{
@@ -627,12 +597,9 @@ fn parse_obj(
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name,ParsedObj::Material{ pattern, material, object });
     } else if let Ok(args) = ctx.get_field("transform") {
-        let translation = optional(args.get_field("translation")).map_or_else(
-            || Ok(None), |ctx| parse_vector3(&ctx).map(Some))?;
-        let rotation = optional(args.get_field("rotation")).map_or_else(
-            || Ok(None), |ctx| parse_rotation(&ctx).map(Some))?;
+        let transform = parse_transform(&args)?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
-        work.push(name, ParsedObj::Transform{ translation, rotation, object });
+        work.push(name, ParsedObj::Transform{ transform, object });
     } else if let Ok(args) = ctx.get_field("union") {
         let smooth = optional(args.get_field("smooth")).map_or_else(
             || Ok(None), |ctx| ctx.as_f32().map(Some))?;
@@ -712,6 +679,27 @@ fn parse_roots(
 }
 
 // Utility Parsers -------------------------------------------------------------
+
+/// Parse a transformation matrix.
+fn parse_transform(ctx: &Context) -> Result<Matrix4<f32>,Error> {
+    let rotation = optional(ctx.get_field("rotation")).map_or_else(
+        || Ok(None), |ctx| parse_rotation(&ctx).map(Some))?;
+    let translation = optional(ctx.get_field("translation")).map_or_else(
+        || Ok(None), |ctx| parse_vector3(&ctx).map(Some))?;
+
+    let mut trans = Matrix4::identity();
+
+    if let Some((vec,angle)) = rotation {
+        let axis = Unit::new_normalize(vec);
+        trans *= Matrix4::from_axis_angle(&axis, angle);
+    }
+
+    if let Some(vec) = translation {
+        trans = trans.append_translation(&vec);
+    }
+
+    Ok(trans)
+}
 
 /// Parse a color as either a hex value, or separate r, g, and b values.
 fn parse_color(ctx: &Context) -> Result<Color, Error> {
