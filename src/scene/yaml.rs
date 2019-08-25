@@ -323,7 +323,7 @@ fn parse_pat(
         let second = parse_pat_subtree(&ctx.get_at(1)?, work)?;
         work.push(name, ParsedPat::Checkers{ first, second });
     } else if let Ok(ctx) = ctx.get_field("transform") {
-        let transform = parse_transform(&ctx)?;
+        let (transform,_) = parse_transform(&ctx)?;
         let pattern = parse_pat_subtree(&ctx.get_field("pattern")?, work)?;
         work.push(name, ParsedPat::Transform{ transform, pattern });
     } else {
@@ -444,9 +444,9 @@ fn parse_objs(
                     }
                 },
 
-                ParsedObj::Transform{ ref transform, ref object } => {
+                ParsedObj::Transform{ ref transform, scale_factor, ref object } => {
                     if let Some(oid) = obj_map.get(object) {
-                        let sid = scene.add(Shape::transform(transform, *oid));
+                        let sid = scene.add(Shape::transform(transform, scale_factor, *oid));
                         obj_map.insert(name,sid);
                         continue;
                     }
@@ -524,17 +524,9 @@ fn parse_objs(
                     }
                 }
 
-                ParsedObj::UniformScale{ ref amount, ref object } => {
+                ParsedObj::Onion{ thickness, ref object } => {
                     if let Some(oid) = obj_map.get(object) {
-                        let sid = scene.add(Shape::uniform_scaling(*amount, *oid));
-                        obj_map.insert(name, sid);
-                        continue;
-                    }
-                },
-
-                ParsedObj::Onion{ ref thickness, ref object } => {
-                    if let Some(oid) = obj_map.get(object) {
-                        let sid = scene.add(Shape::onion(*thickness, *oid));
+                        let sid = scene.add(Shape::onion(thickness, *oid));
                         obj_map.insert(name, sid);
                         continue;
                     }
@@ -588,6 +580,7 @@ enum ParsedObj {
     },
     Transform{
         transform: Matrix4<f32>,
+        scale_factor: f32,
         object: ParsedName
     },
     Group{
@@ -603,10 +596,6 @@ enum ParsedObj {
     },
     Intersect{
         objects: Vec<ParsedName>,
-    },
-    UniformScale{
-        amount: f32,
-        object: ParsedName,
     },
     Onion{
         thickness: f32,
@@ -645,9 +634,9 @@ fn parse_obj(
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name,ParsedObj::Material{ pattern, material, object });
     } else if let Ok(args) = ctx.get_field("transform") {
-        let transform = parse_transform(&args)?;
+        let (transform,scale_factor) = parse_transform(&args)?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
-        work.push(name, ParsedObj::Transform{ transform, object });
+        work.push(name, ParsedObj::Transform{ transform, scale_factor, object });
     } else if let Ok(ctx) = ctx.get_field("group") {
         let mut objects = Vec::new();
         let entries = ctx.as_sequence()?;
@@ -676,10 +665,6 @@ fn parse_obj(
         let first = parse_subtree(&entries.get_at(0)?, work)?;
         let second = parse_subtree(&entries.get_at(1)?, work)?;
         work.push(name, ParsedObj::Subtract{ first, second });
-    } else if let Ok(args) = ctx.get_field("uniform-scale") {
-        let amount = args.get_field("amount")?.as_f32()?;
-        let object = parse_subtree(&args.get_field("object")?, work)?;
-        work.push(name, ParsedObj::UniformScale{ amount, object });
     } else if let Ok(args) = ctx.get_field("onion") {
         let thickness = args.get_field("thickness")?.as_f32()?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
@@ -744,13 +729,21 @@ fn parse_roots(
 // Utility Parsers -------------------------------------------------------------
 
 /// Parse a transformation matrix.
-fn parse_transform(ctx: &Context) -> Result<Matrix4<f32>,Error> {
+fn parse_transform(ctx: &Context) -> Result<(Matrix4<f32>,f32),Error> {
+    let scale = optional(ctx.get_field("scale")).map_or_else(
+        || Ok(None), |ctx| parse_scale(&ctx).map(Some))?;
     let rotation = optional(ctx.get_field("rotation")).map_or_else(
         || Ok(None), |ctx| parse_rotation(&ctx).map(Some))?;
     let translation = optional(ctx.get_field("translation")).map_or_else(
         || Ok(None), |ctx| parse_vector3(&ctx).map(Some))?;
 
     let mut trans = Matrix4::identity();
+    let mut scale_factor = 1.0;
+
+    if let Some(vec) = scale {
+        scale_factor = vec.x.min(vec.y).min(vec.z);
+        trans.append_nonuniform_scaling_mut(&vec);
+    }
 
     if let Some((vec,angle)) = rotation {
         let axis = Unit::new_normalize(vec);
@@ -758,10 +751,10 @@ fn parse_transform(ctx: &Context) -> Result<Matrix4<f32>,Error> {
     }
 
     if let Some(vec) = translation {
-        trans = trans.append_translation(&vec);
+        trans.append_translation_mut(&vec);
     }
 
-    Ok(trans)
+    Ok((trans,scale_factor))
 }
 
 /// Parse a color as either a hex value, or separate r, g, and b values.
@@ -798,6 +791,21 @@ fn parse_vector3(ctx: &Context) -> Result<Vector3<f32>,Error> {
     let z = optional(ctx.get_field("z")).map_or_else(
         || Ok(0.0), |ctx| ctx.as_f32())?;
     Ok(Vector3::new(x,y,z))
+}
+
+fn parse_scale(ctx: &Context) -> Result<Vector3<f32>,Error> {
+    if let Ok(ctx) = ctx.get_field("uniform") {
+        let uniform = ctx.as_f32()?;
+        Ok(Vector3::new(uniform, uniform, uniform))
+    } else {
+        let x = optional(ctx.get_field("x")).map_or_else(
+            || Ok(1.0), |ctx| ctx.as_f32())?;
+        let y = optional(ctx.get_field("y")).map_or_else(
+            || Ok(1.0), |ctx| ctx.as_f32())?;
+        let z = optional(ctx.get_field("z")).map_or_else(
+            || Ok(1.0), |ctx| ctx.as_f32())?;
+        Ok(Vector3::new(x,y,z))
+    }
 }
 
 fn parse_rotation(ctx: &Context) -> Result<(Vector3<f32>,f32),Error> {

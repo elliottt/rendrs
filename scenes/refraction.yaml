@@ -46,11 +46,10 @@ objects:
         translation:
           x: -1.5
           z: 3.0
+        scale:
+          uniform: 2.0
         object:
-          uniform-scale:
-            amount: 2.0
-            object:
-              cylinder:
+          cylinder:
 
 - name: ball
   material:
@@ -62,11 +61,10 @@ objects:
           y: 1
           x: 2.5
           z: -5
+        scale:
+          uniform: 2.0
         object:
-          uniform-scale:
-            amount: 2.0
-            object:
-              sphere:
+          sphere:
 
 - name: floor
   material:

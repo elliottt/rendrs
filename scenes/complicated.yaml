@@ -47,10 +47,9 @@ objects:
           - transform:
               translation:
                 x: 1.0
-              object:
-                uniform-scale:
-                  amount: 2.0
-                  object: blue-sphere
+              scale:
+                uniform: 2.0
+              object: blue-sphere
 
           - transform:
               translation:

@@ -44,11 +44,10 @@ objects:
           y: 0
           x: 2.5
           z: 0
+        scale:
+          uniform: 5.0
         object:
-          uniform-scale:
-            amount: 5.0
-            object:
-              sphere:
+          sphere:
 
 - name: wall
   material:

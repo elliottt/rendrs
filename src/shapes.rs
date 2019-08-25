@@ -114,12 +114,7 @@ pub enum Shape {
     /// A transformation applied to a sub-graph
     Transform{
         matrix: Matrix4<f32>,
-        node: ShapeId,
-    },
-
-    /// Scaling must be handled differently for an SDF
-    UniformScale{
-        amount: f32,
+        scale_factor: f32,
         node: ShapeId,
     },
 
@@ -242,15 +237,10 @@ impl Shape {
                 result.object_space_point = point.clone();
             },
 
-            Shape::Transform{ matrix, node } => {
+            Shape::Transform{ matrix, scale_factor, node } => {
                 let p = matrix.transform_point(point);
                 scene.get_shape(*node).sdf(scene, *node, &p, result);
-            },
-
-            Shape::UniformScale{ amount, node } => {
-                let p = point / *amount;
-                scene.get_shape(*node).sdf(scene, *node, &p, result);
-                result.distance *= amount;
+                result.distance *= *scale_factor;
             },
 
             Shape::Material{ pattern, material, node } => {
@@ -267,23 +257,23 @@ impl Shape {
         }
     }
 
-    pub fn transform(matrix: &Matrix4<f32>, node: ShapeId) -> Self {
+    pub fn transform(matrix: &Matrix4<f32>, scale_factor: f32, node: ShapeId) -> Self {
         let inv = matrix.try_inverse().expect("Unable to invert transformation matrix");
-        Shape::Transform{ matrix: inv, node }
+        Shape::Transform{ matrix: inv, scale_factor, node }
     }
 
     pub fn rotation(axisangle: Vector3<f32>, node: ShapeId) -> Self {
-        Self::transform(&Matrix4::new_rotation(axisangle), node)
+        Self::transform(&Matrix4::new_rotation(axisangle), 1.0, node)
     }
 
     /// Translate the sub-graph by the given vector.
     pub fn translation(vec: &Vector3<f32>, node: ShapeId) -> Self {
-        Self::transform(&Matrix4::new_translation(vec), node)
+        Self::transform(&Matrix4::new_translation(vec), 1.0, node)
     }
 
     /// Scale each dimension by a constant amount.
     pub fn uniform_scaling(amount: f32, node: ShapeId) -> Self {
-        Shape::UniformScale{ amount, node }
+        Self::transform(&Matrix4::new_scaling(amount), amount, node)
     }
 
     pub fn group(nodes: Vec<ShapeId>) -> Self {
