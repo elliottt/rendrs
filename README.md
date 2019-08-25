@@ -16,3 +16,9 @@ $ cargo run --release scenes/refraction.yaml output.png
 ```
 
 ![](examples/refraction.png)
+
+```sh
+$ cargo run --release scenes/csg.yaml output.png
+```
+
+![](examples/csg.png)
