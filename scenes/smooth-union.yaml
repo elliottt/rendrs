@@ -65,8 +65,8 @@ cameras:
 
     position:
       x: 0.0
-      y: 1.0
-      z: -5.0
+      y: 0.0
+      z: -3.0
 
     target:
       x: 0.0
