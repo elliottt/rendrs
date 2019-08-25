@@ -1,0 +1,104 @@
+# vim: sw=2 et
+
+patterns:
+- name: red
+  solid:
+    hex: 0xff0000
+
+- name: green
+  solid:
+    hex: 0x00ff00
+
+- name: blue
+  solid:
+    hex: 0x0000ff
+
+- name: black
+  solid:
+    hex: 0x000000
+
+materials:
+- name: mirror
+  reflective: 0.5
+
+objects:
+- name: long-cylinder
+  cylinder:
+    length: 2.0
+    radius: 0.5
+
+- name: aggregate
+  intersect:
+    objects:
+    - material:
+        pattern: red
+        object:
+          sphere:
+    - material:
+        pattern: blue
+        object:
+          cube:
+            size: 0.75
+
+- name: plus
+  material:
+    pattern: green
+    object:
+      union:
+        objects:
+        - long-cylinder
+        - transform:
+            rotation:
+              z: 1.0
+              degrees: 90
+            object: long-cylinder
+        - transform:
+            rotation:
+              x: 1.0
+              degrees: 90
+            object: long-cylinder
+
+- name: composition
+  subtract:
+    objects:
+    - aggregate
+    - plus
+
+- name: ground
+  material:
+    material: mirror
+    pattern: black
+    object:
+      transform:
+        translation:
+          y: -2
+        object:
+          plane:
+
+lights:
+- position:
+    x: 5.0
+    y: 10.0
+    z: -10.0
+
+scene:
+- composition
+- ground
+
+cameras:
+- perspective:
+    width: 1000
+    height: 1000
+
+    fov:
+      degrees: 90.0
+
+    position:
+      x: 0.0
+      y: 2.0
+      z: -2.5
+
+    target:
+      x: 0.0
+      y: 0.0
+      z: 0.0

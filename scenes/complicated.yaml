@@ -41,6 +41,7 @@ objects:
 
 - name: combination
   subtract:
+    objects:
     - union:
         objects:
           - transform:

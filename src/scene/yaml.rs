@@ -486,6 +486,25 @@ fn parse_objs(
                     }
                 },
 
+                ParsedObj::Intersect{ ref objects } => {
+                    let mut resolved = Vec::with_capacity(objects.len());
+                    let mut all_resolved = true;
+                    for obj in objects {
+                        if let Some(oid) = obj_map.get(obj) {
+                            resolved.push(*oid);
+                        } else {
+                            all_resolved = false;
+                            break;
+                        }
+                    }
+
+                    if all_resolved {
+                        let sid = scene.add(Shape::intersect(resolved));
+                        obj_map.insert(name,sid);
+                        continue;
+                    }
+                }
+
                 ParsedObj::UniformScale{ ref amount, ref object } => {
                     if let Some(oid) = obj_map.get(object) {
                         let sid = scene.add(Shape::uniform_scaling(*amount, *oid));
@@ -560,6 +579,9 @@ enum ParsedObj {
         first: ParsedName,
         second: ParsedName,
     },
+    Intersect{
+        objects: Vec<ParsedName>,
+    },
     UniformScale{
         amount: f32,
         object: ParsedName,
@@ -577,8 +599,14 @@ fn parse_obj(
 ) -> Result<(),Error> {
     if let Ok(_ctx) = ctx.get_field("sphere") {
         work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Sphere });
-    } else if let Ok(_ctx) = ctx.get_field("cube") {
-        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Cube });
+    } else if let Ok(ctx) = ctx.get_field("cube") {
+        let size = optional(ctx.get_field("size")).map_or_else(
+            || Ok(1.0), |ctx| ctx.as_f32())?;
+        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::RectangularPrism{
+            width: size,
+            height: size,
+            depth: size,
+        }});
     } else if let Ok(_ctx) = ctx.get_field("plane") {
         work.push(name,ParsedObj::PrimShape{ prim: PrimShape::XZPlane });
     } else if let Ok(ctx) = ctx.get_field("cylinder") {
@@ -607,9 +635,17 @@ fn parse_obj(
             objects.push(parse_subtree(&entry, work)?);
         }
         work.push(name, ParsedObj::Union{ smooth, objects });
+    } else if let Ok(args) = ctx.get_field("intersect") {
+        let mut objects = Vec::new();
+        let entries = args.get_field("objects")?.as_sequence()?;
+        for entry in entries {
+            objects.push(parse_subtree(&entry, work)?);
+        }
+        work.push(name, ParsedObj::Intersect{ objects });
     } else if let Ok(args) = ctx.get_field("subtract") {
-        let first = parse_subtree(&args.get_at(0)?, work)?;
-        let second = parse_subtree(&args.get_at(1)?, work)?;
+        let entries = args.get_field("objects")?;
+        let first = parse_subtree(&entries.get_at(0)?, work)?;
+        let second = parse_subtree(&entries.get_at(1)?, work)?;
         work.push(name, ParsedObj::Subtract{ first, second });
     } else if let Ok(args) = ctx.get_field("uniform-scale") {
         let amount = args.get_field("amount")?.as_f32()?;

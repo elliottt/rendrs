@@ -38,7 +38,11 @@ pub enum PrimShape {
         length: f32,
     },
 
-    Cube,
+    RectangularPrism{
+        width: f32,
+        height: f32,
+        depth: f32,
+    },
 
     XZPlane,
 }
@@ -56,10 +60,10 @@ impl PrimShape {
                 (xz_mag - radius).max(point.y.abs() - length)
             },
 
-            PrimShape::Cube => {
-                let x = point.x.abs() - 1.0;
-                let y = point.y.abs() - 1.0;
-                let z = point.z.abs() - 1.0;
+            PrimShape::RectangularPrism{ width, height, depth } => {
+                let x = point.x.abs() - width;
+                let y = point.y.abs() - height;
+                let z = point.z.abs() - depth;
                 let diff = x.max(y.max(z)).min(0.0);
                 Vector3::new(x.max(0.0), y.max(0.0), z.max(0.0)).magnitude() + diff
             },
@@ -97,6 +101,11 @@ pub enum Shape {
         second: ShapeId,
     },
 
+    /// Intersect nodes.
+    Intersect{
+        nodes: Vec<ShapeId>,
+    },
+
     /// A transformation applied to a sub-graph
     Transform{
         matrix: Matrix4<f32>,
@@ -132,6 +141,7 @@ impl Shape {
             },
 
             Shape::Union{nodes} => {
+                result.distance = std::f32::INFINITY;
                 let mut tmp = result.clone();
 
                 for node in nodes {
@@ -182,6 +192,23 @@ impl Shape {
                     result.material = tmp.material;
                     result.pattern = tmp.pattern;
                 }
+            },
+
+            Shape::Intersect{ nodes } => {
+                result.distance = std::f32::NEG_INFINITY;
+                let mut tmp = result.clone();
+
+                for node in nodes {
+                    scene.get_shape(*node).sdf(scene, point, &mut tmp);
+                    if tmp.distance > result.distance {
+                        result.distance = tmp.distance;
+                        result.material = tmp.material;
+                        result.pattern = tmp.pattern;
+                    }
+                }
+
+                // Make texturing relative to the intersection, not the individual object
+                result.object_space_point = point.clone();
             },
 
             Shape::Transform{ matrix, node } => {
@@ -239,6 +266,10 @@ impl Shape {
         Shape::Subtract{ first, second }
     }
 
+    pub fn intersect(nodes: Vec<ShapeId>) -> Self {
+        Shape::Intersect{ nodes }
+    }
+
     pub fn material(pattern: PatternId, material: MaterialId, node: ShapeId) -> Self {
         Shape::Material{ pattern, material, node }
     }
@@ -252,7 +283,7 @@ impl Shape {
 fn test_cube() {
     use crate::assert_eq_f32;
 
-    let shape = PrimShape::Cube;
+    let shape = PrimShape::RectangularPrism{ width: 1.0, height: 1.0, depth: 1.0 };
     {
         let point = Point3::new(1.0, 0.0, 0.0);
         assert_eq_f32!(shape.sdf(&point), 0.0);

@@ -15,6 +15,7 @@ objects:
 
 - name: combination
   subtract:
+    objects:
     - onion:
         thickness: 0.25
         object: cube
