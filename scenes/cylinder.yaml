@@ -10,7 +10,7 @@ objects:
   material:
     pattern: blue
     object:
-      prim: cylinder
+      cylinder:
 
 lights:
 - position:

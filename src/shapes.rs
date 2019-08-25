@@ -31,16 +31,15 @@ impl Shapes {
 
 #[derive(Debug,Clone)]
 pub enum PrimShape {
-    /// The unit sphere
     Sphere,
 
-    /// The unit cylinder
-    Cylinder,
+    Cylinder{
+        radius: f32,
+        length: f32,
+    },
 
-    /// The unit cube
     Cube,
 
-    /// X-Z plane
     XZPlane,
 }
 
@@ -52,9 +51,9 @@ impl PrimShape {
                 magnitude - 1.0
             },
 
-            PrimShape::Cylinder => {
+            PrimShape::Cylinder{ radius, length } => {
                 let xz_mag = Vector2::new(point.x, point.z).magnitude();
-                (xz_mag - 1.0).max(point.y.abs() - 1.0)
+                (xz_mag - radius).max(point.y.abs() - length)
             },
 
             PrimShape::Cube => {

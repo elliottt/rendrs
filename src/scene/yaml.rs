@@ -580,8 +580,6 @@ fn parse_obj(
         match sort.as_str() {
             "sphere" =>
                 work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Sphere }),
-            "cylinder" =>
-                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Cylinder }),
             "plane" =>
                 work.push(name,ParsedObj::PrimShape{ prim: PrimShape::XZPlane }),
             "cube" =>
@@ -589,6 +587,12 @@ fn parse_obj(
             other =>
                 return Err(format_err!("unknown primitive `{}`", other)),
         };
+    } else if let Ok(ctx) = ctx.get_field("cylinder") {
+        let radius = optional(ctx.get_field("radius")).map_or_else(
+            || Ok(1.0), |ctx| ctx.as_f32())?;
+        let length = optional(ctx.get_field("length")).map_or_else(
+            || Ok(1.0), |ctx| ctx.as_f32())?;
+        work.push(name, ParsedObj::PrimShape{ prim: PrimShape::Cylinder{ radius, length }});
     } else if let Ok(args) = ctx.get_field("material") {
         let pattern = optional(args.get_field("pattern")).map_or_else(
             || Ok(None), |ctx| ctx.as_str().map(|name| Some(ParsedName::String(name))))?;

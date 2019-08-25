@@ -50,7 +50,7 @@ objects:
           uniform-scale:
             amount: 2.0
             object:
-              prim: cylinder
+              cylinder:
 
 - name: ball
   material:
