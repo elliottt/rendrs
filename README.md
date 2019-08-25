@@ -8,7 +8,7 @@ A ray-marching based ray-tracer written in rust.
 $ cargo run --release scenes/complicated.yaml output.png
 ```
 
-![](examples/spheres.png)
+![](examples/complicated.png)
 
 
 ```sh
