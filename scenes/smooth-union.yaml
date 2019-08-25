@@ -1,0 +1,74 @@
+# vim: sw=2 et
+patterns:
+- name: blue
+  solid:
+    hex: 0x0000ff
+
+- name: purple
+  solid:
+    hex: 0xff00ff
+
+objects:
+- name: blue-ball
+  material:
+    pattern: blue
+    object:
+      prim: sphere
+
+- name: purple-ball
+  material:
+    pattern: purple
+    object:
+      prim: sphere
+
+- name: union
+  union:
+    smooth: 0.5
+    objects:
+      - transform:
+          translation:
+            y: -0.9
+            x: -0.9
+          object: blue-ball
+      - transform:
+          translation:
+            y:  0.9
+            x: -0.9
+          object: purple-ball
+      - transform:
+          translation:
+            y:  0.9
+            x:  0.9
+          object: blue-ball
+      - transform:
+          translation:
+            y: -0.9
+            x:  0.9
+          object: purple-ball
+
+lights:
+- position:
+    x: 0.0
+    y: 1.0
+    z: -2.0
+
+scene:
+- union
+
+cameras:
+- perspective:
+    width: 1000
+    height: 1000
+
+    fov:
+      degrees: 90.0
+
+    position:
+      x: 0.0
+      y: 1.0
+      z: -5.0
+
+    target:
+      x: 0.0
+      y: 0.0
+      z: 0.0

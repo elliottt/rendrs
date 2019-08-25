@@ -42,18 +42,19 @@ objects:
 - name: combination
   subtract:
     - union:
-      - transform:
-          translation:
-            x: 1.0
-          object:
-            uniform-scale:
-              amount: 2.0
-              object: blue-sphere
+        objects:
+          - transform:
+              translation:
+                x: 1.0
+              object:
+                uniform-scale:
+                  amount: 2.0
+                  object: blue-sphere
 
-      - transform:
-          translation:
-            x: -1.0
-          object: red-sphere
+          - transform:
+              translation:
+                x: -1.0
+              object: red-sphere
 
     - transform:
         translation:

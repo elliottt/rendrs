@@ -85,6 +85,13 @@ pub enum Shape {
         nodes: Vec<ShapeId>,
     },
 
+    /// Union together two nodes, with a smoothing factor
+    SmoothUnion{
+        k: f32,
+        first: ShapeId,
+        second: ShapeId,
+    },
+
     /// Subtract one node from another
     Subtract{
         first: ShapeId,
@@ -136,6 +143,25 @@ impl Shape {
                         result.pattern = tmp.pattern;
                     }
                 }
+            },
+
+            Shape::SmoothUnion{ k, first, second } => {
+                use crate::utils::{mix,clamp};
+
+                let mut tmp = result.clone();
+
+                scene.get_shape(*first).sdf(scene, point, result);
+                scene.get_shape(*second).sdf(scene, point, &mut tmp);
+
+                let diff = tmp.distance - result.distance;
+
+                if diff < 0.0 {
+                    result.material = tmp.material;
+                    result.pattern = tmp.pattern;
+                }
+
+                let h = clamp(0.5 + 0.5*diff / k, 0.0, 1.0);
+                result.distance = mix(tmp.distance, result.distance, h) - k * h * (1.0 - h);
             },
 
             Shape::Subtract{ first, second } => {
@@ -197,7 +223,11 @@ impl Shape {
     }
 
     pub fn union(nodes: Vec<ShapeId>) -> Self {
-        Shape::Union{ nodes: nodes.into() }
+        Shape::Union{ nodes }
+    }
+
+    pub fn smooth_union(k: f32, first: ShapeId, second: ShapeId) -> Self {
+        Shape::SmoothUnion{ k, first, second }
     }
 
     pub fn subtract(first: ShapeId, second: ShapeId) -> Self {

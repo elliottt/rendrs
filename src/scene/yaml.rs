@@ -481,7 +481,7 @@ fn parse_objs(
                     }
                 },
 
-                ParsedObj::Union{ ref objects } => {
+                ParsedObj::Union{ ref smooth, ref objects } => {
                     let mut resolved = Vec::with_capacity(objects.len());
                     let mut all_resolved = true;
                     for obj in objects {
@@ -494,7 +494,12 @@ fn parse_objs(
                     }
 
                     if all_resolved {
-                        let sid = scene.add(Shape::union(resolved));
+                        let sid =
+                            if let Some(k) = smooth {
+                                build_smooth_union(scene, *k, &resolved)
+                            } else {
+                                Ok(scene.add(Shape::union(resolved)))
+                            }?;
                         obj_map.insert(name,sid);
                         continue;
                     }
@@ -540,6 +545,29 @@ fn parse_objs(
     Ok(obj_map)
 }
 
+fn build_smooth_union(scene: &mut Scene, k: f32, resolved: &[ShapeId]) -> Result<ShapeId,Error> {
+    let pivot = resolved.len() / 2;
+
+    let left = &resolved[0..pivot];
+    let right = &resolved[pivot..];
+
+    let first =
+        match left.len() {
+            0 => Err(format_err!("union with smoothing requires at least two nodes")),
+            1 => Ok(left[0]),
+            _ => build_smooth_union(scene, k, left),
+        }?;
+
+    let second =
+        match right.len() {
+            0 => Err(format_err!("union with smoothing requires at least two nodes")),
+            1 => Ok(right[0]),
+            _ => build_smooth_union(scene, k, right),
+        }?;
+
+    Ok(scene.add(Shape::smooth_union(k, first, second)))
+}
+
 enum ParsedObj {
     PrimShape{
         prim: PrimShape,
@@ -555,6 +583,7 @@ enum ParsedObj {
         object: ParsedName
     },
     Union{
+        smooth: Option<f32>,
         objects: Vec<ParsedName>,
     },
     Subtract{
@@ -605,12 +634,14 @@ fn parse_obj(
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name, ParsedObj::Transform{ translation, rotation, object });
     } else if let Ok(args) = ctx.get_field("union") {
+        let smooth = optional(args.get_field("smooth")).map_or_else(
+            || Ok(None), |ctx| ctx.as_f32().map(Some))?;
         let mut objects = Vec::new();
-        let entries = args.as_sequence()?;
+        let entries = args.get_field("objects")?.as_sequence()?;
         for entry in entries {
             objects.push(parse_subtree(&entry, work)?);
         }
-        work.push(name, ParsedObj::Union{ objects });
+        work.push(name, ParsedObj::Union{ smooth, objects });
     } else if let Ok(args) = ctx.get_field("subtract") {
         let first = parse_subtree(&args.get_at(0)?, work)?;
         let second = parse_subtree(&args.get_at(1)?, work)?;

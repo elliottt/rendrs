@@ -14,4 +14,3 @@ macro_rules! assert_eq_f32 {
         assert!((x - y) <= diff, format!("\n  left: `{}`\n right: `{}`", x, y))
     };
 }
-
