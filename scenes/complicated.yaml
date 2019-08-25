@@ -30,14 +30,14 @@ objects:
     material: reflective
     pattern: red
     object:
-      prim: sphere
+      sphere:
 
 - name: blue-sphere
   material:
     material: reflective
     pattern: blue
     object:
-      prim: sphere
+      sphere:
 
 - name: combination
   subtract:
@@ -61,7 +61,7 @@ objects:
           y: 1.0
           z: -1.0
         object:
-          prim: sphere
+          sphere:
 
 - name: wall
   transform:
@@ -75,7 +75,7 @@ objects:
         material: wall-material
         pattern: stripes
         object:
-          prim: plane
+          plane:
 
 - name: ground
   transform:
@@ -85,7 +85,7 @@ objects:
       material:
         pattern: stripes
         object:
-          prim: plane
+          plane:
 
 lights:
 - position:

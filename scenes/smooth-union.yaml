@@ -13,13 +13,13 @@ objects:
   material:
     pattern: blue
     object:
-      prim: sphere
+      sphere:
 
 - name: purple-ball
   material:
     pattern: purple
     object:
-      prim: sphere
+      sphere:
 
 - name: union
   union:

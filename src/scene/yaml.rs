@@ -575,18 +575,12 @@ fn parse_obj(
     work: &mut ParseQueue<ParsedObj>,
     name: ParsedName,
 ) -> Result<(),Error> {
-    if let Ok(args) = ctx.get_field("prim") {
-        let sort = args.as_str()?;
-        match sort.as_str() {
-            "sphere" =>
-                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Sphere }),
-            "plane" =>
-                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::XZPlane }),
-            "cube" =>
-                work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Cube }),
-            other =>
-                return Err(format_err!("unknown primitive `{}`", other)),
-        };
+    if let Ok(_ctx) = ctx.get_field("sphere") {
+        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Sphere });
+    } else if let Ok(_ctx) = ctx.get_field("cube") {
+        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Cube });
+    } else if let Ok(_ctx) = ctx.get_field("plane") {
+        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::XZPlane });
     } else if let Ok(ctx) = ctx.get_field("cylinder") {
         let radius = optional(ctx.get_field("radius")).map_or_else(
             || Ok(1.0), |ctx| ctx.as_f32())?;

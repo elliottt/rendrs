@@ -48,7 +48,7 @@ objects:
           uniform-scale:
             amount: 5.0
             object:
-              prim: sphere
+              sphere:
 
 - name: wall
   material:
@@ -62,7 +62,7 @@ objects:
           x: 1.0
           degrees: -90
         object:
-          prim: plane
+          plane:
 
 - name: floor
   material:
@@ -73,7 +73,7 @@ objects:
         translation:
           y: -4.5
         object:
-          prim: plane
+          plane:
 
 lights:
 - position:

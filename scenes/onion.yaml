@@ -11,7 +11,7 @@ objects:
   material:
     pattern: blue
     object:
-      prim: cube
+      cube:
 
 - name: combination
   subtract:
@@ -23,7 +23,7 @@ objects:
           x: 1.0
           degrees: 180
         object:
-          prim: plane
+          plane:
 
 lights:
 - position:
