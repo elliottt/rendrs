@@ -143,6 +143,9 @@ impl Shape {
                         result.pattern = tmp.pattern;
                     }
                 }
+
+                // Make texturing relative to the union, not the individual object
+                result.object_space_point = point.clone();
             },
 
             Shape::SmoothUnion{ k, first, second } => {
@@ -162,6 +165,9 @@ impl Shape {
 
                 let h = clamp(0.5 + 0.5*diff / k, 0.0, 1.0);
                 result.distance = mix(tmp.distance, result.distance, h) - k * h * (1.0 - h);
+
+                // Make texturing relative to the union, not the individual object
+                result.object_space_point = point.clone();
             },
 
             Shape::Subtract{ first, second } => {
