@@ -101,7 +101,7 @@ impl Scene {
             material: self.default_material,
             pattern: self.default_pattern,
         };
-        self.get_shape(root).sdf(self, point, &mut result);
+        self.get_shape(root).sdf(self, root, point, &mut result);
         result
     }
 

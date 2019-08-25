@@ -133,9 +133,10 @@ pub enum Shape {
 }
 
 impl Shape {
-    pub fn sdf(&self, scene: &Scene, point: &Point3<f32>, result: &mut SDFResult) {
+    pub fn sdf(&self, scene: &Scene, self_id: ShapeId, point: &Point3<f32>, result: &mut SDFResult) {
         match self {
             Shape::PrimShape{ shape } => {
+                result.object_id = self_id;
                 result.distance = shape.sdf(point);
                 result.object_space_point = point.clone();
             },
@@ -145,13 +146,16 @@ impl Shape {
                 let mut tmp = result.clone();
 
                 for node in nodes {
-                    scene.get_shape(*node).sdf(scene, point, &mut tmp);
+                    scene.get_shape(*node).sdf(scene, *node, point, &mut tmp);
                     if tmp.distance < result.distance {
                         result.distance = tmp.distance;
                         result.material = tmp.material;
                         result.pattern = tmp.pattern;
                     }
                 }
+
+                // Override the object id of the individual hit to be that of the entire union
+                result.object_id = self_id;
 
                 // Make texturing relative to the union, not the individual object
                 result.object_space_point = point.clone();
@@ -162,8 +166,8 @@ impl Shape {
 
                 let mut tmp = result.clone();
 
-                scene.get_shape(*first).sdf(scene, point, result);
-                scene.get_shape(*second).sdf(scene, point, &mut tmp);
+                scene.get_shape(*first).sdf(scene, *first, point, result);
+                scene.get_shape(*second).sdf(scene, *second, point, &mut tmp);
 
                 let diff = tmp.distance - result.distance;
 
@@ -180,18 +184,23 @@ impl Shape {
             },
 
             Shape::Subtract{ first, second } => {
-                scene.get_shape(*first).sdf(scene, point, result);
+                scene.get_shape(*first).sdf(scene, *first, point, result);
 
                 // figure out the distance for the part being subtracted
                 let mut tmp = result.clone();
-                scene.get_shape(*second).sdf(scene, point, &mut tmp);
+                scene.get_shape(*second).sdf(scene, *second, point, &mut tmp);
                 let sub = -tmp.distance;
 
                 if result.distance <= sub {
                     result.distance = sub;
+
+                    // keep texturing information from the shape that was subtracted.
                     result.material = tmp.material;
                     result.pattern = tmp.pattern;
                 }
+
+                // override the object id to be that of the subtraction
+                result.object_id = self_id;
             },
 
             Shape::Intersect{ nodes } => {
@@ -199,7 +208,7 @@ impl Shape {
                 let mut tmp = result.clone();
 
                 for node in nodes {
-                    scene.get_shape(*node).sdf(scene, point, &mut tmp);
+                    scene.get_shape(*node).sdf(scene, *node, point, &mut tmp);
                     if tmp.distance > result.distance {
                         result.distance = tmp.distance;
                         result.material = tmp.material;
@@ -207,30 +216,34 @@ impl Shape {
                     }
                 }
 
+                // override the object id to be that of the subtraction
+                result.object_id = self_id;
+
                 // Make texturing relative to the intersection, not the individual object
                 result.object_space_point = point.clone();
             },
 
             Shape::Transform{ matrix, node } => {
                 let p = matrix.transform_point(point);
-                scene.get_shape(*node).sdf(scene, &p, result);
+                scene.get_shape(*node).sdf(scene, *node, &p, result);
             },
 
             Shape::UniformScale{ amount, node } => {
                 let p = point / *amount;
-                scene.get_shape(*node).sdf(scene, &p, result);
+                scene.get_shape(*node).sdf(scene, *node, &p, result);
                 result.distance *= amount;
             },
 
             Shape::Material{ pattern, material, node } => {
-                scene.get_shape(*node).sdf(scene, point, result);
+                scene.get_shape(*node).sdf(scene, *node, point, result);
                 result.material = *material;
                 result.pattern = *pattern;
             },
 
             Shape::Onion{ thickness, node } => {
-                scene.get_shape(*node).sdf(scene, point, result);
+                scene.get_shape(*node).sdf(scene, *node, point, result);
                 result.distance = result.distance.abs() - thickness;
+                result.object_id = self_id;
             },
         }
     }
