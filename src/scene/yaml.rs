@@ -452,6 +452,25 @@ fn parse_objs(
                     }
                 },
 
+                ParsedObj::Group{ ref objects } => {
+                    let mut resolved = Vec::with_capacity(objects.len());
+                    let mut all_resolved = true;
+                    for obj in objects {
+                        if let Some(oid) = obj_map.get(obj) {
+                            resolved.push(*oid);
+                        } else {
+                            all_resolved = false;
+                            break;
+                        }
+                    }
+
+                    if all_resolved {
+                        let sid = scene.add(Shape::group(resolved));
+                        obj_map.insert(name,sid);
+                        continue;
+                    }
+                },
+
                 ParsedObj::Union{ ref smooth, ref objects } => {
                     let mut resolved = Vec::with_capacity(objects.len());
                     let mut all_resolved = true;
@@ -571,6 +590,9 @@ enum ParsedObj {
         transform: Matrix4<f32>,
         object: ParsedName
     },
+    Group{
+        objects: Vec<ParsedName>,
+    },
     Union{
         smooth: Option<f32>,
         objects: Vec<ParsedName>,
@@ -626,6 +648,13 @@ fn parse_obj(
         let transform = parse_transform(&args)?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name, ParsedObj::Transform{ transform, object });
+    } else if let Ok(ctx) = ctx.get_field("group") {
+        let mut objects = Vec::new();
+        let entries = ctx.as_sequence()?;
+        for entry in entries {
+            objects.push(parse_subtree(&entry, work)?);
+        }
+        work.push(name, ParsedObj::Group{ objects });
     } else if let Ok(args) = ctx.get_field("union") {
         let smooth = optional(args.get_field("smooth")).map_or_else(
             || Ok(None), |ctx| ctx.as_f32().map(Some))?;

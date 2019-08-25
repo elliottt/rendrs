@@ -83,6 +83,11 @@ pub enum Shape {
         shape: PrimShape,
     },
 
+    /// A bunch of nodes grouped together
+    Group{
+        nodes: Vec<ShapeId>,
+    },
+
     /// Union together a bunch of nodes
     Union{
         nodes: Vec<ShapeId>,
@@ -141,7 +146,21 @@ impl Shape {
                 result.object_space_point = point.clone();
             },
 
-            Shape::Union{nodes} => {
+            // A group differs from a union in that the individual objects hit by the SDF are
+            // maintained as the result -- the whole isn't considered the hit.
+            Shape::Group{ nodes } => {
+                result.distance = std::f32::INFINITY;
+                let mut tmp = result.clone();
+
+                for node in nodes {
+                    scene.get_shape(*node).sdf(scene, *node, point, &mut tmp);
+                    if tmp.distance < result.distance {
+                        *result = tmp.clone();
+                    }
+                }
+            },
+
+            Shape::Union{ nodes } => {
                 result.distance = std::f32::INFINITY;
                 let mut tmp = result.clone();
 
@@ -265,6 +284,10 @@ impl Shape {
     /// Scale each dimension by a constant amount.
     pub fn uniform_scaling(amount: f32, node: ShapeId) -> Self {
         Shape::UniformScale{ amount, node }
+    }
+
+    pub fn group(nodes: Vec<ShapeId>) -> Self {
+        Shape::Group{ nodes }
     }
 
     pub fn union(nodes: Vec<ShapeId>) -> Self {
