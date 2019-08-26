@@ -44,6 +44,16 @@ pub enum PrimShape {
         depth: f32,
     },
 
+    Triangle{
+        a: Point3<f32>,
+        b: Point3<f32>,
+        c: Point3<f32>,
+        ba: Vector3<f32>,
+        cb: Vector3<f32>,
+        ac: Vector3<f32>,
+        normal: Vector3<f32>,
+    },
+
     XZPlane,
 }
 
@@ -68,12 +78,41 @@ impl PrimShape {
                 Vector3::new(x.max(0.0), y.max(0.0), z.max(0.0)).magnitude() + diff
             },
 
+            PrimShape::Triangle{ a, b, c, ba, cb, ac, normal } => {
+                use crate::utils::{clamp,dot2};
+
+                let pa = point - a;
+                let pb = point - b;
+                let pc = point - c;
+
+                let sa = pa.dot(&ba.cross(&normal)).signum();
+                let sb = pb.dot(&cb.cross(&normal)).signum();
+                let sc = pc.dot(&ac.cross(&normal)).signum();
+
+                if sa + sb + sc < 2.0 {
+                    let d2a = dot2(&(ba*clamp(ba.dot(&pa) / dot2(&ba), 0.0, 1.0) - pa));
+                    let d2b = dot2(&(cb*clamp(cb.dot(&pb) / dot2(&cb), 0.0, 1.0) - pb));
+                    let d2c = dot2(&(ac*clamp(ac.dot(&pc) / dot2(&ac), 0.0, 1.0) - pc));
+                    d2a.min(d2b).min(d2c)
+                } else {
+                    normal.dot(&pa).powi(2) / normal.dot(normal)
+                }.sqrt()
+            },
+
             PrimShape::XZPlane => {
                 point.y
             }
         }
     }
 
+    pub fn triangle(a: Point3<f32>, b: Point3<f32>, c: Point3<f32>) -> Self {
+        let ba = b - a;
+        let cb = c - b;
+        let ac = a - c;
+        let normal = ba.cross(&ac);
+
+        PrimShape::Triangle{ a, b, c, ba, cb, ac, normal }
+    }
 }
 
 #[derive(Debug,Clone)]
@@ -303,6 +342,7 @@ impl Shape {
     pub fn onion(thickness: f32, node: ShapeId) -> Self {
         Shape::Onion{ thickness, node }
     }
+
 }
 
 #[test]

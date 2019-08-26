@@ -91,6 +91,16 @@ impl<'a> Context<'a> {
     fn is_hash(&self) -> bool {
         self.focus.is_mapping()
     }
+
+    fn is_seq(&self) -> bool {
+        self.focus.is_sequence()
+    }
+
+    fn sequence_len(&self) -> Result<usize,Error> {
+        self.focus.as_sequence().map_or_else(
+            || Err(format_err!("expected a sequence")),
+            |val| Ok(val.len()))
+    }
 }
 
 /// Parsed names, plus fresh names for nested structures.
@@ -626,6 +636,15 @@ fn parse_obj(
         let length = optional(ctx.get_field("length")).map_or_else(
             || Ok(1.0), |ctx| ctx.as_f32())?;
         work.push(name, ParsedObj::PrimShape{ prim: PrimShape::Cylinder{ radius, length }});
+    } else if let Ok(ctx) = ctx.get_field("triangle") {
+        let len = ctx.sequence_len()?;
+        if len != 3 {
+            return Err(format_err!("`triangle` requires three points"));
+        }
+        let a = parse_point3(&ctx.get_at(0)?)?;
+        let b = parse_point3(&ctx.get_at(1)?)?;
+        let c = parse_point3(&ctx.get_at(2)?)?;
+        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::triangle(a,b,c) });
     } else if let Ok(args) = ctx.get_field("material") {
         let pattern = optional(args.get_field("pattern")).map_or_else(
             || Ok(None), |ctx| ctx.as_str().map(|name| Some(ParsedName::String(name))))?;
@@ -773,23 +792,30 @@ fn parse_color(ctx: &Context) -> Result<Color, Error> {
     }
 }
 
+fn parse_three(ctx: &Context, def: f32)-> Result<(f32,f32,f32),Error> {
+    if ctx.is_seq() {
+        let x = ctx.get_at(0)?.as_f32()?;
+        let y = ctx.get_at(1)?.as_f32()?;
+        let z = ctx.get_at(2)?.as_f32()?;
+        Ok((x,y,z))
+    } else {
+        let x = optional(ctx.get_field("x")).map_or_else(
+            || Ok(def), |ctx| ctx.as_f32())?;
+        let y = optional(ctx.get_field("y")).map_or_else(
+            || Ok(def), |ctx| ctx.as_f32())?;
+        let z = optional(ctx.get_field("z")).map_or_else(
+            || Ok(def), |ctx| ctx.as_f32())?;
+        Ok((x,y,z))
+    }
+}
+
 fn parse_point3(ctx: &Context) -> Result<Point3<f32>,Error> {
-    let x = optional(ctx.get_field("x")).map_or_else(
-        || Ok(0.0), |ctx| ctx.as_f32())?;
-    let y = optional(ctx.get_field("y")).map_or_else(
-        || Ok(0.0), |ctx| ctx.as_f32())?;
-    let z = optional(ctx.get_field("z")).map_or_else(
-        || Ok(0.0), |ctx| ctx.as_f32())?;
+    let (x,y,z) = parse_three(ctx, 0.0)?;
     Ok(Point3::new(x,y,z))
 }
 
 fn parse_vector3(ctx: &Context) -> Result<Vector3<f32>,Error> {
-    let x = optional(ctx.get_field("x")).map_or_else(
-        || Ok(0.0), |ctx| ctx.as_f32())?;
-    let y = optional(ctx.get_field("y")).map_or_else(
-        || Ok(0.0), |ctx| ctx.as_f32())?;
-    let z = optional(ctx.get_field("z")).map_or_else(
-        || Ok(0.0), |ctx| ctx.as_f32())?;
+    let (x,y,z) = parse_three(ctx, 0.0)?;
     Ok(Vector3::new(x,y,z))
 }
 
