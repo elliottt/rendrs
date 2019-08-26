@@ -4,15 +4,17 @@ patterns:
   solid:
     hex: 0x0000ff
 
+materials:
+- name: matte
+  specular: 0.0
+
 objects:
 - name: teapot
   material:
+    material: matte
     pattern: blue
     object:
       transform:
-        rotation:
-          y: 1.0
-          degrees: 180
         scale:
           uniform: 0.05
         object:

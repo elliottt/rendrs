@@ -103,7 +103,7 @@ impl MarchResult {
         where SDF: Fn(&Point3<f32>) -> SDFResult,
     {
         let res = sdf(&self.world_space_point);
-        let offset = Vector3::new(0.001, 0.0, 0.0);
+        let offset = Vector3::new(0.0001, 0.0, 0.0);
 
         let px = sdf(&(self.world_space_point - offset.xyy()));
         let py = sdf(&(self.world_space_point - offset.yxy()));
