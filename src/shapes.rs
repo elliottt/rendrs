@@ -105,13 +105,37 @@ impl PrimShape {
         }
     }
 
-    pub fn triangle(a: Point3<f32>, b: Point3<f32>, c: Point3<f32>) -> Self {
+    /// Construct a triangle.
+    pub fn triangle(a: &Point3<f32>, b: &Point3<f32>, c: &Point3<f32>) -> Self {
         let ba = b - a;
         let cb = c - b;
         let ac = a - c;
         let normal = ba.cross(&ac);
+        PrimShape::Triangle{
+            a: a.clone(),
+            b: b.clone(),
+            c: c.clone(),
+            ba, cb, ac, normal
+        }
+    }
 
-        PrimShape::Triangle{ a, b, c, ba, cb, ac, normal }
+    /// Construct a triangle with an explicit normal.
+    pub fn triangle_with_normal(
+        a: &Point3<f32>,
+        b: &Point3<f32>,
+        c: &Point3<f32>,
+        normal: &Vector3<f32>,
+    ) -> Self {
+        let ba = b - a;
+        let cb = c - b;
+        let ac = a - c;
+        PrimShape::Triangle{
+            a: a.clone(),
+            b: b.clone(),
+            c: c.clone(),
+            normal: normal.clone(),
+            ba, cb, ac,
+        }
     }
 }
 

@@ -13,6 +13,7 @@ use crate::{
     canvas::Color,
     camera::Camera,
     material::{Light,Material,MaterialId},
+    obj::Obj,
     pattern::{Pattern,PatternId},
     scene::Scene,
     shapes::{ShapeId,Shape,PrimShape},
@@ -541,6 +542,15 @@ fn parse_objs(
                         continue;
                     }
                 },
+
+                ParsedObj::Model{ ref file } => {
+                    use std::{io::BufReader,fs::File};
+                    let file = File::open(file)?;
+                    let model = Obj::parse(BufReader::new(file))?;
+                    let sid = model.add_to_scene(scene)?;
+                    obj_map.insert(name, sid);
+                    continue;
+                },
             }
 
             next.push((name,parsed));
@@ -611,6 +621,9 @@ enum ParsedObj {
         thickness: f32,
         object: ParsedName,
     },
+    Model{
+        file: String,
+    },
 }
 
 fn parse_obj(
@@ -644,7 +657,7 @@ fn parse_obj(
         let a = parse_point3(&ctx.get_at(0)?)?;
         let b = parse_point3(&ctx.get_at(1)?)?;
         let c = parse_point3(&ctx.get_at(2)?)?;
-        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::triangle(a,b,c) });
+        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::triangle(&a,&b,&c) });
     } else if let Ok(args) = ctx.get_field("material") {
         let pattern = optional(args.get_field("pattern")).map_or_else(
             || Ok(None), |ctx| ctx.as_str().map(|name| Some(ParsedName::String(name))))?;
@@ -652,6 +665,9 @@ fn parse_obj(
             || Ok(None), |ctx| ctx.as_str().map(Some))?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name,ParsedObj::Material{ pattern, material, object });
+    } else if let Ok(ctx) = ctx.get_field("model") {
+        let file = ctx.as_str()?;
+        work.push(name,ParsedObj::Model{ file });
     } else if let Ok(args) = ctx.get_field("transform") {
         let (transform,scale_factor) = parse_transform(&args)?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
