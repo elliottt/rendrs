@@ -1,7 +1,7 @@
 /target
 **/*.rs.bk
 
-test.png
+/*.png
 flamegraph.svg
 perf.data
 perf.data.old
