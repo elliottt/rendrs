@@ -1,6 +1,7 @@
 
 use nalgebra::{Vector2,Vector3,Point3,Matrix4};
 
+use crate::bounding_volume::{AABB};
 use crate::material::{MaterialId};
 use crate::pattern::{PatternId};
 use crate::ray::{SDFResult};
@@ -137,6 +138,42 @@ impl PrimShape {
             ba, cb, ac,
         }
     }
+
+    /// Compute the bounding volume for this primitive.
+    pub fn bounding_volume(&self) -> AABB {
+        match self {
+            PrimShape::Sphere => {
+                AABB::new(
+                    Point3::new(-1.0, -1.0, -1.0),
+                    Point3::new( 1.0,  1.0,  1.0),
+                )
+            },
+
+            PrimShape::Cylinder{ radius, length } => {
+                AABB::new(
+                    Point3::new(-radius, -radius, -length),
+                    Point3::new(*radius, *radius, *length),
+                )
+            },
+
+            PrimShape::RectangularPrism{ width, height, depth } => {
+                AABB::new(
+                    Point3::new(-width, -height, -depth),
+                    Point3::new(*width, *height, *depth),
+                )
+            },
+
+            PrimShape::Triangle{ a, b, c, ba: _, cb: _, ac: _, normal: _ } => {
+                AABB::new(a.clone(), b.clone()).union_point(c)
+            },
+
+            PrimShape::XZPlane => {
+                let mut aabb = AABB::max();
+                aabb.max.y = 0.0;
+                aabb
+            }
+        }
+    }
 }
 
 #[derive(Debug,Clone)]
@@ -177,6 +214,7 @@ pub enum Shape {
     /// A transformation applied to a sub-graph
     Transform{
         matrix: Matrix4<f32>,
+        inverse: Matrix4<f32>,
         scale_factor: f32,
         node: ShapeId,
     },
@@ -300,8 +338,8 @@ impl Shape {
                 result.object_space_point = point.clone();
             },
 
-            Shape::Transform{ matrix, scale_factor, node } => {
-                let p = matrix.transform_point(point);
+            Shape::Transform{ matrix: _, inverse, scale_factor, node } => {
+                let p = inverse.transform_point(point);
                 scene.get_shape(*node).sdf(scene, *node, &p, result);
                 result.distance *= *scale_factor;
             },
@@ -321,8 +359,8 @@ impl Shape {
     }
 
     pub fn transform(matrix: &Matrix4<f32>, scale_factor: f32, node: ShapeId) -> Self {
-        let inv = matrix.try_inverse().expect("Unable to invert transformation matrix");
-        Shape::Transform{ matrix: inv, scale_factor, node }
+        let inverse = matrix.try_inverse().expect("Unable to invert transformation matrix");
+        Shape::Transform{ matrix: matrix.clone(), inverse, scale_factor, node }
     }
 
     pub fn rotation(axisangle: Vector3<f32>, node: ShapeId) -> Self {

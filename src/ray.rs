@@ -2,6 +2,7 @@
 use nalgebra::{Matrix4,Point3,Vector3};
 
 use crate::{
+    bounding_volume::{AABB},
     material::{MaterialId},
     pattern::{PatternId},
     shapes::{ShapeId},
@@ -17,6 +18,7 @@ pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
 pub struct Ray {
     pub origin: Point3<f32>,
     pub direction: Vector3<f32>,
+    pub inv_direction: Point3<f32>,
     pub sign: f32,
 }
 
@@ -35,7 +37,12 @@ impl Ray {
     pub const MAX_DIST: f32 = 100.0;
 
     pub fn new(origin: Point3<f32>, direction: Vector3<f32>, sign: f32) -> Self {
-        Ray{ origin, direction, sign }
+        let inv_direction = Point3::new(
+            if direction.x != 0.0 { 1.0 / direction.x } else { std::f32::INFINITY },
+            if direction.y != 0.0 { 1.0 / direction.y } else { std::f32::INFINITY },
+            if direction.z != 0.0 { 1.0 / direction.z } else { std::f32::INFINITY },
+        );
+        Ray{ origin, direction, inv_direction, sign }
     }
 
     pub fn position(&self, t: f32) -> Point3<f32> {
@@ -83,6 +90,29 @@ impl Ray {
         Self::new(origin, direction, self.sign)
     }
 
+    /// Returns `true` when the ray intersects the bounding volume.
+    ///
+    /// https://tavianator.com/fast-branchless-raybounding-box-intersections/
+    pub fn intersects(&self, aabb: &AABB) -> bool {
+        let t1 = Point3::new(
+            (aabb.min.x - self.origin.x) * self.inv_direction.x,
+            (aabb.min.y - self.origin.y) * self.inv_direction.y,
+            (aabb.min.z - self.origin.z) * self.inv_direction.z,
+        );
+        let t2 = Point3::new(
+            (aabb.max.x - self.origin.x) * self.inv_direction.x,
+            (aabb.max.y - self.origin.y) * self.inv_direction.y,
+            (aabb.max.z - self.origin.z) * self.inv_direction.z,
+        );
+
+        let min = Point3::new(t1.x.min(t2.x), t1.y.min(t2.y), t1.z.min(t2.z));
+        let max = Point3::new(t1.x.max(t2.x), t1.y.max(t2.y), t1.z.max(t2.z));
+
+        let tmin = min.x.max(min.y).max(min.z);
+        let tmax = max.x.min(max.y).min(max.z);
+
+        tmax >= tmin
+    }
 }
 
 #[derive(Debug)]
@@ -115,6 +145,26 @@ impl MarchResult {
         ).normalize()
     }
 
+}
+
+#[test]
+fn test_intersect() {
+    let rays = vec![
+        Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, 1.0), 1.0),
+        Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(-1.0, 0.0, 1.0), 1.0),
+    ];
+
+    for p in rays {
+        assert!(p.intersects(&AABB::max()));
+
+        assert!(p.intersects(&AABB::new(
+                    Point3::new(-1.0, -1.0, -1.0),
+                    Point3::new( 1.0,  1.0,  1.0))));
+
+        assert!(!p.intersects(&AABB::new(
+                    Point3::new(2.0, -2.0, 2.0),
+                    Point3::new(4.0,  4.0, 4.0))));
+    }
 }
 
 #[test]

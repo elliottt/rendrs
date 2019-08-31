@@ -5,6 +5,7 @@ extern crate failure;
 extern crate serde;
 extern crate serde_yaml;
 
+pub mod bounding_volume;
 pub mod camera;
 pub mod canvas;
 pub mod material;
