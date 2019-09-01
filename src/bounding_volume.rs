@@ -192,10 +192,6 @@ impl<T> BVH<T> where T: Clone {
         where GetBound: Fn(&T) -> &AABB
     {
         let mut bounds = get_bound(&values[0]).clone();
-
-        if values.len() == 1 {
-        }
-
         let mut centroid_bound = AABB::from_point(bounds.centroid());
 
         for value in &values[1..] {
