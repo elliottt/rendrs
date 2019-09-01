@@ -1,5 +1,5 @@
 
-use nalgebra::Point3;
+use nalgebra::{Point3,Matrix4,Vector3};
 
 use crate::{utils,ray::Ray};
 
@@ -41,6 +41,37 @@ impl AABB {
             self.min.x + (self.max.x - self.min.x) / 2.0,
             self.min.y + (self.max.y - self.min.y) / 2.0,
             self.min.z + (self.max.z - self.min.z) / 2.0,
+        )
+    }
+
+    /// Construct a new AABB that contains the transforomed original.
+    pub fn transform(&self, matrix: &Matrix4<f32>) -> Self {
+        let right = matrix.column(0);
+        let xa = right * self.min.x;
+        let xb = right * self.max.x;
+        let xmin = Vector3::new(xa.x.min(xb.x), xa.y.min(xb.y), xa.z.min(xb.z));
+        let xmax = Vector3::new(xa.x.max(xb.x), xa.y.max(xb.y), xa.z.max(xb.z));
+
+        let up = matrix.column(1);
+        let ya = up * self.min.y;
+        let yb = up * self.max.y;
+        let ymin = Vector3::new(ya.x.min(yb.x), ya.y.min(yb.y), ya.z.min(yb.z));
+        let ymax = Vector3::new(ya.x.max(yb.x), ya.y.max(yb.y), ya.z.max(yb.z));
+
+        let back = matrix.column(2);
+        let za = back * self.min.z;
+        let zb = back * self.max.z;
+        let zmin = Vector3::new(za.x.min(zb.x), za.y.min(zb.y), za.z.min(zb.z));
+        let zmax = Vector3::new(za.x.max(zb.x), za.y.max(zb.y), za.z.max(zb.z));
+
+        let translate = {
+            let col = matrix.column(3);
+            Point3::new(col[0], col[1], col[2])
+        };
+
+        Self::new(
+            translate + (xmin + ymin + zmin),
+            translate + (xmax + ymax + zmax),
         )
     }
 
