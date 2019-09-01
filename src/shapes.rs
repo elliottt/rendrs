@@ -163,8 +163,8 @@ impl PrimShape {
                 )
             },
 
-            PrimShape::Triangle{ a, b, c, ba: _, cb: _, ac: _, normal: _ } => {
-                AABB::new(a.clone(), b.clone()).union_point(c)
+            PrimShape::Triangle{ a, b, c, .. } => {
+                AABB::from_points(a, b).union_point(c)
             },
 
             PrimShape::XZPlane => {
@@ -338,7 +338,7 @@ impl Shape {
                 result.object_space_point = point.clone();
             },
 
-            Shape::Transform{ matrix: _, inverse, scale_factor, node } => {
+            Shape::Transform{ inverse, scale_factor, node, .. } => {
                 let p = inverse.transform_point(point);
                 scene.get_shape(*node).sdf(scene, *node, &p, result);
                 result.distance *= *scale_factor;
