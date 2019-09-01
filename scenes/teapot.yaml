@@ -28,8 +28,8 @@ scene:
 
 cameras:
 - perspective:
-    width: 200
-    height: 200
+    width: 1000
+    height: 1000
 
     fov:
       degrees: 90.0
