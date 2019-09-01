@@ -70,6 +70,6 @@ impl Obj {
             triangles.push(scene.add(Shape::PrimShape{ shape }));
         }
 
-        Ok(scene.add(Shape::group(triangles)))
+        Ok(scene.add(Shape::group(scene, triangles)))
     }
 }

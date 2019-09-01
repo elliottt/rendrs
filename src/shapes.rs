@@ -1,7 +1,7 @@
 
 use nalgebra::{Vector2,Vector3,Point3,Matrix4};
 
-use crate::bounding_volume::{AABB};
+use crate::bounding_volume::{AABB,BVH};
 use crate::material::{MaterialId};
 use crate::pattern::{PatternId};
 use crate::ray::{Ray,SDFResult};
@@ -169,9 +169,10 @@ impl PrimShape {
             },
 
             PrimShape::XZPlane => {
-                let mut aabb = AABB::max();
-                aabb.max.y = 0.0;
-                aabb
+                AABB::new(
+                    Point3::new(-Ray::MAX_DIST, -Ray::MAX_DIST, -Ray::MAX_DIST),
+                    Point3::new(Ray::MAX_DIST, 0.0, Ray::MAX_DIST),
+                )
             }
         }
     }
@@ -186,7 +187,7 @@ pub enum Shape {
 
     /// A bunch of nodes grouped together
     Group{
-        nodes: Vec<ShapeId>,
+        bvh: BVH<ShapeId>,
     },
 
     /// Union together a bunch of nodes
@@ -245,16 +246,16 @@ impl Shape {
 
             // A group differs from a union in that the individual objects hit by the SDF are
             // maintained as the result -- the whole isn't considered the hit.
-            Shape::Group{ nodes } => {
+            Shape::Group{ bvh } => {
                 result.distance = std::f32::INFINITY;
                 let mut tmp = result.clone();
 
-                for node in nodes {
+                bvh.intersect_with(ray, |node| {
                     scene.get_shape(*node).sdf(scene, *node, ray, &mut tmp);
                     if tmp.distance < result.distance {
                         *result = tmp.clone();
                     }
-                }
+                })
             },
 
             Shape::Union{ nodes } => {
@@ -364,13 +365,8 @@ impl Shape {
             Shape::PrimShape{ shape } =>
                 shape.bounding_volume(),
 
-            Shape::Group{ nodes, .. } => {
-                let mut bound = scene.get_shape(nodes[0]).bounding_volume(scene);
-                for node in nodes[1..].iter() {
-                    bound.union_mut(&scene.get_shape(*node).bounding_volume(scene))
-                }
-                bound
-            },
+            Shape::Group{ bvh } =>
+                bvh.bounding_volume().expect("empty group").clone(),
 
             Shape::Union{ nodes, .. } => {
                 let mut bound = scene.get_shape(nodes[0]).bounding_volume(scene);
@@ -427,8 +423,9 @@ impl Shape {
         Self::transform(&Matrix4::new_scaling(amount), amount, node)
     }
 
-    pub fn group(nodes: Vec<ShapeId>) -> Self {
-        Shape::Group{ nodes }
+    pub fn group(scene: &Scene, nodes: Vec<ShapeId>) -> Self {
+        let bvh = BVH::from_nodes(nodes, &|sid| scene.get_shape(*sid).bounding_volume(scene));
+        Shape::Group{ bvh }
     }
 
     pub fn union(nodes: Vec<ShapeId>) -> Self {

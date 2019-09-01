@@ -476,7 +476,7 @@ fn parse_objs(
                     }
 
                     if all_resolved {
-                        let sid = scene.add(Shape::group(resolved));
+                        let sid = scene.add(Shape::group(scene, resolved));
                         obj_map.insert(name,sid);
                         continue;
                     }
