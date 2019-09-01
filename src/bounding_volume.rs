@@ -1,7 +1,7 @@
 
 use nalgebra::Point3;
 
-use crate::utils;
+use crate::{utils,ray::Ray};
 
 #[derive(Debug,Clone,PartialEq)]
 pub struct AABB {
@@ -100,24 +100,27 @@ impl AABB {
         let diff = self.max - self.min;
         if diff.x > diff.y {
             if diff.x > diff.z {
-                (Axis::X, diff.x / 2.0)
+                (Axis::X, self.min.x + diff.x / 2.0)
             } else {
-                (Axis::Z, diff.z / 2.0)
+                (Axis::Z, self.min.z + diff.z / 2.0)
             }
         } else {
             if diff.y > diff.z {
-                (Axis::Y, diff.y / 2.0)
+                (Axis::Y, self.min.y + diff.y / 2.0)
             } else {
-                (Axis::Z, diff.z / 2.0)
+                (Axis::Z, self.min.z + diff.z / 2.0)
             }
         }
     }
 }
 
+#[derive(Debug)]
 pub enum Axis { X, Y, Z }
 
+#[derive(Debug,Clone)]
 pub struct BVHNodeId(usize);
 
+#[derive(Debug)]
 pub enum BVHNode<T> {
     Internal {
         left: Option<BVHNodeId>,
@@ -148,6 +151,7 @@ impl<T> BVHNode<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct BVH<T> {
     nodes: Vec<BVHNode<T>>,
 }
@@ -173,13 +177,17 @@ impl<T> BVH<T> where T: Clone {
 
     fn add_node(&mut self, node: BVHNode<T>) -> BVHNodeId {
         self.nodes.push(node);
-        BVHNodeId(self.nodes.len())
+        BVHNodeId(self.nodes.len() - 1)
+    }
+
+    fn get_node_mut<'a>(&'a mut self, nid: BVHNodeId) -> &'a mut BVHNode<T> {
+        unsafe { self.nodes.get_unchecked_mut(nid.0) }
     }
 
     fn add_nodes<GetBound>(&mut self, nodes: &mut [T], get_bound: &GetBound) -> Option<BVHNodeId>
         where GetBound: Fn(&T) -> &AABB
     {
-        if nodes.len() == 0 {
+        if nodes.is_empty() {
             return None
         }
 
@@ -213,12 +221,10 @@ impl<T> BVH<T> where T: Clone {
         let lid = self.add_nodes(&mut nodes[0..pivot_index], get_bound);
         let rid = self.add_nodes(&mut nodes[pivot_index..], get_bound);
 
-        unsafe {
-            if let BVHNode::Internal{ ref mut left, ref mut right, .. } =
-                self.nodes.get_unchecked_mut(nid.0) {
-                *left = lid;
-                *right = rid;
-            }
+        if let BVHNode::Internal{ ref mut left, ref mut right, .. } =
+            self.get_node_mut(nid.clone()) {
+            *left = lid;
+            *right = rid;
         }
 
         Some(nid)
@@ -231,32 +237,74 @@ impl<T> BVH<T> where T: Clone {
             Some(&self.nodes[0].bounds())
         }
     }
+
+    pub fn intersect(&self, ray: &Ray) -> Vec<T> {
+        let mut results = Vec::new();
+        if !self.nodes.is_empty() {
+            self.intersect_rec(ray, BVHNodeId(0), &mut results);
+        }
+        results
+    }
+
+    fn intersect_rec(&self, ray: &Ray, nid: BVHNodeId, results: &mut Vec<T>) {
+        match unsafe { self.nodes.get_unchecked(nid.0) } {
+            BVHNode::Internal{ left, right, ref bounds, .. } => {
+                if ray.intersects(bounds) {
+                    left.clone().map(|lid| self.intersect_rec(ray, lid, results));
+                    right.clone().map(|rid| self.intersect_rec(ray, rid, results));
+                }
+            },
+
+            BVHNode::Leaf{ ref bounds, value } => {
+                if ray.intersects(bounds) {
+                    results.push(value.clone())
+                }
+            },
+        }
+    }
 }
 
 #[test]
 fn test_bvh() {
     {
         let mut nodes = vec![
-            ( AABB::new([0.0, 0.0, 0.0].into(), [1.0, 1.0, 1.0].into()), 1 ),
+            ( AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()), 1 ),
         ];
 
         let bvh = BVH::from_nodes(&mut nodes, &|(a,_)| a);
         assert_eq!(
             bvh.bounding_volume(),
-            Some(&AABB::new([0.0, 0.0, 0.0].into(), [1.0, 1.0, 1.0].into()))
+            Some(&AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()))
         );
+
+        let int = bvh.intersect(&Ray::new([0.0, 0.0, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        assert_eq!(int.len(), 0);
+
+        let int = bvh.intersect(&Ray::new([1.5, 1.5, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        assert_eq!(int.len(), 1);
     }
 
     {
         let mut nodes = vec![
-            ( AABB::new([0.0, 0.0, 0.0].into(), [1.0, 1.0, 1.0].into()), 1 ),
-            ( AABB::new([0.0, 2.0, 0.0].into(), [1.0, 3.0, 1.0].into()), 1 ),
+            ( AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()), 1 ),
+            ( AABB::new([3.0, 3.0, 1.0].into(), [4.0, 4.0, 2.0].into()), 2 ),
+            ( AABB::new([0.5, 0.5, 1.0].into(), [2.0, 2.0, 2.0].into()), 3 ),
         ];
 
         let bvh = BVH::from_nodes(&mut nodes, &|(a,_)| a);
         assert_eq!(
             bvh.bounding_volume(),
-            Some(&AABB::new([0.0, 0.0, 0.0].into(), [1.0, 3.0, 1.0].into()))
+            Some(&AABB::new([0.5, 0.5, 1.0].into(), [4.0, 4.0, 2.0].into()))
         );
+
+        let int = bvh.intersect(&Ray::new([0.0, 0.0, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        assert_eq!(int.len(), 0);
+
+        let int = bvh.intersect(&Ray::new([1.5, 1.5, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        assert_eq!(int.len(), 2);
+
+        let mut ids: Vec<isize> = int.iter().map(|(_,b)| *b).collect();
+        ids.sort();
+        assert_eq!(ids, vec![1,3]);
     }
 }
