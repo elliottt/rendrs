@@ -278,7 +278,7 @@ impl<'a> Hit<'a> {
 
         Hit{
             object_space_point: res.object_space_point,
-            world_space_point: res.world_space_point,
+            world_space_point: res.final_ray.origin,
             normal,
 
             // this doesn't need to be computed here

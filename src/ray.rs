@@ -14,7 +14,7 @@ pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
     vec - (normal * (2.0 * dot))
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Ray {
     pub origin: Point3<f32>,
     pub direction: Vector3<f32>,
@@ -51,9 +51,9 @@ impl Ray {
 
     pub fn march<SDF>(&self, max_steps: usize, sdf: SDF)
         -> Option<MarchResult>
-        where SDF: Fn(&Point3<f32>) -> SDFResult
+        where SDF: Fn(&Ray) -> SDFResult
     {
-        let mut pos = self.origin.clone();
+        let mut pos = self.clone();
         let mut total_dist: f32 = 0.0;
         for i in 0 .. max_steps {
             let res = sdf(&pos);
@@ -65,7 +65,7 @@ impl Ray {
                     distance: total_dist,
                     object_id: res.object_id,
                     object_space_point: res.object_space_point,
-                    world_space_point: pos,
+                    final_ray: pos,
                     material: res.material,
                     pattern: res.pattern,
                 })
@@ -77,7 +77,7 @@ impl Ray {
                 break;
             }
 
-            pos += signed_radius * self.direction;
+            pos.origin += signed_radius * pos.direction;
         }
 
         None
@@ -121,7 +121,7 @@ pub struct MarchResult {
     pub distance: f32,
     pub object_id: ShapeId,
     pub object_space_point: Point3<f32>,
-    pub world_space_point: Point3<f32>,
+    pub final_ray: Ray,
     pub material: MaterialId,
     pub pattern: PatternId,
 }
@@ -130,14 +130,21 @@ impl MarchResult {
 
     /// Compute the normal to this result
     pub fn normal<SDF>(&self, sdf: SDF) -> Vector3<f32>
-        where SDF: Fn(&Point3<f32>) -> SDFResult,
+        where SDF: Fn(&Ray) -> SDFResult,
     {
-        let res = sdf(&self.world_space_point);
+        let mut pos = self.final_ray.clone();
+
+        let res = sdf(&pos);
         let offset = Vector3::new(0.0001, 0.0, 0.0);
 
-        let px = sdf(&(self.world_space_point - offset.xyy()));
-        let py = sdf(&(self.world_space_point - offset.yxy()));
-        let pz = sdf(&(self.world_space_point - offset.yyx()));
+        pos.origin = self.final_ray.origin - offset.xyy();
+        let px = sdf(&pos);
+
+        pos.origin = self.final_ray.origin - offset.yxy();
+        let py = sdf(&pos);
+
+        pos.origin = self.final_ray.origin - offset.yyx();
+        let pz = sdf(&pos);
         Vector3::new(
             res.distance - px.distance,
             res.distance - py.distance,

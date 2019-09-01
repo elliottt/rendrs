@@ -1,10 +1,8 @@
 
-use nalgebra::{Point3};
-
 use crate::{
     material::{Light,MaterialId,Material,Materials},
     pattern::{PatternId,Pattern,Patterns},
-    ray::{SDFResult},
+    ray::{Ray,SDFResult},
     shapes::{ShapeId,Shapes,Shape},
 };
 
@@ -85,23 +83,23 @@ impl Scene {
         self.materials.get_material(mid)
     }
 
-    pub fn sdf(&self, point: &Point3<f32>) -> SDFResult {
+    pub fn sdf(&self, ray: &Ray) -> SDFResult {
         self.world
             .iter()
-            .map(|root| self.sdf_from(root.clone(), point))
+            .map(|root| self.sdf_from(root.clone(), ray))
             .min_by(|a,b| a.distance.partial_cmp(&b.distance).expect("failed to compare"))
             .expect("Empty world")
     }
 
-    pub fn sdf_from(&self, root: ShapeId, point: &Point3<f32>) -> SDFResult {
+    pub fn sdf_from(&self, root: ShapeId, ray: &Ray) -> SDFResult {
         let mut result = SDFResult{
             distance: std::f32::INFINITY,
-            object_space_point: point.clone(),
+            object_space_point: ray.origin.clone(),
             object_id: root,
             material: self.default_material,
             pattern: self.default_pattern,
         };
-        self.get_shape(root).sdf(self, root, point, &mut result);
+        self.get_shape(root).sdf(self, root, ray, &mut result);
         result
     }
 

@@ -4,7 +4,7 @@ use nalgebra::{Vector2,Vector3,Point3,Matrix4};
 use crate::bounding_volume::{AABB};
 use crate::material::{MaterialId};
 use crate::pattern::{PatternId};
-use crate::ray::{SDFResult};
+use crate::ray::{Ray,SDFResult};
 use crate::scene::{Scene};
 
 #[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
@@ -59,7 +59,8 @@ pub enum PrimShape {
 }
 
 impl PrimShape {
-    fn sdf(&self, point: &Point3<f32>) -> f32 {
+    fn sdf(&self, ray: &Ray) -> f32 {
+        let point = ray.origin;
         match self {
             PrimShape::Sphere => {
                 let magnitude = Vector3::new(point.x, point.y, point.z).magnitude();
@@ -234,12 +235,12 @@ pub enum Shape {
 }
 
 impl Shape {
-    pub fn sdf(&self, scene: &Scene, self_id: ShapeId, point: &Point3<f32>, result: &mut SDFResult) {
+    pub fn sdf(&self, scene: &Scene, self_id: ShapeId, ray: &Ray, result: &mut SDFResult) {
         match self {
             Shape::PrimShape{ shape } => {
                 result.object_id = self_id;
-                result.distance = shape.sdf(point);
-                result.object_space_point = point.clone();
+                result.distance = shape.sdf(ray);
+                result.object_space_point = ray.origin.clone();
             },
 
             // A group differs from a union in that the individual objects hit by the SDF are
@@ -249,7 +250,7 @@ impl Shape {
                 let mut tmp = result.clone();
 
                 for node in nodes {
-                    scene.get_shape(*node).sdf(scene, *node, point, &mut tmp);
+                    scene.get_shape(*node).sdf(scene, *node, ray, &mut tmp);
                     if tmp.distance < result.distance {
                         *result = tmp.clone();
                     }
@@ -261,7 +262,7 @@ impl Shape {
                 let mut tmp = result.clone();
 
                 for node in nodes {
-                    scene.get_shape(*node).sdf(scene, *node, point, &mut tmp);
+                    scene.get_shape(*node).sdf(scene, *node, ray, &mut tmp);
                     if tmp.distance < result.distance {
                         result.distance = tmp.distance;
                         result.material = tmp.material;
@@ -273,7 +274,7 @@ impl Shape {
                 result.object_id = self_id;
 
                 // Make texturing relative to the union, not the individual object
-                result.object_space_point = point.clone();
+                result.object_space_point = ray.origin.clone();
             },
 
             Shape::SmoothUnion{ k, first, second } => {
@@ -281,8 +282,8 @@ impl Shape {
 
                 let mut tmp = result.clone();
 
-                scene.get_shape(*first).sdf(scene, *first, point, result);
-                scene.get_shape(*second).sdf(scene, *second, point, &mut tmp);
+                scene.get_shape(*first).sdf(scene, *first, ray, result);
+                scene.get_shape(*second).sdf(scene, *second, ray, &mut tmp);
 
                 let diff = tmp.distance - result.distance;
 
@@ -295,15 +296,15 @@ impl Shape {
                 result.distance = mix(tmp.distance, result.distance, h) - k * h * (1.0 - h);
 
                 // Make texturing relative to the union, not the individual object
-                result.object_space_point = point.clone();
+                result.object_space_point = ray.origin.clone();
             },
 
             Shape::Subtract{ first, second } => {
-                scene.get_shape(*first).sdf(scene, *first, point, result);
+                scene.get_shape(*first).sdf(scene, *first, ray, result);
 
                 // figure out the distance for the part being subtracted
                 let mut tmp = result.clone();
-                scene.get_shape(*second).sdf(scene, *second, point, &mut tmp);
+                scene.get_shape(*second).sdf(scene, *second, ray, &mut tmp);
                 let sub = -tmp.distance;
 
                 if result.distance <= sub {
@@ -323,7 +324,7 @@ impl Shape {
                 let mut tmp = result.clone();
 
                 for node in nodes {
-                    scene.get_shape(*node).sdf(scene, *node, point, &mut tmp);
+                    scene.get_shape(*node).sdf(scene, *node, ray, &mut tmp);
                     if tmp.distance > result.distance {
                         result.distance = tmp.distance;
                         result.material = tmp.material;
@@ -335,23 +336,23 @@ impl Shape {
                 result.object_id = self_id;
 
                 // Make texturing relative to the intersection, not the individual object
-                result.object_space_point = point.clone();
+                result.object_space_point = ray.origin.clone();
             },
 
             Shape::Transform{ inverse, scale_factor, node, .. } => {
-                let p = inverse.transform_point(point);
-                scene.get_shape(*node).sdf(scene, *node, &p, result);
+                let r = ray.transform(inverse);
+                scene.get_shape(*node).sdf(scene, *node, &r, result);
                 result.distance *= *scale_factor;
             },
 
             Shape::Material{ pattern, material, node } => {
-                scene.get_shape(*node).sdf(scene, *node, point, result);
+                scene.get_shape(*node).sdf(scene, *node, ray, result);
                 result.material = *material;
                 result.pattern = *pattern;
             },
 
             Shape::Onion{ thickness, node } => {
-                scene.get_shape(*node).sdf(scene, *node, point, result);
+                scene.get_shape(*node).sdf(scene, *node, ray, result);
                 result.distance = result.distance.abs() - thickness;
                 result.object_id = self_id;
             },
@@ -413,15 +414,15 @@ fn test_cube() {
 
     let shape = PrimShape::RectangularPrism{ width: 1.0, height: 1.0, depth: 1.0 };
     {
-        let point = Point3::new(1.0, 0.0, 0.0);
-        assert_eq_f32!(shape.sdf(&point), 0.0);
+        let ray = Ray::new([1.0, 0.0, 0.0].into(), [0.0, 0.0, 1.0].into(), 1.0);
+        assert_eq_f32!(shape.sdf(&ray), 0.0);
     }
     {
-        let point = Point3::new(0.5, 0.0, 0.0);
-        assert_eq_f32!(shape.sdf(&point), -0.5);
+        let ray = Ray::new([0.5, 0.0, 0.0].into(), [0.0, 0.0, 1.0].into(), 1.0);
+        assert_eq_f32!(shape.sdf(&ray), -0.5);
     }
     {
-        let point = Point3::new(0.0, 0.0, 0.0);
-        assert_eq_f32!(shape.sdf(&point), -1.0);
+        let ray = Ray::new([0.0, 0.0, 0.0].into(), [0.0, 0.0, 1.0].into(), 1.0);
+        assert_eq_f32!(shape.sdf(&ray), -1.0);
     }
 }
