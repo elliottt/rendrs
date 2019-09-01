@@ -1,5 +1,6 @@
 
 use crate::{
+    bounding_volume::AABB,
     material::{Light,MaterialId,Material,Materials},
     pattern::{PatternId,Pattern,Patterns},
     ray::{Ray,SDFResult},
@@ -53,6 +54,10 @@ impl Scene {
 
     pub fn get_shape(&self, shape: ShapeId) -> &'_ Shape {
         self.shapes.get_shape(shape)
+    }
+
+    pub fn get_bounding_volume(&self, shape: ShapeId) -> AABB {
+        self.shapes.get_shape(shape).bounding_volume(self)
     }
 
     pub fn add_light(&mut self, light: Light) {

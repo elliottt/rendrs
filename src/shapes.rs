@@ -359,6 +359,55 @@ impl Shape {
         }
     }
 
+    pub fn bounding_volume(&self, scene: &Scene) -> AABB {
+        match self {
+            Shape::PrimShape{ shape } =>
+                shape.bounding_volume(),
+
+            Shape::Group{ nodes, .. } => {
+                let mut bound = scene.get_shape(nodes[0]).bounding_volume(scene);
+                for node in nodes[1..].iter() {
+                    bound.union_mut(&scene.get_shape(*node).bounding_volume(scene))
+                }
+                bound
+            },
+
+            Shape::Union{ nodes, .. } => {
+                let mut bound = scene.get_shape(nodes[0]).bounding_volume(scene);
+                for node in nodes[1..].iter() {
+                    bound.union_mut(&scene.get_shape(*node).bounding_volume(scene))
+                }
+                bound
+            },
+
+            Shape::SmoothUnion{ first, second, .. } => {
+                let mut bound = scene.get_shape(*first).bounding_volume(scene);
+                bound.union_mut(&scene.get_shape(*second).bounding_volume(scene));
+                bound
+            },
+
+            Shape::Subtract{ first, .. } =>
+                scene.get_shape(*first).bounding_volume(scene),
+
+            Shape::Intersect{ nodes } => {
+                let mut bound = scene.get_shape(nodes[0]).bounding_volume(scene);
+                for node in nodes[1..].iter() {
+                    bound.intersect_mut(&scene.get_shape(*node).bounding_volume(scene))
+                }
+                bound
+            },
+
+            Shape::Transform{ matrix, node, .. } =>
+                scene.get_shape(*node).bounding_volume(scene).transform(matrix),
+
+            Shape::Material{ node, .. } =>
+                scene.get_shape(*node).bounding_volume(scene),
+
+            Shape::Onion{ node, .. } =>
+                scene.get_shape(*node).bounding_volume(scene),
+        }
+    }
+
     pub fn transform(matrix: &Matrix4<f32>, scale_factor: f32, node: ShapeId) -> Self {
         let inverse = matrix.try_inverse().expect("Unable to invert transformation matrix");
         Shape::Transform{ matrix: matrix.clone(), inverse, scale_factor, node }

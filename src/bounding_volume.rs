@@ -75,6 +75,30 @@ impl AABB {
         )
     }
 
+    /// Construct the intersection of two AABBs.
+    pub fn intersect(&self, other: &Self) -> Self {
+        let min = Point3::new(
+            self.min.x.max(other.min.x),
+            self.min.y.max(other.min.y),
+            self.min.z.max(other.min.z),
+        );
+        let max = Point3::new(
+            self.max.x.min(other.max.x),
+            self.max.y.min(other.max.y),
+            self.max.z.min(other.max.z),
+        );
+        Self::new(min, max)
+    }
+
+    pub fn intersect_mut(&mut self, other: &Self) {
+        self.min.x = self.min.x.max(other.min.x);
+        self.min.y = self.min.y.max(other.min.y);
+        self.min.z = self.min.z.max(other.min.z);
+        self.max.x = self.max.x.min(other.max.x);
+        self.max.y = self.max.y.min(other.max.y);
+        self.max.z = self.max.z.min(other.max.z);
+    }
+
     /// Construct a new AABB that encompasses the space of the two.
     pub fn union(&self, other: &Self) -> Self {
         let min = Point3::new(
@@ -194,7 +218,7 @@ pub struct BVH<T> {
 impl<T> BVH<T> where T: Clone {
 
     pub fn from_nodes<GetBound>(mut values: Vec<T>, get_bound: &GetBound) -> Self
-        where GetBound: Fn(&T) -> &AABB
+        where GetBound: Fn(&T) -> AABB
     {
         if values.is_empty() {
             BVH { nodes: Vec::new(), values }
@@ -220,14 +244,14 @@ impl<T> BVH<T> where T: Clone {
         start: usize,
         get_bound: &GetBound,
     ) -> usize
-        where GetBound: Fn(&T) -> &AABB
+        where GetBound: Fn(&T) -> AABB
     {
         let mut bounds = get_bound(&values[0]).clone();
         let mut centroid_bound = AABB::from_point(bounds.centroid());
 
         for value in &values[1..] {
             let bound = get_bound(value);
-            bounds.union_mut(bound);
+            bounds.union_mut(&bound);
             centroid_bound.union_point_mut(&bound.centroid());
         }
 
