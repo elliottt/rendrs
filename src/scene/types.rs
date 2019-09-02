@@ -19,8 +19,8 @@ pub struct Scene {
     patterns: Patterns,
     pub default_pattern: PatternId,
 
-    // the roots of the world
-    world: Vec<ShapeId>,
+    // the root of the world
+    root: Option<ShapeId>,
 }
 
 impl Scene {
@@ -40,7 +40,7 @@ impl Scene {
             default_material,
             patterns,
             default_pattern,
-            world: Vec::new(),
+            root: None,
         }
     }
 
@@ -48,8 +48,8 @@ impl Scene {
         self.shapes.add_shape(shape)
     }
 
-    pub fn add_root(&mut self, node: ShapeId) {
-        self.world.push(node);
+    pub fn set_root(&mut self, node: ShapeId) {
+        self.root = Some(node);
     }
 
     pub fn get_shape(&self, shape: ShapeId) -> &'_ Shape {
@@ -89,11 +89,9 @@ impl Scene {
     }
 
     pub fn sdf(&self, ray: &Ray) -> SDFResult {
-        self.world
-            .iter()
+        self.root
             .map(|root| self.sdf_from(root.clone(), ray))
-            .min_by(|a,b| a.distance.partial_cmp(&b.distance).expect("failed to compare"))
-            .expect("Empty world")
+            .expect("empty world")
     }
 
     pub fn sdf_from(&self, root: ShapeId, ray: &Ray) -> SDFResult {

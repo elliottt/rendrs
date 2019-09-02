@@ -499,7 +499,7 @@ fn parse_objs(
                             if let Some(k) = smooth {
                                 build_smooth_union(scene, *k, &resolved)
                             } else {
-                                Ok(scene.add(Shape::union(resolved)))
+                                Ok(scene.add(Shape::union(scene, resolved)))
                             }?;
                         obj_map.insert(name,sid);
                         continue;
@@ -529,7 +529,7 @@ fn parse_objs(
                     }
 
                     if all_resolved {
-                        let sid = scene.add(Shape::intersect(resolved));
+                        let sid = scene.add(Shape::intersect(scene, resolved));
                         obj_map.insert(name,sid);
                         continue;
                     }
@@ -747,16 +747,21 @@ fn parse_roots(
     scene: &mut Scene,
     objs: BTreeMap<ParsedName,ShapeId>,
 ) -> Result<(),Error> {
-    let roots = ctx.as_sequence()?;
-    for root in roots {
+
+    let mut nodes = Vec::new();
+
+    for root in ctx.as_sequence()? {
         let name = parse_obj_name(&root)?;
         if let Some(sid) = objs.get(&name) {
-            scene.add_root(*sid);
+            nodes.push(*sid);
         } else {
             // TODO: don't use the debug formatter here
             return Err(format_err!("object `{:?}` is not present", name));
         }
     }
+
+    let gid = scene.add(Shape::group(scene, nodes));
+    scene.set_root(gid);
 
     Ok(())
 }

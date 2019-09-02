@@ -192,7 +192,7 @@ pub enum Shape {
 
     /// Union together a bunch of nodes
     Union{
-        nodes: Vec<ShapeId>,
+        bvh: BVH<ShapeId>,
     },
 
     /// Union together two nodes, with a smoothing factor
@@ -210,7 +210,7 @@ pub enum Shape {
 
     /// Intersect nodes.
     Intersect{
-        nodes: Vec<ShapeId>,
+        bvh: BVH<ShapeId>,
     },
 
     /// A transformation applied to a sub-graph
@@ -258,18 +258,18 @@ impl Shape {
                 })
             },
 
-            Shape::Union{ nodes } => {
+            Shape::Union{ bvh } => {
                 result.distance = std::f32::INFINITY;
                 let mut tmp = result.clone();
 
-                for node in nodes {
+                bvh.intersect_with(ray, |node| {
                     scene.get_shape(*node).sdf(scene, *node, ray, &mut tmp);
                     if tmp.distance < result.distance {
                         result.distance = tmp.distance;
                         result.material = tmp.material;
                         result.pattern = tmp.pattern;
                     }
-                }
+                });
 
                 // Override the object id of the individual hit to be that of the entire union
                 result.object_id = self_id;
@@ -320,18 +320,18 @@ impl Shape {
                 result.object_id = self_id;
             },
 
-            Shape::Intersect{ nodes } => {
+            Shape::Intersect{ bvh } => {
                 result.distance = std::f32::NEG_INFINITY;
                 let mut tmp = result.clone();
 
-                for node in nodes {
+                bvh.intersect_with(ray, |node| {
                     scene.get_shape(*node).sdf(scene, *node, ray, &mut tmp);
                     if tmp.distance > result.distance {
                         result.distance = tmp.distance;
                         result.material = tmp.material;
                         result.pattern = tmp.pattern;
                     }
-                }
+                });
 
                 // override the object id to be that of the subtraction
                 result.object_id = self_id;
@@ -368,13 +368,8 @@ impl Shape {
             Shape::Group{ bvh } =>
                 bvh.bounding_volume().expect("empty group").clone(),
 
-            Shape::Union{ nodes, .. } => {
-                let mut bound = scene.get_shape(nodes[0]).bounding_volume(scene);
-                for node in nodes[1..].iter() {
-                    bound.union_mut(&scene.get_shape(*node).bounding_volume(scene))
-                }
-                bound
-            },
+            Shape::Union{ bvh } =>
+                bvh.bounding_volume().expect("empty union").clone(),
 
             Shape::SmoothUnion{ first, second, .. } => {
                 let mut bound = scene.get_shape(*first).bounding_volume(scene);
@@ -385,13 +380,8 @@ impl Shape {
             Shape::Subtract{ first, .. } =>
                 scene.get_shape(*first).bounding_volume(scene),
 
-            Shape::Intersect{ nodes } => {
-                let mut bound = scene.get_shape(nodes[0]).bounding_volume(scene);
-                for node in nodes[1..].iter() {
-                    bound.intersect_mut(&scene.get_shape(*node).bounding_volume(scene))
-                }
-                bound
-            },
+            Shape::Intersect{ bvh } =>
+                bvh.bounding_volume().expect("empty intersection").clone(),
 
             Shape::Transform{ matrix, node, .. } =>
                 scene.get_shape(*node).bounding_volume(scene).transform(matrix),
@@ -428,8 +418,9 @@ impl Shape {
         Shape::Group{ bvh }
     }
 
-    pub fn union(nodes: Vec<ShapeId>) -> Self {
-        Shape::Union{ nodes }
+    pub fn union(scene: &Scene, nodes: Vec<ShapeId>) -> Self {
+        let bvh = BVH::from_nodes(nodes, &|sid| scene.get_shape(*sid).bounding_volume(scene));
+        Shape::Union{ bvh }
     }
 
     pub fn smooth_union(k: f32, first: ShapeId, second: ShapeId) -> Self {
@@ -440,8 +431,9 @@ impl Shape {
         Shape::Subtract{ first, second }
     }
 
-    pub fn intersect(nodes: Vec<ShapeId>) -> Self {
-        Shape::Intersect{ nodes }
+    pub fn intersect(scene: &Scene, nodes: Vec<ShapeId>) -> Self {
+        let bvh = BVH::from_nodes(nodes, &|sid| scene.get_shape(*sid).bounding_volume(scene));
+        Shape::Intersect{ bvh }
     }
 
     pub fn material(pattern: PatternId, material: MaterialId, node: ShapeId) -> Self {
