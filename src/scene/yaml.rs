@@ -19,7 +19,6 @@ use crate::{
     shapes::{ShapeId,Shape,PrimShape},
 };
 
-
 pub fn parse<P>(path: P)
     -> Result<(Scene,Vec<Camera>), Error>
     where P: AsRef<Path>
@@ -172,8 +171,8 @@ fn parse_cameras(ctx: &Context) -> Result<Vec<Camera>,Error> {
 }
 
 fn parse_camera(ctx: &Context) -> Result<Camera,Error> {
-    if let Ok(val) = ctx.get_field("perspective") {
-        parse_perspective(&val)
+    if let Ok(ctx) = ctx.get_field("perspective") {
+        parse_perspective(&ctx)
     } else {
         Err(format_err!("unknown camera type"))
     }
@@ -186,7 +185,10 @@ fn parse_perspective(ctx: &Context) -> Result<Camera,Error> {
     let position = parse_point3(&ctx.get_field("position")?)?;
     let target = parse_point3(&ctx.get_field("target")?)?;
 
-    let mut camera = Camera::new(width, height, fov);
+    let num_samples = optional(ctx.get_field("samples")).map_or_else(
+        || Ok(1), |ctx| ctx.as_usize())?;
+
+    let mut camera = Camera::new(width, height, fov, num_samples.max(1));
     camera.set_transform(Matrix4::look_at_lh(&position, &target, &Vector3::new(0.0, 1.0, 0.0)));
 
     Ok(camera)

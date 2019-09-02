@@ -131,10 +131,17 @@ fn render_body<Body>(
     mut body: Body
 ) where Body: FnMut(Ray) -> Color,
 {
+    let sample_frac = camera.sample_fraction();
     for y in (idx .. cfg.height).step_by(cfg.jobs) {
         let mut row = Vec::with_capacity(cfg.width);
         for x in 0 .. cfg.width {
-            row.push(body(camera.ray_for_pixel(x,y)));
+            let mut pixel = Color::black();
+
+            for ray in camera.rays_for_pixel(x, y) {
+                pixel += body(ray) * sample_frac;
+            }
+
+            row.push(pixel);
         }
         send.send(RenderedRow{ y, row }).expect("Failed to send row!");
     }
