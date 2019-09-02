@@ -90,6 +90,8 @@ cameras:
     width: 1000
     height: 1000
 
+    samples: 3
+
     fov:
       degrees: 90.0
 
