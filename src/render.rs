@@ -9,6 +9,7 @@ use std::{
 };
 
 use nalgebra::{Point3,Vector3};
+use pbr::ProgressBar;
 
 use crate::{
     camera::Camera,
@@ -514,11 +515,14 @@ pub fn write_canvas(cfg: Arc<Config>, recv: Receiver<RenderedRow>) -> Canvas {
     let mut canvas = Canvas::new(cfg.width, cfg.height);
 
     let expected = cfg.height;
+    let mut pb = ProgressBar::new(expected as u64);
 
     for _ in 0 .. expected {
         let row = recv.recv().expect("Failed to read all rows!");
         canvas.blit_row(row.y, row.row);
+        pb.inc();
     }
+    pb.finish_print("done");
 
     canvas
 }
