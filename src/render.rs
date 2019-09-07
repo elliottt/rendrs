@@ -1,5 +1,6 @@
 
 use std::{
+    borrow::Cow,
     sync::{
         Arc,
         mpsc::{channel,Sender,Receiver},
@@ -158,11 +159,12 @@ fn render_job(
     let world = World::new(cfg.clone(), scene);
 
     let containers = Containers::new();
+    let cow = Cow::Borrowed(&containers);
 
     render_body(idx, camera, cfg, send, |ray| {
-        find_hit(&world, &containers, &ray).map_or_else(
+        find_hit(&world, &cow, &ray).map_or_else(
             || Color::black(),
-            |hit| shade_hit(&world, &containers, &hit, 0))
+            |hit| shade_hit(&world, &cow, &hit, 0))
     });
 }
 
@@ -248,34 +250,34 @@ impl Containers {
 }
 
 #[derive(Debug)]
-struct Hit<'a> {
+struct Hit<'scene, 'cont> {
     object_space_point: Point3<f32>,
     world_space_point: Point3<f32>,
     normal: Vector3<f32>,
     reflectv: Vector3<f32>,
     eyev: Vector3<f32>,
-    material: &'a Material,
-    pattern: &'a Pattern,
+    material: &'scene Material,
+    pattern: &'scene Pattern,
     n1: f32,
     n2: f32,
     leaving: bool,
-    containers: Containers,
+    containers: Cow<'cont, Containers>,
 }
 
-impl<'a> Hit<'a> {
-    fn new<'b>(
-        world: &'b World,
-        containers: &Containers,
+impl<'scene, 'cont> Hit<'scene, 'cont> {
+    fn new<'a, 'b>(
+        world: &'a World,
+        containers: &Cow<'b, Containers>,
         ray: &Ray,
         res: MarchResult,
-    ) -> Hit<'b> {
+    ) -> Hit<'a, 'b> {
 
         let material = world.scene.get_material(res.material);
 
         let mut containers = containers.clone();
 
         let (leaving,n1,n2) = if material.transparent > 0.0 {
-            containers.process_hit(res.object_id, material.refractive_index)
+            containers.to_mut().process_hit(res.object_id, material.refractive_index)
         } else {
             let val = containers.refractive_index();
             (false,val,val)
@@ -371,11 +373,11 @@ fn test_schlick() {
 
 /// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
 /// `None`.
-fn find_hit<'a>(
-    world: &'a World,
-    containers: &Containers,
+fn find_hit<'scene, 'cont>(
+    world: &'scene World,
+    containers: &Cow<'cont, Containers>,
     ray: &Ray
-) -> Option<Hit<'a>> {
+) -> Option<Hit<'scene, 'cont>> {
     ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
         .map(|res| Hit::new(world, containers, ray, res))
 }
@@ -383,7 +385,7 @@ fn find_hit<'a>(
 /// Shade the color according to the material properties, and light.
 fn shade_hit(
     world: &World,
-    containers: &Containers,
+    containers: &Cow<Containers>,
     hit: &Hit,
     reflection_count: usize,
 ) -> Color {
@@ -416,7 +418,7 @@ fn shade_hit(
 /// Compute the color from a reflection.
 fn reflected_color(
     world: &World,
-    containers: &Containers,
+    containers: &Cow<Containers>,
     hit: &Hit,
     reflection_count: usize,
 ) -> Color {
@@ -425,16 +427,16 @@ fn reflected_color(
         Color::black()
     } else {
         let ray = hit.reflection_ray(containers);
-        find_hit(world, &containers, &ray).map_or_else(
+        find_hit(world, containers, &ray).map_or_else(
             || Color::black(),
-            |refl_hit| shade_hit(world, &containers, &refl_hit, reflection_count + 1) * reflective)
+            |refl_hit| shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective)
     }
 }
 
 /// Compute the additional color due to refraction.
 fn refracted_color(
     world: &World,
-    containers: &Containers,
+    containers: &Cow<Containers>,
     hit: &Hit,
     reflection_count: usize
 ) -> Color {
