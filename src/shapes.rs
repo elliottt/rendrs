@@ -226,6 +226,13 @@ pub enum Shape {
         second: ShapeId,
     },
 
+    /// Subtract one node from another with a smoothing factor
+    SmoothSubtract{
+        k: f32,
+        first: ShapeId,
+        second: ShapeId,
+    },
+
     /// Intersect nodes.
     Intersect{
         bvh: BVH<ShapeId>,
@@ -317,7 +324,7 @@ impl Shape {
                     result.pattern = tmp.pattern;
                 }
 
-                let h = clamp(0.5 + 0.5*diff / k, 0.0, 1.0);
+                let h = clamp(0.5 + 0.5 * diff / k, 0.0, 1.0);
                 result.distance = mix(tmp.distance, result.distance, h) - k * h * (1.0 - h);
 
                 // Make texturing relative to the union, not the individual object
@@ -339,6 +346,29 @@ impl Shape {
                     result.material = tmp.material;
                     result.pattern = tmp.pattern;
                 }
+
+                // override the object id to be that of the subtraction
+                result.object_id = self_id;
+            },
+
+            Shape::SmoothSubtract{ k, first, second } => {
+                use crate::utils::{mix,clamp};
+
+                scene.get_shape(*first).sdf(scene, *first, ray, result);
+
+                // figure out the distance for the part being subtracted
+                let mut tmp = result.clone();
+                scene.get_shape(*second).sdf(scene, *second, ray, &mut tmp);
+                let sub = -tmp.distance;
+
+                if result.distance <= sub {
+                    // keep texturing information from the shape that was subtracted.
+                    result.material = tmp.material;
+                    result.pattern = tmp.pattern;
+                }
+
+                let h = clamp(0.5 - 0.5 * (result.distance + tmp.distance) / k, 0.0, 1.0);
+                result.distance = mix(result.distance, sub, h) + k * h * (1.0 - h);
 
                 // override the object id to be that of the subtraction
                 result.object_id = self_id;
@@ -408,6 +438,9 @@ impl Shape {
             Shape::Subtract{ first, .. } =>
                 scene.get_shape(*first).bounding_volume(scene),
 
+            Shape::SmoothSubtract{ first, .. } =>
+                scene.get_shape(*first).bounding_volume(scene),
+
             Shape::Intersect{ bvh } =>
                 bvh.bounding_volume().expect("empty intersection").clone(),
 
@@ -466,6 +499,10 @@ impl Shape {
 
     pub fn subtract(first: ShapeId, second: ShapeId) -> Self {
         Shape::Subtract{ first, second }
+    }
+
+    pub fn smooth_subtract(k: f32, first: ShapeId, second: ShapeId) -> Self {
+        Shape::SmoothSubtract{ k, first, second }
     }
 
     pub fn intersect(scene: &Scene, nodes: Vec<ShapeId>) -> Self {

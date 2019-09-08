@@ -508,10 +508,15 @@ fn parse_objs(
                     }
                 },
 
-                ParsedObj::Subtract{ ref first, ref second } => {
+                ParsedObj::Subtract{ ref smooth, ref first, ref second } => {
                     if let Some(aid) = obj_map.get(first) {
                         if let Some(bid) = obj_map.get(second) {
-                            let sid = scene.add(Shape::subtract(*aid, *bid));
+                            let sid =
+                                if let Some(k) = smooth {
+                                    scene.add(Shape::smooth_subtract(*k, *aid, *bid))
+                                } else {
+                                    scene.add(Shape::subtract(*aid, *bid))
+                                };
                             obj_map.insert(name,sid);
                             continue;
                         }
@@ -621,6 +626,7 @@ enum ParsedObj {
         objects: Vec<ParsedName>,
     },
     Subtract{
+        smooth: Option<f32>,
         first: ParsedName,
         second: ParsedName,
     },
@@ -716,10 +722,12 @@ fn parse_obj(
         }
         work.push(name, ParsedObj::Intersect{ objects });
     } else if let Ok(args) = ctx.get_field("subtract") {
+        let smooth = optional(args.get_field("smooth")).map_or_else(
+            || Ok(None), |ctx| ctx.as_f32().map(Some))?;
         let entries = args.get_field("objects")?;
         let first = parse_subtree(&entries.get_at(0)?, work)?;
         let second = parse_subtree(&entries.get_at(1)?, work)?;
-        work.push(name, ParsedObj::Subtract{ first, second });
+        work.push(name, ParsedObj::Subtract{ smooth, first, second });
     } else if let Ok(args) = ctx.get_field("onion") {
         let thickness = args.get_field("thickness")?.as_f32()?;
         let object = parse_subtree(&args.get_field("object")?, work)?;

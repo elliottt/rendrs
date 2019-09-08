@@ -1,0 +1,67 @@
+# vim: et sw=2
+patterns:
+- name: blue
+  solid:
+    hex: 0x0000ff
+
+objects:
+- name: torus
+  material:
+    pattern: blue
+    object:
+      torus:
+        radius: 0.2
+        hole: 1.0
+
+- name: part
+  transform:
+    scale:
+      x: 0.05
+    object:
+      cube:
+        size: 2.0
+
+- name: plus
+  union:
+    objects:
+    - part
+    - transform:
+        rotation:
+          y: 1.0
+          degrees: 90
+        object: part
+
+- name: combination
+  subtract:
+    smooth: 0.1
+    objects:
+      - torus
+      - plus
+
+
+scene:
+- combination
+
+lights:
+- position:
+    x: 1.0
+    y: 10.0
+    z: -5.0
+
+cameras:
+- perspective:
+    width: 1000
+    height: 1000
+
+    fov:
+      degrees: 90.0
+
+    position:
+      x: 0.5
+      y: 2.0
+      z: -2.0
+
+    target:
+      x: 0.0
+      y: 0.0
+      z: 0.0
