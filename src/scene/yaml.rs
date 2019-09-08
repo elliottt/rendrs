@@ -647,6 +647,12 @@ fn parse_obj(
 ) -> Result<(),Error> {
     if let Ok(_ctx) = ctx.get_field("sphere") {
         work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Sphere });
+    } else if let Ok(ctx) = ctx.get_field("torus") {
+        let radius = optional(ctx.get_field("radius")).map_or_else(
+            || Ok(0.5), |ctx| ctx.as_f32())?;
+        let hole = optional(ctx.get_field("hole")).map_or_else(
+            || Ok(0.5), |ctx| ctx.as_f32())?;
+        work.push(name,ParsedObj::PrimShape{ prim: PrimShape::Torus{ radius, hole }});
     } else if let Ok(ctx) = ctx.get_field("cube") {
         let size = optional(ctx.get_field("size")).map_or_else(
             || Ok(1.0), |ctx| ctx.as_f32())?;

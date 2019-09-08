@@ -45,6 +45,11 @@ pub enum PrimShape {
         depth: f32,
     },
 
+    Torus{
+        radius: f32,
+        hole: f32,
+    },
+
     Triangle{
         a: Point3<f32>,
         b: Point3<f32>,
@@ -70,6 +75,11 @@ impl PrimShape {
             PrimShape::Cylinder{ radius, length } => {
                 let xz_mag = Vector2::new(point.x, point.z).magnitude();
                 (xz_mag - radius).max(point.y.abs() - length)
+            },
+
+            PrimShape::Torus{ radius, hole } => {
+                let x = Vector2::new(point.x, point.z).magnitude() - hole;
+                Vector2::new(x, point.y).magnitude() - radius
             },
 
             PrimShape::RectangularPrism{ width, height, depth } => {
@@ -147,6 +157,14 @@ impl PrimShape {
                 AABB::new(
                     Point3::new(-1.0, -1.0, -1.0),
                     Point3::new( 1.0,  1.0,  1.0),
+                )
+            },
+
+            PrimShape::Torus{ radius, hole } => {
+                let combined = radius + hole;
+                AABB::new(
+                    Point3::new(-combined, -combined, -combined),
+                    Point3::new( combined,  combined,  combined),
                 )
             },
 
@@ -367,6 +385,7 @@ impl Shape {
             Shape::Rounded{ rad, node } => {
                 scene.get_shape(*node).sdf(scene, *node, ray, result);
                 result.distance -= *rad;
+                result.object_id = self_id;
             },
         }
     }
