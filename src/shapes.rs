@@ -379,13 +379,11 @@ impl Shape {
             Shape::Onion{ thickness, node } => {
                 scene.get_shape(*node).sdf(scene, *node, ray, result);
                 result.distance = result.distance.abs() - thickness;
-                result.object_id = self_id;
             },
 
             Shape::Rounded{ rad, node } => {
                 scene.get_shape(*node).sdf(scene, *node, ray, result);
                 result.distance -= *rad;
-                result.object_id = self_id;
             },
         }
     }
