@@ -11,7 +11,7 @@ objects:
     pattern: blue
     object:
       rounded:
-        rad: 0.1
+        rad: 0.5
         object:
           cube:
 
@@ -33,7 +33,7 @@ cameras:
       degrees: 90.0
 
     position:
-      x: 0.0
+      x: 1.0
       y: 2.0
       z: -5.0
 

@@ -406,8 +406,11 @@ impl Shape {
                 bound
             }
 
-            Shape::Rounded{ node, .. } =>
-                scene.get_shape(*node).bounding_volume(scene),
+            Shape::Rounded{ rad, node } => {
+                let mut bound = scene.get_shape(*node).bounding_volume(scene);
+                bound.grow_by_mut(*rad);
+                bound
+            }
         }
     }
 
