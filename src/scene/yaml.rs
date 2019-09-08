@@ -553,6 +553,14 @@ fn parse_objs(
                     obj_map.insert(name, sid);
                     continue;
                 },
+
+                ParsedObj::Rounded{ rad, ref object } => {
+                    if let Some(oid) = obj_map.get(object) {
+                        let sid = scene.add(Shape::rounded(rad, *oid));
+                        obj_map.insert(name, sid);
+                        continue;
+                    }
+                },
             }
 
             next.push((name,parsed));
@@ -625,6 +633,10 @@ enum ParsedObj {
     },
     Model{
         file: String,
+    },
+    Rounded{
+        rad: f32,
+        object: ParsedName,
     },
 }
 
@@ -706,6 +718,10 @@ fn parse_obj(
         let thickness = args.get_field("thickness")?.as_f32()?;
         let object = parse_subtree(&args.get_field("object")?, work)?;
         work.push(name, ParsedObj::Onion{ thickness, object });
+    } else if let Ok(ctx) = ctx.get_field("rounded") {
+        let rad = ctx.get_field("rad")?.as_f32()?;
+        let object = parse_subtree(&ctx.get_field("object")?, work)?;
+        work.push(name, ParsedObj::Rounded{ rad, object });
     } else {
         return Err(format_err!("Unknown shape type"));
     }

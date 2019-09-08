@@ -99,6 +99,16 @@ impl AABB {
         self.max.z = self.max.z.min(other.max.z);
     }
 
+    /// Grow the bounding box by an amount in each dimension.
+    pub fn grow_by_mut(&mut self, amount: f32) {
+        self.min.x -= amount;
+        self.min.y -= amount;
+        self.min.z -= amount;
+        self.max.x += amount;
+        self.max.y += amount;
+        self.max.z += amount;
+    }
+
     /// Construct a new AABB that encompasses the space of the two.
     pub fn union(&self, other: &Self) -> Self {
         let min = Point3::new(

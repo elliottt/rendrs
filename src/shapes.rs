@@ -232,7 +232,13 @@ pub enum Shape {
     Onion{
         thickness: f32,
         node: ShapeId,
-    }
+    },
+
+    /// Rounding the edges of an object
+    Rounded{
+        rad: f32,
+        node: ShapeId,
+    },
 }
 
 impl Shape {
@@ -357,6 +363,11 @@ impl Shape {
                 result.distance = result.distance.abs() - thickness;
                 result.object_id = self_id;
             },
+
+            Shape::Rounded{ rad, node } => {
+                scene.get_shape(*node).sdf(scene, *node, ray, result);
+                result.distance -= *rad;
+            },
         }
     }
 
@@ -389,7 +400,13 @@ impl Shape {
             Shape::Material{ node, .. } =>
                 scene.get_shape(*node).bounding_volume(scene),
 
-            Shape::Onion{ node, .. } =>
+            Shape::Onion{ thickness, node } => {
+                let mut bound = scene.get_shape(*node).bounding_volume(scene);
+                bound.grow_by_mut(*thickness);
+                bound
+            }
+
+            Shape::Rounded{ node, .. } =>
                 scene.get_shape(*node).bounding_volume(scene),
         }
     }
@@ -444,6 +461,9 @@ impl Shape {
         Shape::Onion{ thickness, node }
     }
 
+    pub fn rounded(rad: f32, node: ShapeId) -> Self {
+        Shape::Rounded{ rad, node }
+    }
 }
 
 #[test]

@@ -449,7 +449,7 @@ fn refracted_color(
             .and_then(|ray| find_hit(world, &containers, &ray))
             .map_or_else(
                 || Color::black(),
-                |refr_hit| shade_hit(world, &containers, &refr_hit, reflection_count+1) * transparent)
+                |refr_hit| shade_hit(world, &containers, &refr_hit, reflection_count + 1) * transparent)
     }
 }
 
