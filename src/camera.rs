@@ -116,7 +116,7 @@ impl Camera {
 fn test_ray_for_pixel() {
     use nalgebra::{Vector3};
 
-    let mut camera = Camera::new(11, 11, std::f32::consts::PI / 2.0);
+    let mut camera = Camera::new(11, 11, std::f32::consts::PI / 2.0, 1);
     let eye = Point3::new(0.0, 0.0, -1.0);
     camera.set_transform(Matrix4::look_at_lh(
         &eye,
@@ -124,23 +124,20 @@ fn test_ray_for_pixel() {
         &Vector3::new(0.0, 1.0, 0.0),
     ));
 
-    {
-        let ray = camera.ray_for_pixel(5,5);
+    for ray in camera.rays_for_pixel(5,5) {
         assert_eq!(ray.origin, eye);
         assert_eq!(ray.direction, Vector3::new(0.0, 0.0, 1.0));
-    };
+    }
 
-    {
-        let ray = camera.ray_for_pixel(0,0);
+    for ray in camera.rays_for_pixel(0,0) {
         assert_eq!(ray.origin, eye);
         assert!(ray.direction.x < 0.0);
         assert!(ray.direction.y > 0.0);
-    };
+    }
 
-    {
-        let ray = camera.ray_for_pixel(10,10);
+    for ray in camera.rays_for_pixel(10,10) {
         assert_eq!(ray.origin, eye);
         assert!(ray.direction.x > 0.0);
         assert!(ray.direction.y < 0.0);
-    };
+    }
 }
