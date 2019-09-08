@@ -1,10 +1,9 @@
-
 use crate::{
     bounding_volume::AABB,
-    material::{Light,MaterialId,Material,Materials},
-    pattern::{PatternId,Pattern,Patterns},
-    ray::{Ray,SDFResult},
-    shapes::{ShapeId,Shapes,Shape},
+    material::{Light, Material, MaterialId, Materials},
+    pattern::{Pattern, PatternId, Patterns},
+    ray::{Ray, SDFResult},
+    shapes::{Shape, ShapeId, Shapes},
 };
 
 #[derive(Debug)]
@@ -24,16 +23,14 @@ pub struct Scene {
 }
 
 impl Scene {
-
     pub fn new() -> Self {
-
         let mut materials = Materials::new();
         let default_material = materials.add_material(Material::default());
 
         let mut patterns = Patterns::new();
         let default_pattern = patterns.add_pattern(Pattern::default());
 
-        Scene{
+        Scene {
             shapes: Shapes::new(),
             lights: Vec::new(),
             materials,
@@ -68,7 +65,7 @@ impl Scene {
         self.lights.len()
     }
 
-    pub fn iter_lights(&self) -> impl Iterator<Item=&Light> {
+    pub fn iter_lights(&self) -> impl Iterator<Item = &Light> {
         self.lights.iter()
     }
 
@@ -95,7 +92,7 @@ impl Scene {
     }
 
     pub fn sdf_from(&self, root: ShapeId, ray: &Ray) -> SDFResult {
-        let mut result = SDFResult{
+        let mut result = SDFResult {
             distance: std::f32::INFINITY,
             object_space_point: ray.origin.clone(),
             object_id: root,
@@ -105,5 +102,4 @@ impl Scene {
         self.get_shape(root).sdf(self, root, ray, &mut result);
         result
     }
-
 }

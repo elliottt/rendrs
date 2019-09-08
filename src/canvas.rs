@@ -1,19 +1,15 @@
-
-use std::ops::{Add,AddAssign,Mul};
+use image::{ImageBuffer, Rgb};
+use std::ops::{Add, AddAssign, Mul};
 use std::path::Path;
-use image::{ImageBuffer,Rgb};
 
-
-#[derive(Clone,Debug,Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Color {
     data: [f32; 3],
 }
 
 impl PartialEq for Color {
     fn eq(&self, other: &Color) -> bool {
-        self.r().eq(&other.r()) &&
-            self.g().eq(&other.g()) &&
-            self.b().eq(&other.b())
+        self.r().eq(&other.r()) && self.g().eq(&other.g()) && self.b().eq(&other.b())
     }
 }
 
@@ -32,9 +28,8 @@ fn f32_to_u8(val: f32) -> u8 {
 }
 
 impl Color {
-
     pub fn new(r: f32, g: f32, b: f32) -> Self {
-        Color{ data: [r, g, b] }
+        Color { data: [r, g, b] }
     }
 
     pub fn white() -> Self {
@@ -73,9 +68,12 @@ impl Color {
     }
 
     pub fn to_rgb(&self) -> Rgb<u8> {
-        Rgb([ f32_to_u8(self.r()), f32_to_u8(self.g()), f32_to_u8(self.b()) ])
+        Rgb([
+            f32_to_u8(self.r()),
+            f32_to_u8(self.g()),
+            f32_to_u8(self.b()),
+        ])
     }
-
 }
 
 impl AddAssign for Color {
@@ -86,7 +84,7 @@ impl AddAssign for Color {
 
 impl AddAssign<&Color> for Color {
     fn add_assign(&mut self, rhs: &Color) {
-        for i in 0 .. 3 {
+        for i in 0..3 {
             self.data[i] += rhs.data[i];
         }
     }
@@ -97,11 +95,11 @@ impl Add for &Color {
 
     fn add(self, rhs: Self) -> Self::Output {
         let mut data = [0.0; 3];
-        for i in 0 .. 3 {
+        for i in 0..3 {
             data[i] = self.data[i] + rhs.data[i];
         }
 
-        Color{ data }
+        Color { data }
     }
 }
 
@@ -114,53 +112,45 @@ impl Add for Color {
 }
 
 impl Mul for &Color {
-
     type Output = Color;
 
     fn mul(self, rhs: Self) -> Self::Output {
         let mut data = [0.0; 3];
-        for i in 0 .. 3 {
+        for i in 0..3 {
             data[i] = self.data[i] * rhs.data[i];
         }
 
-        Color{ data }
+        Color { data }
     }
-
 }
 
 impl Mul for Color {
-
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
         &self * &rhs
     }
-
 }
 
 impl Mul<f32> for &Color {
-
     type Output = Color;
 
     fn mul(self, rhs: f32) -> Self::Output {
         let mut data = [0.0; 3];
-        for i in 0 .. 3 {
+        for i in 0..3 {
             data[i] = self.data[i] * rhs;
         }
 
-        Color{ data }
+        Color { data }
     }
-
 }
 
 impl Mul<f32> for Color {
-
     type Output = Color;
 
     fn mul(self, rhs: f32) -> Self::Output {
         &self * rhs
     }
-
 }
 pub struct Canvas {
     pub width: usize,
@@ -169,11 +159,14 @@ pub struct Canvas {
 }
 
 impl Canvas {
-
     pub fn new(width: usize, height: usize) -> Self {
         let mut pixels = Vec::new();
         pixels.resize_with(width * height, Default::default);
-        Canvas{ width, height, pixels }
+        Canvas {
+            width,
+            height,
+            pixels,
+        }
     }
 
     pub fn index(&self, x: usize, y: usize) -> Option<usize> {
@@ -186,24 +179,30 @@ impl Canvas {
 
     pub fn blit_row(&mut self, y: usize, row: Vec<Color>) {
         let start = y * self.width;
-        let slice = self.pixels.get_mut(start .. start + self.width).expect("Missing row");
-        for (pixel,color) in slice.into_iter().zip(row) {
+        let slice = self
+            .pixels
+            .get_mut(start..start + self.width)
+            .expect("Missing row");
+        for (pixel, color) in slice.into_iter().zip(row) {
             *pixel = color;
         }
     }
 
     pub fn get(&self, x: usize, y: usize) -> Option<&Color> {
-        self.index(x, y).map( |ix| unsafe { self.pixels.get_unchecked(ix) })
+        self.index(x, y)
+            .map(|ix| unsafe { self.pixels.get_unchecked(ix) })
     }
 
     pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut Color> {
-        self.index(x, y).map(move |ix| unsafe { self.pixels.get_unchecked_mut(ix) })
+        self.index(x, y)
+            .map(move |ix| unsafe { self.pixels.get_unchecked_mut(ix) })
     }
 
     pub fn save<Q>(&self, path: Q)
-    where Q: AsRef<Path>
+    where
+        Q: AsRef<Path>,
     {
-        let image = ImageBuffer::from_fn(self.width as u32, self.height as u32, |x,y| {
+        let image = ImageBuffer::from_fn(self.width as u32, self.height as u32, |x, y| {
             // invert the y coordinate, otherwise the image will be saved upsidown
             // let ix = (self.height - (y as usize) - 1) * self.width + (x as usize);
             let ix = (y as usize) * self.width + (x as usize);
@@ -212,5 +211,4 @@ impl Canvas {
 
         image.save(path).unwrap()
     }
-
 }

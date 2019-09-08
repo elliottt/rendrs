@@ -1,8 +1,7 @@
+use nalgebra::{Point3, Vector3};
 
-use nalgebra::{Point3,Vector3};
-
-use crate::ray::{reflect};
 use crate::canvas::Color;
+use crate::ray::reflect;
 
 #[derive(Debug)]
 pub struct Light {
@@ -10,17 +9,19 @@ pub struct Light {
     pub intensity: Color,
 }
 
-#[derive(Copy,Clone,Ord,PartialOrd,Eq,PartialEq,Debug)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct MaterialId(usize);
 
 #[derive(Debug)]
 pub struct Materials {
-    materials: Vec::<Material>,
+    materials: Vec<Material>,
 }
 
 impl Materials {
     pub fn new() -> Self {
-        Materials{ materials: Vec::with_capacity(10) }
+        Materials {
+            materials: Vec::with_capacity(10),
+        }
     }
 
     pub fn add_material(&mut self, mat: Material) -> MaterialId {
@@ -33,7 +34,7 @@ impl Materials {
     }
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Material {
     pub ambient: f32,
     pub diffuse: f32,
@@ -46,7 +47,7 @@ pub struct Material {
 
 impl Default for Material {
     fn default() -> Self {
-        Material{
+        Material {
             ambient: 0.1,
             diffuse: 0.9,
             specular: 0.9,
@@ -68,7 +69,7 @@ impl Material {
         transparent: f32,
         refractive_index: f32,
     ) -> Self {
-        Material{
+        Material {
             ambient,
             diffuse,
             specular,
@@ -87,8 +88,7 @@ impl Material {
         eyev: &Vector3<f32>,
         normal: &Vector3<f32>,
         light_visible: bool,
-    ) -> Color
-    {
+    ) -> Color {
         let effectivec = obj_color * &light.intensity;
 
         let mut color = &effectivec * self.ambient;
@@ -102,7 +102,7 @@ impl Material {
                 // add in the diffuse part
                 color += &effectivec * (self.diffuse * light_dot_normal);
 
-                let reflectv = reflect(& -lightv, normal);
+                let reflectv = reflect(&-lightv, normal);
                 let reflect_dot_eye = reflectv.dot(eyev);
 
                 if reflect_dot_eye > 0.0 {
@@ -125,9 +125,9 @@ fn test_lighting() {
     {
         let eyev = Vector3::new(0.0, 0.0, -1.0);
         let normalv = Vector3::new(0.0, 0.0, -1.0);
-        let light = Light{
+        let light = Light {
             position: Point3::new(0.0, 0.0, -10.0),
-            intensity: Color::new(1.0, 1.0, 1.0)
+            intensity: Color::new(1.0, 1.0, 1.0),
         };
         let res = m.lighting(&light, &white, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.9);
@@ -144,9 +144,9 @@ fn test_lighting() {
         let s2d2 = f32::sqrt(2.0) / 2.0;
         let eyev = Vector3::new(0.0, s2d2, -s2d2);
         let normalv = Vector3::new(0.0, 0.0, -1.0);
-        let light = Light{
+        let light = Light {
             position: Point3::new(0.0, 0.0, -10.0),
-            intensity: Color::new(1.0, 1.0, 1.0)
+            intensity: Color::new(1.0, 1.0, 1.0),
         };
         let mut res = m.lighting(&light, &white, &pos, &eyev, &normalv, true);
         assert_eq!(res.r(), 1.0);
@@ -154,7 +154,7 @@ fn test_lighting() {
         assert_eq!(res.b(), 1.0);
 
         let eyev2 = Vector3::new(0.0, -s2d2, -s2d2);
-        let light2 = Light{
+        let light2 = Light {
             position: Point3::new(0.0, 10.0, -10.0),
             intensity: Color::new(1.0, 1.0, 1.0),
         };

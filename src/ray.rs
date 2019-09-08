@@ -1,12 +1,6 @@
+use nalgebra::{Matrix4, Point3, Vector3};
 
-use nalgebra::{Matrix4,Point3,Vector3};
-
-use crate::{
-    bounding_volume::{AABB},
-    material::{MaterialId},
-    pattern::{PatternId},
-    shapes::{ShapeId},
-};
+use crate::{bounding_volume::AABB, material::MaterialId, pattern::PatternId, shapes::ShapeId};
 
 /// Reflect a vector through a normal.
 pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
@@ -14,7 +8,7 @@ pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
     vec - (normal * (2.0 * dot))
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Ray {
     pub origin: Point3<f32>,
     pub direction: Vector3<f32>,
@@ -22,7 +16,7 @@ pub struct Ray {
     pub sign: f32,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct SDFResult {
     pub distance: f32,
     pub object_space_point: Point3<f32>,
@@ -32,35 +26,51 @@ pub struct SDFResult {
 }
 
 impl Ray {
-
     pub const MIN_DIST: f32 = 0.001;
     pub const MAX_DIST: f32 = 100.0;
 
     pub fn new(origin: Point3<f32>, direction: Vector3<f32>, sign: f32) -> Self {
         let inv_direction = Point3::new(
-            if direction.x != 0.0 { 1.0 / direction.x } else { std::f32::INFINITY },
-            if direction.y != 0.0 { 1.0 / direction.y } else { std::f32::INFINITY },
-            if direction.z != 0.0 { 1.0 / direction.z } else { std::f32::INFINITY },
+            if direction.x != 0.0 {
+                1.0 / direction.x
+            } else {
+                std::f32::INFINITY
+            },
+            if direction.y != 0.0 {
+                1.0 / direction.y
+            } else {
+                std::f32::INFINITY
+            },
+            if direction.z != 0.0 {
+                1.0 / direction.z
+            } else {
+                std::f32::INFINITY
+            },
         );
-        Ray{ origin, direction, inv_direction, sign }
+        Ray {
+            origin,
+            direction,
+            inv_direction,
+            sign,
+        }
     }
 
     pub fn position(&self, t: f32) -> Point3<f32> {
         self.origin + (self.direction * t)
     }
 
-    pub fn march<SDF>(&self, max_steps: usize, sdf: SDF)
-        -> Option<MarchResult>
-        where SDF: Fn(&Ray) -> SDFResult
+    pub fn march<SDF>(&self, max_steps: usize, sdf: SDF) -> Option<MarchResult>
+    where
+        SDF: Fn(&Ray) -> SDFResult,
     {
         let mut pos = self.clone();
         let mut total_dist: f32 = 0.0;
-        for i in 0 .. max_steps {
+        for i in 0..max_steps {
             let res = sdf(&pos);
             let signed_radius = self.sign * res.distance;
 
             if signed_radius < Self::MIN_DIST {
-                return Some(MarchResult{
+                return Some(MarchResult {
                     steps: i,
                     distance: total_dist,
                     object_id: res.object_id,
@@ -68,7 +78,7 @@ impl Ray {
                     final_ray: pos,
                     material: res.material,
                     pattern: res.pattern,
-                })
+                });
             }
 
             total_dist += signed_radius;
@@ -127,10 +137,10 @@ pub struct MarchResult {
 }
 
 impl MarchResult {
-
     /// Compute the normal to this result
     pub fn normal<SDF>(&self, sdf: SDF) -> Vector3<f32>
-        where SDF: Fn(&Ray) -> SDFResult,
+    where
+        SDF: Fn(&Ray) -> SDFResult,
     {
         let mut pos = self.final_ray.clone();
 
@@ -149,28 +159,34 @@ impl MarchResult {
             res.distance - px.distance,
             res.distance - py.distance,
             res.distance - pz.distance,
-        ).normalize()
+        )
+        .normalize()
     }
-
 }
 
 #[test]
 fn test_intersect() {
     let rays = vec![
         Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, 1.0), 1.0),
-        Ray::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(-1.0, 0.0, 1.0), 1.0),
+        Ray::new(
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::new(-1.0, 0.0, 1.0),
+            1.0,
+        ),
     ];
 
     for p in rays {
         assert!(p.intersects(&AABB::max()));
 
         assert!(p.intersects(&AABB::new(
-                    Point3::new(-1.0, -1.0, -1.0),
-                    Point3::new( 1.0,  1.0,  1.0))));
+            Point3::new(-1.0, -1.0, -1.0),
+            Point3::new(1.0, 1.0, 1.0)
+        )));
 
         assert!(!p.intersects(&AABB::new(
-                    Point3::new(2.0, -2.0, 2.0),
-                    Point3::new(4.0,  4.0, 4.0))));
+            Point3::new(2.0, -2.0, 2.0),
+            Point3::new(4.0, 4.0, 4.0)
+        )));
     }
 }
 
@@ -209,20 +225,33 @@ fn test_transform() {
 #[test]
 fn test_march() {
     use crate::assert_eq_f32;
-    use crate::{shapes::{Shape,PrimShape},scene::Scene};
+    use crate::{
+        scene::Scene,
+        shapes::{PrimShape, Shape},
+    };
 
-    let ray = Ray::new(Point3::new(0.0, 0.0, -5.0), Vector3::new(0.0, 0.0, 1.0), 1.0);
+    let ray = Ray::new(
+        Point3::new(0.0, 0.0, -5.0),
+        Vector3::new(0.0, 0.0, 1.0),
+        1.0,
+    );
 
     let mut scene = Scene::new();
-    let sphere = scene.add(Shape::PrimShape{ shape: PrimShape::Sphere });
+    let sphere = scene.add(Shape::PrimShape {
+        shape: PrimShape::Sphere,
+    });
     let scaled = scene.add(Shape::uniform_scaling(2.0, sphere));
     let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere));
 
     // test an intersection
-    let mut result = ray.march(4, |pt| scene.sdf_from(sphere, pt)).expect("Failed to march ray");
+    let mut result = ray
+        .march(4, |pt| scene.sdf_from(sphere, pt))
+        .expect("Failed to march ray");
     assert_eq_f32!(result.distance, 4.0);
 
-    result = ray.march(4, |pt| scene.sdf_from(scaled, pt)).expect("Failed to march ray");
+    result = ray
+        .march(4, |pt| scene.sdf_from(scaled, pt))
+        .expect("Failed to march ray");
     assert_eq_f32!(result.distance, 3.0);
 
     // test a miss

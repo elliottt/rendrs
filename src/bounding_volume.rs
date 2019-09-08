@@ -1,9 +1,8 @@
+use nalgebra::{Matrix4, Point3, Vector3};
 
-use nalgebra::{Point3,Matrix4,Vector3};
+use crate::{ray::Ray, utils};
 
-use crate::{utils,ray::Ray};
-
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AABB {
     pub min: Point3<f32>,
     pub max: Point3<f32>,
@@ -12,7 +11,7 @@ pub struct AABB {
 impl AABB {
     /// Construct an AABB with the given min and max points.
     pub fn new(min: Point3<f32>, max: Point3<f32>) -> Self {
-        AABB{ min, max }
+        AABB { min, max }
     }
 
     /// Construct an AABB that contains these two points.
@@ -24,12 +23,15 @@ impl AABB {
 
     /// Construct an AABB that encloses a single point.
     pub fn from_point(point: Point3<f32>) -> Self {
-        AABB{ min: point.clone(), max: point.clone() }
+        AABB {
+            min: point.clone(),
+            max: point.clone(),
+        }
     }
 
     /// Construct an AABB that encloses all points.
     pub fn max() -> Self {
-        AABB{
+        AABB {
             min: Point3::new(std::f32::MIN, std::f32::MIN, std::f32::MIN),
             max: Point3::new(std::f32::MAX, std::f32::MAX, std::f32::MAX),
         }
@@ -161,7 +163,7 @@ impl AABB {
         self.min <= point && point <= self.max
     }
 
-    pub fn max_axis(&self) -> (Axis,f32) {
+    pub fn max_axis(&self) -> (Axis, f32) {
         let diff = self.max - self.min;
         if diff.x > diff.y {
             if diff.x > diff.z {
@@ -179,10 +181,14 @@ impl AABB {
     }
 }
 
-#[derive(Clone,Debug)]
-pub enum Axis { X, Y, Z }
+#[derive(Clone, Debug)]
+pub enum Axis {
+    X,
+    Y,
+    Z,
+}
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub enum BVHNodeType {
     Internal {
         right_offset: usize,
@@ -194,7 +200,7 @@ pub enum BVHNodeType {
     },
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct BVHNode {
     node_type: BVHNodeType,
     bounds: AABB,
@@ -202,15 +208,18 @@ pub struct BVHNode {
 
 impl BVHNode {
     pub fn internal(bounds: AABB, axis: Axis) -> Self {
-        BVHNode{
-            node_type: BVHNodeType::Internal{ right_offset: 0, axis },
+        BVHNode {
+            node_type: BVHNodeType::Internal {
+                right_offset: 0,
+                axis,
+            },
             bounds,
         }
     }
 
     pub fn leaf(bounds: AABB, values_start: usize, num_nodes: usize) -> Self {
-        BVHNode{
-            node_type: BVHNodeType::Leaf{
+        BVHNode {
+            node_type: BVHNodeType::Leaf {
                 values_start,
                 num_nodes,
             },
@@ -219,19 +228,25 @@ impl BVHNode {
     }
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct BVH<T> {
     nodes: Vec<BVHNode>,
     values: Vec<T>,
 }
 
-impl<T> BVH<T> where T: Clone {
-
+impl<T> BVH<T>
+where
+    T: Clone,
+{
     pub fn from_nodes<GetBound>(mut values: Vec<T>, get_bound: &GetBound) -> Self
-        where GetBound: Fn(&T) -> AABB
+    where
+        GetBound: Fn(&T) -> AABB,
     {
         if values.is_empty() {
-            BVH { nodes: Vec::new(), values }
+            BVH {
+                nodes: Vec::new(),
+                values,
+            }
         } else {
             let mut nodes = Vec::new();
             Self::add_nodes(&mut nodes, &mut values, 0, get_bound);
@@ -254,7 +269,8 @@ impl<T> BVH<T> where T: Clone {
         start: usize,
         get_bound: &GetBound,
     ) -> usize
-        where GetBound: Fn(&T) -> AABB
+    where
+        GetBound: Fn(&T) -> AABB,
     {
         let mut bounds = get_bound(&values[0]).clone();
         let mut centroid_bound = AABB::from_point(bounds.centroid());
@@ -271,7 +287,7 @@ impl<T> BVH<T> where T: Clone {
         }
 
         // partition the values about the mid-point of the centroid bound
-        let (axis,mid) = centroid_bound.max_axis();
+        let (axis, mid) = centroid_bound.max_axis();
         let pivot_index = utils::partition_by(values, |value| {
             let bound = get_bound(&value);
             match axis {
@@ -279,7 +295,8 @@ impl<T> BVH<T> where T: Clone {
                 Axis::Y => bound.centroid().y < mid,
                 Axis::Z => bound.centroid().z < mid,
             }
-        }).expect("Invalid centroid bound");
+        })
+        .expect("Invalid centroid bound");
 
         if pivot_index == 0 {
             panic!("bad mid point: {:?}", centroid_bound)
@@ -288,10 +305,19 @@ impl<T> BVH<T> where T: Clone {
         let nid = Self::add_node(nodes, BVHNode::internal(bounds, axis));
 
         let _loff = Self::add_nodes(nodes, &mut values[0..pivot_index], start, get_bound);
-        let roff = Self::add_nodes(nodes, &mut values[pivot_index..], start + pivot_index, get_bound);
+        let roff = Self::add_nodes(
+            nodes,
+            &mut values[pivot_index..],
+            start + pivot_index,
+            get_bound,
+        );
 
-        let BVHNode{ node_type, .. } = Self::get_node_mut(nodes, nid);
-        if let BVHNodeType::Internal{ ref mut right_offset, .. } = node_type {
+        let BVHNode { node_type, .. } = Self::get_node_mut(nodes, nid);
+        if let BVHNodeType::Internal {
+            ref mut right_offset,
+            ..
+        } = node_type
+        {
             *right_offset = roff;
         }
 
@@ -313,7 +339,8 @@ impl<T> BVH<T> where T: Clone {
     }
 
     pub fn intersect_with<Hit>(&self, ray: &Ray, mut handle_hit: Hit)
-        where Hit: FnMut(&T) -> ()
+    where
+        Hit: FnMut(&T) -> (),
     {
         if !self.nodes.is_empty() {
             self.intersect_rec(ray, 0, &mut handle_hit)
@@ -321,21 +348,25 @@ impl<T> BVH<T> where T: Clone {
     }
 
     fn intersect_rec<Hit>(&self, ray: &Ray, offset: usize, handle_hit: &mut Hit)
-        where Hit: FnMut(&T) -> ()
+    where
+        Hit: FnMut(&T) -> (),
     {
         let node = unsafe { self.nodes.get_unchecked(offset) };
         if ray.intersects(&node.bounds) {
             match node.node_type {
-                BVHNodeType::Internal{ right_offset, .. } => {
-                    self.intersect_rec(ray, offset+1, handle_hit);
+                BVHNodeType::Internal { right_offset, .. } => {
+                    self.intersect_rec(ray, offset + 1, handle_hit);
                     self.intersect_rec(ray, right_offset, handle_hit);
-                },
+                }
 
-                BVHNodeType::Leaf{ values_start, num_nodes } => {
+                BVHNodeType::Leaf {
+                    values_start,
+                    num_nodes,
+                } => {
                     for value in self.values[values_start..].iter().take(num_nodes) {
                         handle_hit(&value)
                     }
-                },
+                }
             }
         }
     }
@@ -344,44 +375,58 @@ impl<T> BVH<T> where T: Clone {
 #[test]
 fn test_bvh() {
     {
-        let nodes = vec![
-            ( AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()), 1 ),
-        ];
+        let nodes = vec![(AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()), 1)];
 
-        let bvh = BVH::from_nodes(nodes, &|(a,_)| a.clone());
+        let bvh = BVH::from_nodes(nodes, &|(a, _)| a.clone());
         assert_eq!(
             bvh.bounding_volume(),
             Some(&AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()))
         );
 
-        let int = bvh.intersect(&Ray::new([0.0, 0.0, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        let int = bvh.intersect(&Ray::new(
+            [0.0, 0.0, -1.0].into(),
+            [0.0, 0.0, 1.0].into(),
+            1.0,
+        ));
         assert_eq!(int.len(), 0);
 
-        let int = bvh.intersect(&Ray::new([1.5, 1.5, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        let int = bvh.intersect(&Ray::new(
+            [1.5, 1.5, -1.0].into(),
+            [0.0, 0.0, 1.0].into(),
+            1.0,
+        ));
         assert_eq!(int.len(), 1);
     }
 
     {
         let nodes = vec![
-            ( AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()), 1 ),
-            ( AABB::new([3.0, 3.0, 1.0].into(), [4.0, 4.0, 2.0].into()), 2 ),
-            ( AABB::new([0.5, 0.5, 1.0].into(), [2.0, 2.0, 2.0].into()), 3 ),
+            (AABB::new([1.0, 1.0, 1.0].into(), [2.0, 2.0, 2.0].into()), 1),
+            (AABB::new([3.0, 3.0, 1.0].into(), [4.0, 4.0, 2.0].into()), 2),
+            (AABB::new([0.5, 0.5, 1.0].into(), [2.0, 2.0, 2.0].into()), 3),
         ];
 
-        let bvh = BVH::from_nodes(nodes, &|(a,_)| a.clone());
+        let bvh = BVH::from_nodes(nodes, &|(a, _)| a.clone());
         assert_eq!(
             bvh.bounding_volume(),
             Some(&AABB::new([0.5, 0.5, 1.0].into(), [4.0, 4.0, 2.0].into()))
         );
 
-        let int = bvh.intersect(&Ray::new([0.0, 0.0, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        let int = bvh.intersect(&Ray::new(
+            [0.0, 0.0, -1.0].into(),
+            [0.0, 0.0, 1.0].into(),
+            1.0,
+        ));
         assert_eq!(int.len(), 0);
 
-        let int = bvh.intersect(&Ray::new([1.5, 1.5, -1.0].into(), [0.0, 0.0, 1.0].into(), 1.0));
+        let int = bvh.intersect(&Ray::new(
+            [1.5, 1.5, -1.0].into(),
+            [0.0, 0.0, 1.0].into(),
+            1.0,
+        ));
         assert_eq!(int.len(), 2);
 
-        let mut ids: Vec<isize> = int.iter().map(|(_,b)| *b).collect();
+        let mut ids: Vec<isize> = int.iter().map(|(_, b)| *b).collect();
         ids.sort();
-        assert_eq!(ids, vec![1,3]);
+        assert_eq!(ids, vec![1, 3]);
     }
 }

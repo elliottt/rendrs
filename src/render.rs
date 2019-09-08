@@ -1,27 +1,26 @@
-
 use std::{
     borrow::Cow,
     sync::{
+        mpsc::{channel, Receiver, Sender},
         Arc,
-        mpsc::{channel,Sender,Receiver},
     },
     thread,
 };
 
-use nalgebra::{Point3,Vector3};
+use nalgebra::{Point3, Vector3};
 use pbr::ProgressBar;
 
 use crate::{
     camera::Camera,
-    canvas::{Canvas,Color},
-    material::{Light,Material},
-    pattern::{Pattern},
-    ray::{reflect,Ray,MarchResult},
+    canvas::{Canvas, Color},
+    material::{Light, Material},
+    pattern::Pattern,
+    ray::{reflect, MarchResult, Ray},
     scene::Scene,
     shapes::ShapeId,
 };
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum DebugMode {
     Normals,
     Steps,
@@ -41,7 +40,7 @@ impl Default for ConfigBuilder {
                 jobs: 1,
                 debug_mode: None,
                 max_reflections: 10,
-            }
+            },
         }
     }
 }
@@ -80,7 +79,7 @@ impl ConfigBuilder {
     pub fn build(self) -> Arc<Config> {
         Arc::new(self.config)
     }
-} 
+}
 
 #[derive(Debug)]
 pub struct Config {
@@ -98,8 +97,7 @@ pub struct RenderedRow {
 }
 
 pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Receiver<RenderedRow> {
-
-    let (send,recv) = channel();
+    let (send, recv) = channel();
 
     // start jobs
     for i in 0..cfg.jobs {
@@ -108,16 +106,15 @@ pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Recei
         let camera_copy = camera.clone();
         let cfg_copy = cfg.clone();
         let send_copy = send.clone();
-        thread::spawn(move || {
-            match cfg_copy.debug_mode {
-                None =>
-                    render_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
+        thread::spawn(move || match cfg_copy.debug_mode {
+            None => render_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
 
-                Some(DebugMode::Normals) =>
-                    render_normals_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
+            Some(DebugMode::Normals) => {
+                render_normals_job(scene_copy, camera_copy, cfg_copy, i, send_copy)
+            }
 
-                Some(DebugMode::Steps) =>
-                    render_steps_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
+            Some(DebugMode::Steps) => {
+                render_steps_job(scene_copy, camera_copy, cfg_copy, i, send_copy)
             }
         });
     }
@@ -130,13 +127,14 @@ fn render_body<Body>(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     send: Sender<RenderedRow>,
-    mut body: Body
-) where Body: FnMut(Ray) -> Color,
+    mut body: Body,
+) where
+    Body: FnMut(Ray) -> Color,
 {
     let sample_frac = camera.sample_fraction();
-    for y in (idx .. cfg.height).step_by(cfg.jobs) {
+    for y in (idx..cfg.height).step_by(cfg.jobs) {
         let mut row = Vec::with_capacity(cfg.width);
-        for x in 0 .. cfg.width {
+        for x in 0..cfg.width {
             let mut pixel = Color::black();
 
             for ray in camera.rays_for_pixel(x, y) {
@@ -145,9 +143,9 @@ fn render_body<Body>(
 
             row.push(pixel);
         }
-        send.send(RenderedRow{ y, row }).expect("Failed to send row!");
+        send.send(RenderedRow { y, row })
+            .expect("Failed to send row!");
     }
-
 }
 
 fn render_job(
@@ -155,17 +153,16 @@ fn render_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: Sender<RenderedRow>) {
-
+    send: Sender<RenderedRow>,
+) {
     let world = World::new(cfg.clone(), scene);
 
     let containers = Containers::new();
     let cow = Cow::Borrowed(&containers);
 
     render_body(idx, camera, cfg, send, |ray| {
-        find_hit(&world, &cow, &ray).map_or_else(
-            || Color::black(),
-            |hit| shade_hit(&world, &cow, &hit, 0))
+        find_hit(&world, &cow, &ray)
+            .map_or_else(|| Color::black(), |hit| shade_hit(&world, &cow, &hit, 0))
     });
 }
 
@@ -178,31 +175,37 @@ struct World {
 impl World {
     fn new(cfg: Arc<Config>, scene: Arc<Scene>) -> Self {
         let light_weight = 1.0 / (scene.num_lights() as f32);
-        World{ cfg, scene, light_weight }
+        World {
+            cfg,
+            scene,
+            light_weight,
+        }
     }
 }
 
 /// Objects that a ray is within during refraction processing.
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 struct Container {
     object: ShapeId,
     refractive_index: f32,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 struct Containers {
     containers: Vec<Container>,
 }
 
 impl Containers {
     fn new() -> Self {
-        Containers{ containers: Vec::new() }
+        Containers {
+            containers: Vec::new(),
+        }
     }
 
     fn refractive_index(&self) -> f32 {
-        self.containers.last().map_or_else(
-            || 1.0,
-            |container| container.refractive_index)
+        self.containers
+            .last()
+            .map_or_else(|| 1.0, |container| container.refractive_index)
     }
 
     /// Returns `-1.0` when the ray originated from within another object, or 1.0 when it is
@@ -217,36 +220,35 @@ impl Containers {
 
     /// Determine the n1/n2 refractive indices for a hit involving a transparent object, and return
     /// a boolean that indicates if the ray is leaving the object.
-    fn process_hit(&mut self, object: ShapeId, refractive_index: f32) -> (bool,f32,f32) {
+    fn process_hit(&mut self, object: ShapeId, refractive_index: f32) -> (bool, f32, f32) {
         let n1 = self.refractive_index();
 
         let mut leaving = false;
 
         // if the object is already in the set, find its index.
-        let existing_ix = self.containers
-            .iter()
-            .enumerate()
-            .find_map( |arg| {
-                if arg.1.object == object {
-                    leaving = true;
-                    Some(arg.0)
-                } else {
-                    None
-                }
-            });
+        let existing_ix = self.containers.iter().enumerate().find_map(|arg| {
+            if arg.1.object == object {
+                leaving = true;
+                Some(arg.0)
+            } else {
+                None
+            }
+        });
 
         match existing_ix {
             Some(ix) => {
                 // the object exists, so remove it.
                 self.containers.remove(ix);
-            },
-            None =>
-                self.containers.push(Container{ object, refractive_index }),
+            }
+            None => self.containers.push(Container {
+                object,
+                refractive_index,
+            }),
         }
 
         let n2 = self.refractive_index();
 
-        return (leaving,n1,n2)
+        return (leaving, n1, n2);
     }
 }
 
@@ -272,21 +274,22 @@ impl<'scene, 'cont> Hit<'scene, 'cont> {
         ray: &Ray,
         res: MarchResult,
     ) -> Hit<'a, 'b> {
-
         let material = world.scene.get_material(res.material);
 
         let mut containers = containers.clone();
 
-        let (leaving,n1,n2) = if material.transparent > 0.0 {
-            containers.to_mut().process_hit(res.object_id, material.refractive_index)
+        let (leaving, n1, n2) = if material.transparent > 0.0 {
+            containers
+                .to_mut()
+                .process_hit(res.object_id, material.refractive_index)
         } else {
             let val = containers.refractive_index();
-            (false,val,val)
+            (false, val, val)
         };
 
         let normal = res.normal(|pt| world.scene.sdf(pt));
 
-        Hit{
+        Hit {
             object_space_point: res.object_space_point,
             world_space_point: res.final_ray.origin,
             normal,
@@ -318,12 +321,11 @@ impl<'scene, 'cont> Hit<'scene, 'cont> {
 
     fn refraction_ray(&self, containers: &Containers) -> Option<Ray> {
         // the normal must point inside when the refraction ray originated within the object
-        let refrac_normal =
-            if self.leaving {
-                -self.normal
-            } else {
-                self.normal
-            };
+        let refrac_normal = if self.leaving {
+            -self.normal
+        } else {
+            self.normal
+        };
 
         let n_ratio = self.n1 / self.n2;
         let cos_i = self.eyev.dot(&refrac_normal);
@@ -333,7 +335,8 @@ impl<'scene, 'cont> Hit<'scene, 'cont> {
             None
         } else {
             let cos_t = (1.0 - sin2_t).sqrt();
-            let direction = (refrac_normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio).normalize();
+            let direction =
+                (refrac_normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio).normalize();
 
             let origin = self.world_space_point + direction * 0.01;
             Some(Ray::new(origin, direction, containers.determine_sign()))
@@ -365,11 +368,27 @@ fn schlick(eyev: &Vector3<f32>, normal: &Vector3<f32>, n1: f32, n2: f32) -> f32 
 
 #[test]
 fn test_schlick() {
-    let reflectance = schlick(&Vector3::new(0.0, 0.0, -1.0), &Vector3::new(0.0, 0.0, -1.0), 1.0, 1.5);
-    assert!(reflectance - 0.04 < 0.001, format!("{} != {}", reflectance, 0.04));
+    let reflectance = schlick(
+        &Vector3::new(0.0, 0.0, -1.0),
+        &Vector3::new(0.0, 0.0, -1.0),
+        1.0,
+        1.5,
+    );
+    assert!(
+        reflectance - 0.04 < 0.001,
+        format!("{} != {}", reflectance, 0.04)
+    );
 
-    let reflectance = schlick(&Vector3::new(0.0, 0.0, -1.0), &Vector3::new(1.0, 0.0, 0.0), 1.0, 1.5);
-    assert!(reflectance - 1.0 < 0.001, format!("{} != {}", reflectance, 1.0));
+    let reflectance = schlick(
+        &Vector3::new(0.0, 0.0, -1.0),
+        &Vector3::new(1.0, 0.0, 0.0),
+        1.0,
+        1.5,
+    );
+    assert!(
+        reflectance - 1.0 < 0.001,
+        format!("{} != {}", reflectance, 1.0)
+    );
 }
 
 /// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
@@ -377,7 +396,7 @@ fn test_schlick() {
 fn find_hit<'scene, 'cont>(
     world: &'scene World,
     containers: &Cow<'cont, Containers>,
-    ray: &Ray
+    ray: &Ray,
 ) -> Option<Hit<'scene, 'cont>> {
     ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
         .map(|res| Hit::new(world, containers, ray, res))
@@ -390,15 +409,21 @@ fn shade_hit(
     hit: &Hit,
     reflection_count: usize,
 ) -> Color {
-    let color = hit.pattern.color_at(&|pid| world.scene.get_pattern(pid), &hit.object_space_point);
+    let color = hit
+        .pattern
+        .color_at(&|pid| world.scene.get_pattern(pid), &hit.object_space_point);
 
     let mut output = Color::black();
 
     for light in world.scene.iter_lights() {
         output += hit.material.lighting(
-                light, &color, &hit.world_space_point,
-                &hit.eyev, &hit.normal, light_visible(&world, &hit, light)
-            ) * world.light_weight;
+            light,
+            &color,
+            &hit.world_space_point,
+            &hit.eyev,
+            &hit.normal,
+            light_visible(&world, &hit, light),
+        ) * world.light_weight;
     }
 
     if reflection_count < world.cfg.max_reflections {
@@ -430,7 +455,8 @@ fn reflected_color(
         let ray = hit.reflection_ray(containers);
         find_hit(world, containers, &ray).map_or_else(
             || Color::black(),
-            |refl_hit| shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective)
+            |refl_hit| shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective,
+        )
     }
 }
 
@@ -439,7 +465,7 @@ fn refracted_color(
     world: &World,
     containers: &Cow<Containers>,
     hit: &Hit,
-    reflection_count: usize
+    reflection_count: usize,
 ) -> Color {
     let transparent = hit.material.transparent;
     if transparent <= 0.0 {
@@ -449,10 +475,12 @@ fn refracted_color(
             .and_then(|ray| find_hit(world, &containers, &ray))
             .map_or_else(
                 || Color::black(),
-                |refr_hit| shade_hit(world, &containers, &refr_hit, reflection_count + 1) * transparent)
+                |refr_hit| {
+                    shade_hit(world, &containers, &refr_hit, reflection_count + 1) * transparent
+                },
+            )
     }
 }
-
 
 /// A predicate that tests whether or not a light is visible from a hit in the scene.
 ///
@@ -474,8 +502,8 @@ fn render_normals_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: Sender<RenderedRow>) {
-
+    send: Sender<RenderedRow>,
+) {
     render_body(idx, camera, cfg.clone(), send, |ray| {
         let mut pixel = Color::black();
         if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
@@ -487,7 +515,6 @@ fn render_normals_job(
         }
         pixel
     });
-
 }
 
 fn render_steps_job(
@@ -495,8 +522,8 @@ fn render_steps_job(
     camera: Arc<Camera>,
     cfg: Arc<Config>,
     idx: usize,
-    send: Sender<RenderedRow>) {
-
+    send: Sender<RenderedRow>,
+) {
     let step_max = cfg.max_steps as f32;
 
     render_body(idx, camera, cfg.clone(), send, |ray| {
@@ -508,7 +535,6 @@ fn render_steps_job(
 
         pixel
     });
-
 }
 
 pub fn write_canvas(cfg: Arc<Config>, recv: Receiver<RenderedRow>) -> Canvas {
@@ -517,7 +543,7 @@ pub fn write_canvas(cfg: Arc<Config>, recv: Receiver<RenderedRow>) -> Canvas {
     let expected = cfg.height;
     let mut pb = ProgressBar::new(expected as u64);
 
-    for _ in 0 .. expected {
+    for _ in 0..expected {
         let row = recv.recv().expect("Failed to read all rows!");
         canvas.blit_row(row.y, row.row);
         pb.inc();
