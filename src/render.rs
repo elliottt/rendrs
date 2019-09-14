@@ -158,11 +158,10 @@ fn render_job(
     let world = World::new(cfg.clone(), scene);
 
     let containers = Containers::new();
-    let cow = Cow::Borrowed(&containers);
 
     render_body(idx, camera, cfg, send, |ray| {
-        find_hit(&world, &cow, &ray)
-            .map_or_else(|| Color::black(), |hit| shade_hit(&world, &cow, &hit, 0))
+        find_hit(&world, &containers, &ray)
+            .map_or_else(Color::black, |hit| shade_hit(&world, &containers, &hit, 0))
     });
 }
 
@@ -248,7 +247,7 @@ impl Containers {
 
         let n2 = self.refractive_index();
 
-        return (leaving, n1, n2);
+        (leaving, n1, n2)
     }
 }
 
@@ -270,13 +269,13 @@ struct Hit<'scene, 'cont> {
 impl<'scene, 'cont> Hit<'scene, 'cont> {
     fn new<'a, 'b>(
         world: &'a World,
-        containers: &Cow<'b, Containers>,
+        containers: &'b Containers,
         ray: &Ray,
         res: MarchResult,
     ) -> Hit<'a, 'b> {
         let material = world.scene.get_material(res.material);
 
-        let mut containers = containers.clone();
+        let mut containers = Cow::Borrowed(containers);
 
         let (leaving, n1, n2) = if material.transparent > 0.0 {
             containers
@@ -300,7 +299,7 @@ impl<'scene, 'cont> Hit<'scene, 'cont> {
             // the direction towards the eye
             eyev: -ray.direction,
 
-            material: material,
+            material,
             pattern: world.scene.get_pattern(res.pattern),
 
             // refraction information
@@ -316,7 +315,7 @@ impl<'scene, 'cont> Hit<'scene, 'cont> {
     fn reflection_ray(&self, containers: &Containers) -> Ray {
         // start the origin along the ray a bit
         let origin = self.world_space_point + self.reflectv * 0.01;
-        Ray::new(origin, self.reflectv.clone(), containers.determine_sign())
+        Ray::new(origin, self.reflectv, containers.determine_sign())
     }
 
     fn refraction_ray(&self, containers: &Containers) -> Option<Ray> {
@@ -395,7 +394,7 @@ fn test_schlick() {
 /// `None`.
 fn find_hit<'scene, 'cont>(
     world: &'scene World,
-    containers: &Cow<'cont, Containers>,
+    containers: &'cont Containers,
     ray: &Ray,
 ) -> Option<Hit<'scene, 'cont>> {
     ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
@@ -403,12 +402,7 @@ fn find_hit<'scene, 'cont>(
 }
 
 /// Shade the color according to the material properties, and light.
-fn shade_hit(
-    world: &World,
-    containers: &Cow<Containers>,
-    hit: &Hit,
-    reflection_count: usize,
-) -> Color {
+fn shade_hit(world: &World, containers: &Containers, hit: &Hit, reflection_count: usize) -> Color {
     let color = hit
         .pattern
         .color_at(&|pid| world.scene.get_pattern(pid), &hit.object_space_point);
@@ -444,7 +438,7 @@ fn shade_hit(
 /// Compute the color from a reflection.
 fn reflected_color(
     world: &World,
-    containers: &Cow<Containers>,
+    containers: &Containers,
     hit: &Hit,
     reflection_count: usize,
 ) -> Color {
@@ -453,17 +447,16 @@ fn reflected_color(
         Color::black()
     } else {
         let ray = hit.reflection_ray(containers);
-        find_hit(world, containers, &ray).map_or_else(
-            || Color::black(),
-            |refl_hit| shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective,
-        )
+        find_hit(world, containers, &ray).map_or_else(Color::black, |refl_hit| {
+            shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective
+        })
     }
 }
 
 /// Compute the additional color due to refraction.
 fn refracted_color(
     world: &World,
-    containers: &Cow<Containers>,
+    containers: &Containers,
     hit: &Hit,
     reflection_count: usize,
 ) -> Color {
@@ -473,12 +466,9 @@ fn refracted_color(
     } else {
         hit.refraction_ray(containers)
             .and_then(|ray| find_hit(world, &containers, &ray))
-            .map_or_else(
-                || Color::black(),
-                |refr_hit| {
-                    shade_hit(world, &containers, &refr_hit, reflection_count + 1) * transparent
-                },
-            )
+            .map_or_else(Color::black, |refr_hit| {
+                shade_hit(world, &containers, &refr_hit, reflection_count + 1) * transparent
+            })
     }
 }
 

@@ -6,7 +6,7 @@ use failure::{format_err, Error};
 use nalgebra::Point3;
 use std::io::BufRead;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Obj {
     vertices: Vec<Point3<f32>>,
     faces: Vec<[usize; 3]>,

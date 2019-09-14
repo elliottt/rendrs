@@ -6,7 +6,7 @@ use crate::{
     shapes::{Shape, ShapeId, Shapes},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Scene {
     shapes: Shapes,
 
@@ -87,14 +87,14 @@ impl Scene {
 
     pub fn sdf(&self, ray: &Ray) -> SDFResult {
         self.root
-            .map(|root| self.sdf_from(root.clone(), ray))
+            .map(|root| self.sdf_from(root, ray))
             .expect("empty world")
     }
 
     pub fn sdf_from(&self, root: ShapeId, ray: &Ray) -> SDFResult {
         let mut result = SDFResult {
             distance: std::f32::INFINITY,
-            object_space_point: ray.origin.clone(),
+            object_space_point: ray.origin,
             object_id: root,
             material: self.default_material,
             pattern: self.default_pattern,

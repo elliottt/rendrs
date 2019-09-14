@@ -9,7 +9,7 @@ use crate::scene::Scene;
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ShapeId(usize);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Shapes {
     shapes: Vec<Shape>,
 }
@@ -136,34 +136,13 @@ impl PrimShape {
         let ac = a - c;
         let normal = ba.cross(&ac);
         PrimShape::Triangle {
-            a: a.clone(),
-            b: b.clone(),
-            c: c.clone(),
+            a: *a,
+            b: *b,
+            c: *c,
             ba,
             cb,
             ac,
             normal,
-        }
-    }
-
-    /// Construct a triangle with an explicit normal.
-    pub fn triangle_with_normal(
-        a: &Point3<f32>,
-        b: &Point3<f32>,
-        c: &Point3<f32>,
-        normal: &Vector3<f32>,
-    ) -> Self {
-        let ba = b - a;
-        let cb = c - b;
-        let ac = a - c;
-        PrimShape::Triangle {
-            a: a.clone(),
-            b: b.clone(),
-            c: c.clone(),
-            normal: normal.clone(),
-            ba,
-            cb,
-            ac,
         }
     }
 
@@ -265,7 +244,7 @@ impl Shape {
             Shape::PrimShape { shape } => {
                 result.object_id = self_id;
                 result.distance = shape.sdf(ray);
-                result.object_space_point = ray.origin.clone();
+                result.object_space_point = ray.origin;
             }
 
             // A group differs from a union in that the individual objects hit by the SDF are
@@ -299,7 +278,7 @@ impl Shape {
                 result.object_id = self_id;
 
                 // Make texturing relative to the union, not the individual object
-                result.object_space_point = ray.origin.clone();
+                result.object_space_point = ray.origin;
             }
 
             Shape::SmoothUnion { k, first, second } => {
@@ -321,7 +300,7 @@ impl Shape {
                 result.distance = mix(tmp.distance, result.distance, h) - k * h * (1.0 - h);
 
                 // Make texturing relative to the union, not the individual object
-                result.object_space_point = ray.origin.clone();
+                result.object_space_point = ray.origin;
             }
 
             Shape::Subtract { first, second } => {
@@ -384,7 +363,7 @@ impl Shape {
                 result.object_id = self_id;
 
                 // Make texturing relative to the intersection, not the individual object
-                result.object_space_point = ray.origin.clone();
+                result.object_space_point = ray.origin;
             }
 
             Shape::Transform {
@@ -466,7 +445,7 @@ impl Shape {
             .try_inverse()
             .expect("Unable to invert transformation matrix");
         Shape::Transform {
-            matrix: matrix.clone(),
+            matrix: *matrix,
             inverse,
             scale_factor,
             node,

@@ -9,10 +9,10 @@ pub struct Light {
     pub intensity: Color,
 }
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Default, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct MaterialId(usize);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Materials {
     materials: Vec<Material>,
 }

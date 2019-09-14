@@ -95,8 +95,8 @@ impl Add for &Color {
 
     fn add(self, rhs: Self) -> Self::Output {
         let mut data = [0.0; 3];
-        for i in 0..3 {
-            data[i] = self.data[i] + rhs.data[i];
+        for ((part,val),rval) in data.iter_mut().zip(&self.data).zip(&rhs.data) {
+            *part = val + rval;
         }
 
         Color { data }
@@ -116,8 +116,8 @@ impl Mul for &Color {
 
     fn mul(self, rhs: Self) -> Self::Output {
         let mut data = [0.0; 3];
-        for i in 0..3 {
-            data[i] = self.data[i] * rhs.data[i];
+        for ((part,val),rval) in data.iter_mut().zip(&self.data).zip(&rhs.data) {
+            *part = val * rval;
         }
 
         Color { data }
@@ -137,8 +137,8 @@ impl Mul<f32> for &Color {
 
     fn mul(self, rhs: f32) -> Self::Output {
         let mut data = [0.0; 3];
-        for i in 0..3 {
-            data[i] = self.data[i] * rhs;
+        for (part,val) in data.iter_mut().zip(&self.data) {
+            *part = val * rhs;
         }
 
         Color { data }
@@ -183,7 +183,7 @@ impl Canvas {
             .pixels
             .get_mut(start..start + self.width)
             .expect("Missing row");
-        for (pixel, color) in slice.into_iter().zip(row) {
+        for (pixel, color) in slice.iter_mut().zip(row) {
             *pixel = color;
         }
     }

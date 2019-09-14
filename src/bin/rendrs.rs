@@ -16,7 +16,7 @@ use rendrs::{
 fn parse_usize(matches: &ArgMatches, label: &str) -> Result<usize, Error> {
     let val = matches
         .value_of(label)
-        .expect(&format!("Is `{}` missing a default?", label))
+        .unwrap_or_else(|| panic!("Is `{}` missing a default?", label))
         .parse()?;
     Ok(val)
 }

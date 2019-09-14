@@ -24,8 +24,8 @@ impl AABB {
     /// Construct an AABB that encloses a single point.
     pub fn from_point(point: Point3<f32>) -> Self {
         AABB {
-            min: point.clone(),
-            max: point.clone(),
+            min: point,
+            max: point,
         }
     }
 
@@ -171,12 +171,10 @@ impl AABB {
             } else {
                 (Axis::Z, self.min.z + diff.z / 2.0)
             }
+        } else if diff.y > diff.z {
+            (Axis::Y, self.min.y + diff.y / 2.0)
         } else {
-            if diff.y > diff.z {
-                (Axis::Y, self.min.y + diff.y / 2.0)
-            } else {
-                (Axis::Z, self.min.z + diff.z / 2.0)
-            }
+            (Axis::Z, self.min.z + diff.z / 2.0)
         }
     }
 }
@@ -324,7 +322,7 @@ where
         nid
     }
 
-    pub fn bounding_volume<'a>(&'a self) -> Option<&'a AABB> {
+    pub fn bounding_volume(&self) -> Option<&AABB> {
         if self.nodes.is_empty() {
             None
         } else {

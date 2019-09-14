@@ -42,7 +42,7 @@ struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn new<'b>(focus: &'b Value) -> Context<'b> {
+    fn new(focus: &Value) -> Context {
         Context { focus }
     }
 
@@ -61,10 +61,10 @@ impl<'a> Context<'a> {
     }
 
     fn as_sequence(&self) -> Result<impl Iterator<Item = Context<'a>>, Error> {
-        let elems = self.focus.as_sequence().map_or_else(
-            || Err(format_err!("expected a sequence")),
-            |elems| Ok(elems),
-        )?;
+        let elems = self
+            .focus
+            .as_sequence()
+            .map_or_else(|| Err(format_err!("expected a sequence")), Ok)?;
         Ok(elems.iter().map(|elem| Context::new(elem)))
     }
 

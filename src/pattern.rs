@@ -2,10 +2,10 @@ use nalgebra::{Matrix4, Point3, Vector2};
 
 use crate::canvas::Color;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PatternId(usize);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Patterns {
     patterns: Vec<Pattern>,
 }
