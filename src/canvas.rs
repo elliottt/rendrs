@@ -1,6 +1,7 @@
 use image::{ImageBuffer, Rgb};
 use std::ops::{Add, AddAssign, Mul};
 use std::path::Path;
+use std::iter::Sum;
 
 #[derive(Clone, Debug, Default)]
 pub struct Color {
@@ -152,6 +153,17 @@ impl Mul<f32> for Color {
         &self * rhs
     }
 }
+
+impl Sum for Color {
+    fn sum<I: Iterator<Item = Color>>(iter: I) -> Self {
+        let mut output = Color::black();
+        for color in iter {
+            output += color;
+        }
+        output
+    }
+}
+
 pub struct Canvas {
     pub width: usize,
     pub height: usize,

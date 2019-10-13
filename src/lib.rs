@@ -1,6 +1,8 @@
+extern crate crossbeam_channel;
 extern crate failure;
 extern crate image;
 extern crate nalgebra;
+extern crate num_cpus;
 extern crate serde;
 extern crate serde_yaml;
 
@@ -8,6 +10,7 @@ pub mod bounding_volume;
 pub mod camera;
 pub mod canvas;
 pub mod material;
+pub mod integrator;
 pub mod obj;
 pub mod pattern;
 pub mod ray;
