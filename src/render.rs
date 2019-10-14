@@ -1,7 +1,12 @@
 use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use std::{sync::Arc, thread};
 
-use crate::{camera::Camera, canvas::{Canvas,Color}, integrator::Integrator, scene::Scene};
+use crate::{
+    camera::Camera,
+    canvas::{Canvas, Color},
+    integrator::Integrator,
+    scene::Scene,
+};
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -151,7 +156,7 @@ fn render_worker<I: ?Sized + Integrator>(
                 .sum();
             values.push(color);
         }
-        output.send(Output {tile, values}).unwrap();
+        output.send(Output { tile, values }).unwrap();
     }
 }
 
@@ -164,7 +169,7 @@ pub fn write_canvas(job: RenderJob) -> Canvas {
 
     for _ in 0..job.expected_tiles {
         let out = job.recv.recv().expect("Failed to read all pixels!");
-        for ((x,y),value) in out.tile.iter().zip(out.values.iter()) {
+        for ((x, y), value) in out.tile.iter().zip(out.values.iter()) {
             let pixel = canvas.get_mut(x, y).expect("Invalid pixel!");
             *pixel = value.clone();
         }
@@ -173,4 +178,19 @@ pub fn write_canvas(job: RenderJob) -> Canvas {
     pb.finish_print("done");
 
     canvas
+}
+
+#[test]
+fn test_tile() {
+    let results: Vec<(usize, usize)> = Tile::new(0, 0, 0, 0).iter().collect();
+    assert!(results.is_empty());
+
+    let results: Vec<(usize, usize)> = Tile::new(0, 0, 1, 1).iter().collect();
+    assert_eq!(vec![(0, 0)], results);
+
+    let results: Vec<(usize, usize)> = Tile::new(0, 0, 2, 1).iter().collect();
+    assert_eq!(vec![(0, 0), (1, 0)], results);
+
+    let results: Vec<(usize, usize)> = Tile::new(0, 0, 1, 2).iter().collect();
+    assert_eq!(vec![(0, 0), (0, 1)], results);
 }
