@@ -1,541 +1,173 @@
-use std::{
-    borrow::Cow,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc,
-    },
-    thread,
-};
+use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
+use std::{sync::Arc, thread};
 
-use nalgebra::{Point3, Vector3};
-use pbr::ProgressBar;
+use crate::{camera::Camera, canvas::{Canvas,Color}, integrator::Integrator, scene::Scene};
 
-use crate::{
-    camera::Camera,
-    canvas::{Canvas, Color},
-    material::{Light, Material},
-    pattern::Pattern,
-    ray::{reflect, MarchResult, Ray},
-    scene::Scene,
-    shapes::ShapeId,
-};
-
-#[derive(Debug, Clone)]
-pub enum DebugMode {
-    Normals,
-    Steps,
+#[derive(Clone, Debug)]
+pub struct Config {
+    pub jobs: usize,
+    pub max_steps: usize,
+    pub max_reflections: usize,
 }
 
-pub struct ConfigBuilder {
-    config: Config,
-}
-
-impl Default for ConfigBuilder {
+impl Default for Config {
     fn default() -> Self {
-        ConfigBuilder {
-            config: Config {
-                width: 100,
-                height: 100,
-                max_steps: 200,
-                jobs: 1,
-                debug_mode: None,
-                max_reflections: 10,
-            },
+        Config {
+            jobs: num_cpus::get(),
+            max_steps: 200,
+            max_reflections: 10,
         }
     }
 }
 
-impl ConfigBuilder {
-    pub fn set_width(mut self, width: usize) -> Self {
-        self.config.width = width;
-        self
-    }
-
-    pub fn set_height(mut self, height: usize) -> Self {
-        self.config.height = height;
-        self
-    }
-
-    pub fn set_max_steps(mut self, steps: usize) -> Self {
-        self.config.max_steps = steps;
-        self
-    }
-
-    pub fn set_jobs(mut self, jobs: usize) -> Self {
-        self.config.jobs = usize::max(jobs, 1);
-        self
-    }
-
-    pub fn set_debug_mode(mut self, mode: DebugMode) -> Self {
-        self.config.debug_mode = Some(mode);
-        self
-    }
-
-    pub fn set_max_reflections(mut self, max_reflections: usize) -> Self {
-        self.config.max_reflections = max_reflections;
-        self
-    }
-
-    pub fn build(self) -> Arc<Config> {
-        Arc::new(self.config)
-    }
-}
-
-#[derive(Debug)]
-pub struct Config {
+pub struct RenderJob {
     width: usize,
     height: usize,
-    max_steps: usize,
-    jobs: usize,
-    debug_mode: Option<DebugMode>,
-    max_reflections: usize,
+    expected_tiles: usize,
+    recv: Receiver<Output>,
 }
 
-pub struct RenderedRow {
-    y: usize,
-    row: Vec<Color>,
+struct Output {
+    pub tile: Tile,
+    pub values: Vec<Color>,
 }
 
-pub fn render(scene: Arc<Scene>, camera: Arc<Camera>, cfg: Arc<Config>) -> Receiver<RenderedRow> {
-    let (send, recv) = channel();
+/// Render a scene to a channel that can accept and write out pixels.
+pub fn render<I: ?Sized + Integrator + 'static>(
+    cfg: Arc<Config>,
+    integrator: Arc<I>,
+    camera: Arc<Camera>,
+    scene: Arc<Scene>,
+) -> RenderJob {
+    let jobs = cfg.jobs.max(1);
 
-    // start jobs
-    for i in 0..cfg.jobs {
-        // each job will render rows that are (row `mod` jobs == i)
-        let scene_copy = scene.clone();
-        let camera_copy = camera.clone();
+    let tiles_width = camera.width_px / 16;
+    let tiles_height = camera.height_px / 16;
+
+    let (in_send, in_recv) = bounded(tiles_width);
+    let (out_send, out_recv) = unbounded();
+
+    for _ in 0..jobs {
         let cfg_copy = cfg.clone();
-        let send_copy = send.clone();
-        thread::spawn(move || match cfg_copy.debug_mode {
-            None => render_job(scene_copy, camera_copy, cfg_copy, i, send_copy),
-
-            Some(DebugMode::Normals) => {
-                render_normals_job(scene_copy, camera_copy, cfg_copy, i, send_copy)
-            }
-
-            Some(DebugMode::Steps) => {
-                render_steps_job(scene_copy, camera_copy, cfg_copy, i, send_copy)
-            }
+        let integrator_copy = integrator.clone();
+        let camera_copy = camera.clone();
+        let scene_copy = scene.clone();
+        let input = in_recv.clone();
+        let output = out_send.clone();
+        thread::spawn(move || {
+            render_worker(
+                cfg_copy,
+                integrator_copy,
+                camera_copy,
+                scene_copy,
+                input,
+                output,
+            );
         });
     }
 
-    recv
-}
+    let width = camera.width_px;
+    let height = camera.height_px;
 
-fn render_body<Body>(
-    idx: usize,
-    camera: Arc<Camera>,
-    cfg: Arc<Config>,
-    send: Sender<RenderedRow>,
-    mut body: Body,
-) where
-    Body: FnMut(Ray) -> Color,
-{
-    let sample_frac = camera.sample_fraction();
-    for y in (idx..cfg.height).step_by(cfg.jobs) {
-        let mut row = Vec::with_capacity(cfg.width);
-        for x in 0..cfg.width {
-            let mut pixel = Color::black();
-
-            for ray in camera.rays_for_pixel(x, y) {
-                pixel += body(ray) * sample_frac;
+    thread::spawn(move || {
+        // iterate the tiles of the image
+        for ty in 0..tiles_height {
+            let y = ty * 16;
+            let tile_height = 16.min(height - y);
+            for tx in 0..tiles_width {
+                let x = tx * 16;
+                in_send
+                    .send(Tile::new(x, y, 16.min(width - x), tile_height))
+                    .unwrap();
             }
-
-            row.push(pixel);
         }
-        send.send(RenderedRow { y, row })
-            .expect("Failed to send row!");
-    }
-}
-
-fn render_job(
-    scene: Arc<Scene>,
-    camera: Arc<Camera>,
-    cfg: Arc<Config>,
-    idx: usize,
-    send: Sender<RenderedRow>,
-) {
-    let world = World::new(cfg.clone(), scene);
-
-    let containers = Containers::new();
-
-    render_body(idx, camera, cfg, send, |ray| {
-        find_hit(&world, &containers, &ray)
-            .map_or_else(Color::black, |hit| shade_hit(&world, &containers, &hit, 0))
     });
-}
 
-struct World {
-    cfg: Arc<Config>,
-    scene: Arc<Scene>,
-    light_weight: f32,
-}
-
-impl World {
-    fn new(cfg: Arc<Config>, scene: Arc<Scene>) -> Self {
-        let light_weight = 1.0 / (scene.num_lights() as f32);
-        World {
-            cfg,
-            scene,
-            light_weight,
-        }
+    RenderJob {
+        width: width,
+        height: height,
+        expected_tiles: tiles_width * tiles_height,
+        recv: out_recv,
     }
 }
 
-/// Objects that a ray is within during refraction processing.
-#[derive(Debug, Clone)]
-struct Container {
-    object: ShapeId,
-    refractive_index: f32,
+struct Tile {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
 }
 
-#[derive(Debug, Clone)]
-struct Containers {
-    containers: Vec<Container>,
-}
-
-impl Containers {
-    fn new() -> Self {
-        Containers {
-            containers: Vec::new(),
+impl Tile {
+    fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
+        Tile {
+            x,
+            y,
+            width,
+            height,
         }
     }
 
-    fn refractive_index(&self) -> f32 {
-        self.containers
-            .last()
-            .map_or_else(|| 1.0, |container| container.refractive_index)
+    fn size(&self) -> usize {
+        self.width * self.height
     }
 
-    /// Returns `-1.0` when the ray originated from within another object, or 1.0 when it is
-    /// outside.
-    fn determine_sign(&self) -> f32 {
-        if self.containers.is_empty() {
-            1.0
-        } else {
-            -1.0
-        }
-    }
-
-    /// Determine the n1/n2 refractive indices for a hit involving a transparent object, and return
-    /// a boolean that indicates if the ray is leaving the object.
-    fn process_hit(&mut self, object: ShapeId, refractive_index: f32) -> (bool, f32, f32) {
-        let n1 = self.refractive_index();
-
-        let mut leaving = false;
-
-        // if the object is already in the set, find its index.
-        let existing_ix = self.containers.iter().enumerate().find_map(|arg| {
-            if arg.1.object == object {
-                leaving = true;
-                Some(arg.0)
-            } else {
-                None
+    fn iter(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+        let mut x = 0;
+        let mut y = 0;
+        std::iter::from_fn(move || {
+            if y >= self.height {
+                return None;
             }
-        });
 
-        match existing_ix {
-            Some(ix) => {
-                // the object exists, so remove it.
-                self.containers.remove(ix);
+            let res = (self.x + x, self.y + y);
+
+            x += 1;
+            if x >= self.width {
+                x = 0;
+                y += 1;
             }
-            None => self.containers.push(Container {
-                object,
-                refractive_index,
-            }),
-        }
 
-        let n2 = self.refractive_index();
-
-        (leaving, n1, n2)
-    }
-}
-
-#[derive(Debug)]
-struct Hit<'scene, 'cont> {
-    object_space_point: Point3<f32>,
-    world_space_point: Point3<f32>,
-    normal: Vector3<f32>,
-    reflectv: Vector3<f32>,
-    eyev: Vector3<f32>,
-    material: &'scene Material,
-    pattern: &'scene Pattern,
-    n1: f32,
-    n2: f32,
-    leaving: bool,
-    containers: Cow<'cont, Containers>,
-}
-
-impl<'scene, 'cont> Hit<'scene, 'cont> {
-    fn new<'a, 'b>(
-        world: &'a World,
-        containers: &'b Containers,
-        ray: &Ray,
-        res: MarchResult,
-    ) -> Hit<'a, 'b> {
-        let material = world.scene.get_material(res.material);
-
-        let mut containers = Cow::Borrowed(containers);
-
-        let (leaving, n1, n2) = if material.transparent > 0.0 {
-            containers
-                .to_mut()
-                .process_hit(res.object_id, material.refractive_index)
-        } else {
-            let val = containers.refractive_index();
-            (false, val, val)
-        };
-
-        let normal = res.normal(|pt| world.scene.sdf(pt));
-
-        Hit {
-            object_space_point: res.object_space_point,
-            world_space_point: res.final_ray.origin,
-            normal,
-
-            // this doesn't need to be computed here
-            reflectv: reflect(&ray.direction, &normal),
-
-            // the direction towards the eye
-            eyev: -ray.direction,
-
-            material,
-            pattern: world.scene.get_pattern(res.pattern),
-
-            // refraction information
-            n1,
-            n2,
-
-            leaving,
-
-            containers,
-        }
-    }
-
-    fn reflection_ray(&self, containers: &Containers) -> Ray {
-        // start the origin along the ray a bit
-        let origin = self.world_space_point + self.reflectv * 0.01;
-        Ray::new(origin, self.reflectv, containers.determine_sign())
-    }
-
-    fn refraction_ray(&self, containers: &Containers) -> Option<Ray> {
-        // the normal must point inside when the refraction ray originated within the object
-        let refrac_normal = if self.leaving {
-            -self.normal
-        } else {
-            self.normal
-        };
-
-        let n_ratio = self.n1 / self.n2;
-        let cos_i = self.eyev.dot(&refrac_normal);
-        let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
-
-        if sin2_t > 1.0 {
-            None
-        } else {
-            let cos_t = (1.0 - sin2_t).sqrt();
-            let direction =
-                (refrac_normal * (n_ratio * cos_i - cos_t) - self.eyev * n_ratio).normalize();
-
-            let origin = self.world_space_point + direction * 0.01;
-            Some(Ray::new(origin, direction, containers.determine_sign()))
-        }
-    }
-
-    fn schlick(&self) -> f32 {
-        schlick(&self.eyev, &self.normal, self.n1, self.n2)
-    }
-}
-
-fn schlick(eyev: &Vector3<f32>, normal: &Vector3<f32>, n1: f32, n2: f32) -> f32 {
-    let mut cos = eyev.dot(&normal);
-
-    // total internal reflection
-    if n1 > n2 {
-        let n = n1 / n2;
-        let sin2_t = n.powi(2) * (1.0 - cos.powi(2));
-        if sin2_t > 1.0 {
-            return 1.0;
-        }
-
-        cos = (1.0 - sin2_t).sqrt();
-    }
-
-    let r0 = ((n1 - n2) / (n1 + n2)).powi(2);
-    (r0 + (1.0 - r0) * (1.0 - cos).powi(5)).min(1.0)
-}
-
-#[test]
-fn test_schlick() {
-    let reflectance = schlick(
-        &Vector3::new(0.0, 0.0, -1.0),
-        &Vector3::new(0.0, 0.0, -1.0),
-        1.0,
-        1.5,
-    );
-    assert!(
-        reflectance - 0.04 < 0.001,
-        format!("{} != {}", reflectance, 0.04)
-    );
-
-    let reflectance = schlick(
-        &Vector3::new(0.0, 0.0, -1.0),
-        &Vector3::new(1.0, 0.0, 0.0),
-        1.0,
-        1.5,
-    );
-    assert!(
-        reflectance - 1.0 < 0.001,
-        format!("{} != {}", reflectance, 1.0)
-    );
-}
-
-/// March a ray until it hits something. If it runs out of steps, or exceeds the max bound, returns
-/// `None`.
-fn find_hit<'scene, 'cont>(
-    world: &'scene World,
-    containers: &'cont Containers,
-    ray: &Ray,
-) -> Option<Hit<'scene, 'cont>> {
-    ray.march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
-        .map(|res| Hit::new(world, containers, ray, res))
-}
-
-/// Shade the color according to the material properties, and light.
-fn shade_hit(world: &World, containers: &Containers, hit: &Hit, reflection_count: usize) -> Color {
-    let color = hit
-        .pattern
-        .color_at(&|pid| world.scene.get_pattern(pid), &hit.object_space_point);
-
-    let mut output = Color::black();
-
-    for light in world.scene.iter_lights() {
-        output += hit.material.lighting(
-            light,
-            &color,
-            &hit.world_space_point,
-            &hit.eyev,
-            &hit.normal,
-            light_visible(&world, &hit, light),
-        ) * world.light_weight;
-    }
-
-    if reflection_count < world.cfg.max_reflections {
-        let refl = reflected_color(world, containers, hit, reflection_count);
-        let refrac = refracted_color(world, &hit.containers, hit, reflection_count);
-
-        if hit.material.reflective > 0.0 && hit.material.transparent > 0.0 {
-            let reflectance = hit.schlick();
-            output + refl * reflectance + refrac * (1.0 - reflectance)
-        } else {
-            output + refl + refrac
-        }
-    } else {
-        output
-    }
-}
-
-/// Compute the color from a reflection.
-fn reflected_color(
-    world: &World,
-    containers: &Containers,
-    hit: &Hit,
-    reflection_count: usize,
-) -> Color {
-    let reflective = hit.material.reflective;
-    if reflective <= 0.0 {
-        Color::black()
-    } else {
-        let ray = hit.reflection_ray(containers);
-        find_hit(world, containers, &ray).map_or_else(Color::black, |refl_hit| {
-            shade_hit(world, containers, &refl_hit, reflection_count + 1) * reflective
+            Some(res)
         })
     }
 }
 
-/// Compute the additional color due to refraction.
-fn refracted_color(
-    world: &World,
-    containers: &Containers,
-    hit: &Hit,
-    reflection_count: usize,
-) -> Color {
-    let transparent = hit.material.transparent;
-    if transparent <= 0.0 {
-        Color::black()
-    } else {
-        hit.refraction_ray(containers)
-            .and_then(|ray| find_hit(world, &containers, &ray))
-            .map_or_else(Color::black, |refr_hit| {
-                shade_hit(world, &containers, &refr_hit, reflection_count + 1) * transparent
-            })
+fn render_worker<I: ?Sized + Integrator>(
+    cfg: Arc<Config>,
+    integrator: Arc<I>,
+    camera: Arc<Camera>,
+    scene: Arc<Scene>,
+    input: Receiver<Tile>,
+    output: Sender<Output>,
+) {
+    let sample_frac = camera.sample_fraction();
+    while let Ok(tile) = input.recv() {
+        let mut values = Vec::with_capacity(tile.size());
+        for (x, y) in tile.iter() {
+            let color = camera
+                .rays_for_pixel(x, y)
+                .map(|ray| integrator.render(&cfg, &scene, &ray) * sample_frac)
+                .sum();
+            values.push(color);
+        }
+        output.send(Output {tile, values}).unwrap();
     }
 }
 
-/// A predicate that tests whether or not a light is visible from a hit in the scene.
-///
-/// TODO: this currently considers transparent objects to be opaque
-fn light_visible(world: &World, hit: &Hit, light: &Light) -> bool {
-    // move slightly away from the surface that was contacted
-    let point = hit.world_space_point + hit.normal * 0.01;
-    let light_dir = light.position - point;
-    let dist = light_dir.magnitude();
+/// Write out the contents of a rendering job to a canvas, so that it may be written out.
+/// Additionally, show a progress bar on the command line.
+pub fn write_canvas(job: RenderJob) -> Canvas {
+    let mut canvas = Canvas::new(job.width, job.height);
 
-    // check to see if the path to the light is obstructed
-    Ray::new(point, light_dir.normalize(), 1.0)
-        .march(world.cfg.max_steps, |pt| world.scene.sdf(pt))
-        .map_or_else(|| true, |res| res.distance >= dist)
-}
+    let mut pb = pbr::ProgressBar::new(job.expected_tiles as u64);
 
-fn render_normals_job(
-    scene: Arc<Scene>,
-    camera: Arc<Camera>,
-    cfg: Arc<Config>,
-    idx: usize,
-    send: Sender<RenderedRow>,
-) {
-    render_body(idx, camera, cfg.clone(), send, |ray| {
-        let mut pixel = Color::black();
-        if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
-            let normal = res.normal(|pt| scene.sdf(pt));
-            pixel
-                .set_r(0.5 + normal.x / 2.0)
-                .set_g(0.5 + normal.y / 2.0)
-                .set_b(0.5 + normal.z / 2.0);
+    for _ in 0..job.expected_tiles {
+        let out = job.recv.recv().expect("Failed to read all pixels!");
+        for ((x,y),value) in out.tile.iter().zip(out.values.iter()) {
+            let pixel = canvas.get_mut(x, y).expect("Invalid pixel!");
+            *pixel = value.clone();
         }
-        pixel
-    });
-}
-
-fn render_steps_job(
-    scene: Arc<Scene>,
-    camera: Arc<Camera>,
-    cfg: Arc<Config>,
-    idx: usize,
-    send: Sender<RenderedRow>,
-) {
-    let step_max = cfg.max_steps as f32;
-
-    render_body(idx, camera, cfg.clone(), send, |ray| {
-        let mut pixel = Color::black();
-        if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
-            let step_val = 1.0 - (res.steps as f32) / step_max;
-            pixel.set_r(step_val).set_b(step_val);
-        }
-
-        pixel
-    });
-}
-
-pub fn write_canvas(cfg: Arc<Config>, recv: Receiver<RenderedRow>) -> Canvas {
-    let mut canvas = Canvas::new(cfg.width, cfg.height);
-
-    let expected = cfg.height;
-    let mut pb = ProgressBar::new(expected as u64);
-
-    for _ in 0..expected {
-        let row = recv.recv().expect("Failed to read all rows!");
-        canvas.blit_row(row.y, row.row);
         pb.inc();
     }
     pb.finish_print("done");

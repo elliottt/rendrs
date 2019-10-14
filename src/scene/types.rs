@@ -11,6 +11,7 @@ pub struct Scene {
     shapes: Shapes,
 
     lights: Vec<Light>,
+    light_weight: f32,
 
     materials: Materials,
     pub default_material: MaterialId,
@@ -33,6 +34,7 @@ impl Scene {
         Scene {
             shapes: Shapes::new(),
             lights: Vec::new(),
+            light_weight: 1.0,
             materials,
             default_material,
             patterns,
@@ -59,6 +61,11 @@ impl Scene {
 
     pub fn add_light(&mut self, light: Light) {
         self.lights.push(light);
+        self.light_weight = 1.0 / self.lights.len() as f32;
+    }
+
+    pub fn get_light_weight(&self) -> f32 {
+        self.light_weight
     }
 
     pub fn num_lights(&self) -> usize {
