@@ -38,9 +38,9 @@ struct Output {
 }
 
 /// Render a scene to a channel that can accept and write out pixels.
-pub fn render<I: ?Sized + Integrator + 'static>(
+pub fn render(
     cfg: Arc<Config>,
-    integrator: Arc<I>,
+    integrator: Arc<dyn Integrator>,
     camera: Arc<Camera>,
     scene: Arc<Scene>,
 ) -> RenderJob {
@@ -138,9 +138,9 @@ impl Tile {
     }
 }
 
-fn render_worker<I: ?Sized + Integrator>(
+fn render_worker(
     cfg: Arc<Config>,
-    integrator: Arc<I>,
+    integrator: Arc<dyn Integrator>,
     camera: Arc<Camera>,
     scene: Arc<Scene>,
     input: Receiver<Tile>,

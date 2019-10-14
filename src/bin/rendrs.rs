@@ -92,7 +92,7 @@ fn main() -> Result<(), Error> {
     };
 
     for camera in cameras {
-        let recv = render::<dyn Integrator>(
+        let recv = render(
             config.clone(),
             integrator.clone(),
             Arc::new(camera),
