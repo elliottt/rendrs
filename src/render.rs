@@ -46,8 +46,8 @@ pub fn render(
 ) -> RenderJob {
     let jobs = cfg.jobs.max(1);
 
-    let tiles_width = camera.width_px / 16;
-    let tiles_height = camera.height_px / 16;
+    let tiles_width = (camera.width_px + 16) / 16;
+    let tiles_height = (camera.height_px + 16) / 16;
 
     let (in_send, in_recv) = bounded(tiles_width);
     let (out_send, out_recv) = unbounded();
