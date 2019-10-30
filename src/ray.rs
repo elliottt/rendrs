@@ -93,6 +93,11 @@ impl Ray {
         None
     }
 
+    /// Move the origin along the ray by amount, and return that new point.
+    pub fn advance(&mut self, amount: f32) {
+        self.origin += self.direction * amount;
+    }
+
     /// Make a new ray that has the given transformation applied to it.
     pub fn transform(&self, matrix: &Matrix4<f32>) -> Self {
         let origin = matrix.transform_point(&self.origin);

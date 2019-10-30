@@ -87,11 +87,13 @@ impl Material {
         world_space_point: &Point3<f32>,
         eyev: &Vector3<f32>,
         normal: &Vector3<f32>,
-        light_visible: bool,
+        visible: f32,
     ) -> Color {
         let effectivec = obj_color * &light.intensity;
 
-        let mut color = &effectivec * self.ambient;
+        let light_visible = visible > 0.0;
+
+        let mut color = Color::black();
 
         if light_visible {
             // the direction to the light
@@ -110,9 +112,11 @@ impl Material {
                     color += &light.intensity * (self.specular * factor);
                 }
             }
+
+            color *= visible;
         }
 
-        color
+        color + &effectivec * self.ambient
     }
 }
 
@@ -129,12 +133,12 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             intensity: Color::new(1.0, 1.0, 1.0),
         };
-        let res = m.lighting(&light, &white, &pos, &eyev, &normalv, true);
+        let res = m.lighting(&light, &white, &pos, &eyev, &normalv, 1.0);
         assert_eq!(res.r(), 1.9);
         assert_eq!(res.g(), 1.9);
         assert_eq!(res.b(), 1.9);
 
-        let res = m.lighting(&light, &white, &pos, &eyev, &normalv, false);
+        let res = m.lighting(&light, &white, &pos, &eyev, &normalv, 0.0);
         assert_eq!(res.r(), 0.1);
         assert_eq!(res.g(), 0.1);
         assert_eq!(res.b(), 0.1);
@@ -148,7 +152,7 @@ fn test_lighting() {
             position: Point3::new(0.0, 0.0, -10.0),
             intensity: Color::new(1.0, 1.0, 1.0),
         };
-        let mut res = m.lighting(&light, &white, &pos, &eyev, &normalv, true);
+        let mut res = m.lighting(&light, &white, &pos, &eyev, &normalv, 1.0);
         assert_eq!(res.r(), 1.0);
         assert_eq!(res.g(), 1.0);
         assert_eq!(res.b(), 1.0);
@@ -158,7 +162,7 @@ fn test_lighting() {
             position: Point3::new(0.0, 10.0, -10.0),
             intensity: Color::new(1.0, 1.0, 1.0),
         };
-        res = m.lighting(&light2, &white, &pos, &eyev2, &normalv, true);
+        res = m.lighting(&light2, &white, &pos, &eyev2, &normalv, 1.0);
         assert_eq!(res.r(), 1.6363853);
         assert_eq!(res.g(), 1.6363853);
         assert_eq!(res.b(), 1.6363853);
