@@ -7,7 +7,6 @@ use crate::{
     render::Config,
     scene::Scene,
     shapes::ShapeId,
-    utils::clamp,
 };
 use nalgebra::{Point3, Vector3};
 use std::borrow::Cow;
@@ -120,57 +119,19 @@ fn refracted_color(
     }
 }
 
-/// Returns a value between 0 and 1 that indicates how visible the light is. 0 indicates that the
-/// light is completely obscured, while 1 indicates that it's completely visible.
-fn light_visible(cfg: &Config, scene: &Scene, hit: &Hit, light: &Light) -> f32 {
+/// A predicate that tests whether or not a light is visible from a hit in the scene.
+///
+/// TODO: this currently considers transparent objects to be opaque
+fn light_visible(cfg: &Config, scene: &Scene, hit: &Hit, light: &Light) -> bool {
     // move slightly away from the surface that was contacted
     let point = hit.world_space_point + hit.normal * 0.01;
     let light_dir = light.position - point;
-    let light_dist = light_dir.magnitude();
+    let dist = light_dir.magnitude();
 
-    // manually march the ray, so that we can detect how close it comes to an object.
-    let mut ray = Ray::new(point, light_dir.normalize(), 1.0);
-    let mut visible: f32 = 1.0;
-    let mut total_dist: f32 = 0.0;
-    let k: f32 = 16.0;
-    let mut ph: f32 = 1e20;
-
-    for i in 0 .. cfg.max_steps {
-        let res = scene.sdf(&ray);
-        let signed_radius = ray.sign * res.distance;
-
-        if total_dist >= light_dist {
-            break;
-        }
-
-        if signed_radius < Ray::MIN_DIST {
-            visible = 0.0;
-            break;
-        }
-
-        let h2 = signed_radius.powi(2);
-        let y =
-            if i == 0 {
-                0.0
-            } else {
-                h2 / (2.0 * ph)
-            };
-        let d = (h2 - y.powi(2)).sqrt();
-
-        let denom = total_dist - y;
-        if denom > 0.0 {
-            visible = visible.min((k * d) / denom);
-        }
-        ph = signed_radius;
-
-        ray.advance(signed_radius);
-        total_dist += signed_radius;
-        if total_dist > Ray::MAX_DIST {
-            break;
-        }
-    }
-
-    clamp(visible, 0.0, 1.0)
+    // check to see if the path to the light is obstructed
+    Ray::new(point, light_dir.normalize(), 1.0)
+        .march(cfg.max_steps, |pt| scene.sdf(pt))
+        .map_or_else(|| true, |res| res.distance >= dist)
 }
 
 /// Objects that a ray is within during refraction processing.
