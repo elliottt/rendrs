@@ -2,7 +2,7 @@ use failure::{format_err, Error};
 use nalgebra::{Matrix4, Point3, Unit, Vector3};
 use serde_yaml::Value;
 
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path, sync::Arc};
 
 use crate::{
     camera::Camera,
@@ -14,7 +14,7 @@ use crate::{
     shapes::{PrimShape, Shape, ShapeId},
 };
 
-pub fn parse<P>(path: P) -> Result<(Scene, Vec<Camera>), Error>
+pub fn parse<P>(path: P) -> Result<(Arc<Scene>, Vec<Camera>), Error>
 where
     P: AsRef<Path>,
 {
@@ -25,7 +25,7 @@ where
     let scene = parse_scene(&ctx)?;
     let cameras = parse_cameras(&ctx)?;
 
-    Ok((scene, cameras))
+    Ok((Arc::new(scene), cameras))
 }
 
 fn optional<A, Err>(res: Result<A, Err>) -> Option<A> {

@@ -1,4 +1,9 @@
-use crate::{canvas::Color, integrator::Integrator, ray::Ray, render::Config, scene::Scene};
+use crate::{
+    canvas::Color,
+    integrator::sampler::{Config, LightIncoming},
+    ray::Ray,
+    scene::Scene,
+};
 
 pub struct DebugNormals;
 
@@ -8,8 +13,8 @@ impl DebugNormals {
     }
 }
 
-impl Integrator for DebugNormals {
-    fn render(&self, cfg: &Config, scene: &Scene, ray: &Ray) -> Color {
+impl LightIncoming for DebugNormals {
+    fn light_incoming(&self, cfg: &Config, scene: &Scene, ray: &Ray) -> Color {
         if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
             let normal = res.normal(|pt| scene.sdf(pt));
             Color::new(

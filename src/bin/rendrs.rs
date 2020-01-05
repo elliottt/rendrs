@@ -9,8 +9,10 @@ use failure::Error;
 use clap::{App, Arg, ArgMatches};
 
 use rendrs::{
-    integrator::{DebugNormals, DebugSteps, Integrator, Whitted},
-    render::{render, write_canvas, Config},
+    integrator::{
+        sampler::{Config, SamplerIntegrator},
+        Integrator,
+    },
     scene::yaml,
 };
 
@@ -75,30 +77,23 @@ fn main() -> Result<(), Error> {
     let jobs = parse_usize(&matches, "jobs")?;
     let max_steps = parse_usize(&matches, "max-steps")?;
     let max_reflections = parse_usize(&matches, "max-reflections")?;
-    let config = Arc::new(Config {
-        jobs,
-        max_steps,
-        max_reflections,
-    });
+    let config = Config::new(jobs, max_steps, max_reflections);
 
     let (scene, cameras) = yaml::parse(scene_path)?;
-    let scene_ref = Arc::new(scene);
 
     let integrator: Arc<dyn Integrator> = match matches.value_of("integrator") {
-        Some("whitted") => Arc::new(Whitted::new()),
-        Some("debug-normals") => Arc::new(DebugNormals::new()),
-        Some("debug-steps") => Arc::new(DebugSteps::new()),
+        Some("whitted") => Arc::new(SamplerIntegrator::whitted(config)),
+        Some("debug-normals") => Arc::new(SamplerIntegrator::debug_normals(config)),
+        Some("debug-steps") => Arc::new(SamplerIntegrator::debug_steps(config)),
         int => panic!("Unknown integrator: {:?}", int),
     };
 
     for camera in cameras {
-        let recv = render(
-            config.clone(),
-            integrator.clone(),
+        let recv = integrator.render(
+            scene.clone(),
             Arc::new(camera),
-            scene_ref.clone(),
         );
-        write_canvas(recv).save(output_path);
+        recv.write_canvas().save(output_path);
     }
 
     Ok(())

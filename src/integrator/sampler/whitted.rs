@@ -1,10 +1,9 @@
 use crate::{
     canvas::Color,
-    integrator::Integrator,
+    integrator::sampler::{Config,LightIncoming},
     material::{Light, Material},
     pattern::Pattern,
     ray::{self, MarchResult, Ray},
-    render::Config,
     scene::Scene,
     shapes::ShapeId,
 };
@@ -19,8 +18,8 @@ impl Whitted {
     }
 }
 
-impl Integrator for Whitted {
-    fn render(&self, cfg: &Config, scene: &Scene, ray: &Ray) -> Color {
+impl LightIncoming for Whitted {
+    fn light_incoming(&self, cfg: &Config, scene: &Scene, ray: &Ray) -> Color {
         let containers = Containers::new();
         find_hit(cfg, scene, &containers, ray).map_or_else(Color::black, |hit| {
             shade_hit(cfg, scene, &containers, &hit, 0)

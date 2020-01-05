@@ -14,7 +14,6 @@ pub mod integrator;
 pub mod obj;
 pub mod pattern;
 pub mod ray;
-pub mod render;
 pub mod scene;
 pub mod shapes;
 pub mod test_utils;
