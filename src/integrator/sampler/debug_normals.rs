@@ -15,8 +15,8 @@ impl DebugNormals {
 
 impl LightIncoming for DebugNormals {
     fn light_incoming(&self, cfg: &Config, scene: &Scene, ray: &Ray) -> Color {
-        if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
-            let normal = res.normal(|pt| scene.sdf(pt));
+        if let Some(res) = ray.march(cfg.max_steps, scene) {
+            let normal = res.normal(scene);
             Color::new(
                 0.5 + normal.x / 2.0,
                 0.5 + normal.y / 2.0,

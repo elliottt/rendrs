@@ -22,7 +22,7 @@ impl DebugSteps {
 impl LightIncoming for DebugSteps {
     fn light_incoming(&self, cfg: &Config, scene: &Scene, ray: &Ray) -> Color {
         let step_max = cfg.max_steps as f32;
-        if let Some(res) = ray.march(cfg.max_steps, |pt| scene.sdf(pt)) {
+        if let Some(res) = ray.march(cfg.max_steps, scene) {
             let step_val = 1.0 - (res.steps as f32) / step_max;
             Color::new(step_val, 0.0, step_val)
         } else {

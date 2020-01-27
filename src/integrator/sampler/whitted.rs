@@ -21,7 +21,7 @@ impl Whitted {
 impl LightIncoming for Whitted {
     fn light_incoming(&self, cfg: &Config, scene: &Scene, ray: &Ray) -> Color {
         let containers = Containers::new();
-        find_hit(cfg, scene, &containers, ray).map_or_else(Color::black, |hit| {
+        find_hit(cfg, scene, &containers, ray).map_or_else(|| Color::black, |hit| {
             shade_hit(cfg, scene, &containers, &hit, 0)
         })
     }
@@ -35,7 +35,7 @@ fn find_hit<'scene, 'cont>(
     containers: &'cont Containers,
     ray: &Ray,
 ) -> Option<Hit<'scene, 'cont>> {
-    ray.march(cfg.max_steps, |pt| scene.sdf(pt))
+    ray.march(cfg.max_steps, scene)
         .map(|res| Hit::new(scene, containers, ray, res))
 }
 
@@ -129,7 +129,7 @@ fn light_visible(cfg: &Config, scene: &Scene, hit: &Hit, light: &Light) -> bool 
 
     // check to see if the path to the light is obstructed
     Ray::new(point, light_dir.normalize(), 1.0)
-        .march(cfg.max_steps, |pt| scene.sdf(pt))
+        .march(cfg.max_steps, scene)
         .map_or_else(|| true, |res| res.distance >= dist)
 }
 
@@ -237,7 +237,7 @@ impl<'scene, 'cont> Hit<'scene, 'cont> {
             (false, val, val)
         };
 
-        let normal = res.normal(|pt| scene.sdf(pt));
+        let normal = res.normal(scene);
 
         Hit {
             object_space_point: res.object_space_point,

@@ -1,6 +1,8 @@
 use nalgebra::{Matrix4, Point3, Vector3};
 
-use crate::{bounding_volume::AABB, material::MaterialId, pattern::PatternId, shapes::ShapeId};
+use crate::{
+    bounding_volume::AABB, material::MaterialId, pattern::PatternId, scene::Scene, shapes::ShapeId,
+};
 
 /// Reflect a vector through a normal.
 pub fn reflect(vec: &Vector3<f32>, normal: &Vector3<f32>) -> Vector3<f32> {
@@ -59,14 +61,11 @@ impl Ray {
         self.origin + (self.direction * t)
     }
 
-    pub fn march<SDF>(&self, max_steps: usize, sdf: SDF) -> Option<MarchResult>
-    where
-        SDF: Fn(&Ray) -> SDFResult,
-    {
+    pub fn march(&self, max_steps: usize, scene: &Scene) -> Option<MarchResult> {
         let mut pos = self.clone();
         let mut total_dist: f32 = 0.0;
         for i in 0..max_steps {
-            let res = sdf(&pos);
+            let res = scene.sdf(&pos);
             let signed_radius = self.sign * res.distance;
 
             if signed_radius < Self::MIN_DIST {
@@ -138,23 +137,21 @@ pub struct MarchResult {
 
 impl MarchResult {
     /// Compute the normal to this result
-    pub fn normal<SDF>(&self, sdf: SDF) -> Vector3<f32>
-    where
-        SDF: Fn(&Ray) -> SDFResult,
+    pub fn normal(&self, scene: &Scene) -> Vector3<f32>
     {
         let mut pos = self.final_ray.clone();
 
-        let res = sdf(&pos);
+        let res = scene.sdf(&pos);
         let offset = Vector3::new(0.0001, 0.0, 0.0);
 
         pos.origin = self.final_ray.origin - offset.xyy();
-        let px = sdf(&pos);
+        let px = scene.sdf(&pos);
 
         pos.origin = self.final_ray.origin - offset.yxy();
-        let py = sdf(&pos);
+        let py = scene.sdf(&pos);
 
         pos.origin = self.final_ray.origin - offset.yyx();
-        let pz = sdf(&pos);
+        let pz = scene.sdf(&pos);
         Vector3::new(
             res.distance - px.distance,
             res.distance - py.distance,
@@ -240,22 +237,20 @@ fn test_march() {
     let sphere = scene.add(Shape::PrimShape {
         shape: PrimShape::Sphere,
     });
-    let scaled = scene.add(Shape::uniform_scaling(2.0, sphere));
-    let moved = scene.add(Shape::translation(&Vector3::new(5.0, 0.0, 0.0), sphere));
 
     // test an intersection
     let mut result = ray
-        .march(4, |pt| scene.sdf_from(sphere, pt))
+        .march(4, &scene)
         .expect("Failed to march ray");
     assert_eq_f32!(result.distance, 4.0);
 
     result = ray
-        .march(4, |pt| scene.sdf_from(scaled, pt))
+        .march(4, &scene)
         .expect("Failed to march ray");
     assert_eq_f32!(result.distance, 3.0);
 
     // test a miss
-    assert!(ray.march(100, |pt| scene.sdf_from(moved, pt)).is_none());
+    assert!(ray.march(100, &scene).is_none());
 }
 
 #[test]
