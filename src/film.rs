@@ -32,8 +32,7 @@ impl Film {
         Film { res, crop, filter, cropped_bounds }
     }
 
-    pub fn cropped_bounds(&self) -> Bounds2<u64> {
-
-        unimplemented!()
+    pub fn cropped_bounds(&self) -> &Bounds2<u64> {
+        &self.cropped_bounds
     }
 }
