@@ -1,6 +1,7 @@
 use nalgebra::Matrix4;
 
 use crate::float::Float;
+use crate::material::Material;
 use crate::ray::Ray;
 use crate::shape::Shape;
 
@@ -9,9 +10,16 @@ pub struct NodeRef {
     index: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct MaterialRef {
+    index: usize,
+}
+
 #[derive(Default)]
 pub struct Scene {
     nodes: Vec<Node>,
+    materials: Vec<Material>,
+    root: Option<NodeRef>,
 }
 
 impl Scene {
@@ -29,9 +37,27 @@ impl Scene {
         unsafe { self.nodes.get_unchecked(index) }
     }
 
+    pub fn add_material(&mut self, material: Material) -> MaterialRef {
+        let index = self.materials.len();
+        self.materials.push(material);
+        MaterialRef { index }
+    }
+
+    pub fn get_material(&self, MaterialRef { index }: MaterialRef) -> &Material {
+        unsafe { self.materials.get_unchecked(index) }
+    }
+
+    pub fn set_root(&mut self, node: NodeRef) {
+        self.root = Some(node)
+    }
+
+    pub fn get_root(&self) -> Option<NodeRef> {
+        self.root
+    }
+
     /// Add an object to the scene.
-    pub fn object(&mut self, shape: Shape) -> NodeRef {
-        self.add(Node::Object { shape })
+    pub fn object(&mut self, shape: Shape, material: MaterialRef) -> NodeRef {
+        self.add(Node::Object { shape, material })
     }
 
     /// Add a transformation node to the scene.
@@ -51,10 +77,35 @@ impl Scene {
     }
 }
 
+#[derive(Debug)]
+pub struct SDFResult {
+    pub distance: Float,
+    pub material: MaterialRef,
+}
+
+impl Default for SDFResult {
+    fn default() -> Self {
+        SDFResult {
+            distance: 0.,
+            material: MaterialRef { index: 0 },
+        }
+    }
+}
+
+impl SDFResult {
+    pub fn reset(&mut self) {
+        self.distance = 0.;
+        self.material = MaterialRef { index: 0 };
+    }
+}
+
 impl Scene {
-    pub fn sdf(&self, ray: &Ray, from: NodeRef) -> Float {
-        match *self.get(from) {
-            Node::Object { ref shape } => shape.sdf(ray),
+    pub fn sdf(&self, result: &mut SDFResult, ray: &Ray, from: NodeRef) {
+        match self.get(from) {
+            Node::Object { shape, material } => {
+                result.distance = shape.sdf(ray);
+                result.material = *material;
+            }
 
             Node::Transform {
                 ref inverse,
@@ -63,8 +114,8 @@ impl Scene {
                 ..
             } => {
                 let ray = ray.transform(inverse);
-                let dist = self.sdf(&ray, child_ref);
-                dist * scale_factor
+                self.sdf(result, &ray, *child_ref);
+                result.distance *= scale_factor;
             }
         }
     }
@@ -73,6 +124,7 @@ impl Scene {
 pub enum Node {
     Object {
         shape: Shape,
+        material: MaterialRef,
     },
 
     Transform {

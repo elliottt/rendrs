@@ -11,6 +11,11 @@ impl Shape {
         Shape { sdf: Box::new(sdf) }
     }
 
+    pub fn plane() -> Self {
+        let sdf = move |ray: &Ray| ray.pos.y;
+        Shape { sdf: Box::new(sdf) }
+    }
+
     pub fn sdf(&self, ray: &Ray) -> Float {
         (self.sdf)(ray)
     }
