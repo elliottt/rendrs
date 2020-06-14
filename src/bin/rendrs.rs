@@ -1,7 +1,12 @@
 
+extern crate rendrs;
+extern crate eliza_error;
+
+use eliza_error::Error;
+
 use rendrs::film;
 
-fn main() {
+fn main() -> Result<(), Error> {
 
     let f = film::Film::new(
         film::Resolution::new(100, 100),
@@ -10,4 +15,6 @@ fn main() {
     );
 
     println!("{:?}", f.cropped_bounds);
+
+    Ok(())
 }
