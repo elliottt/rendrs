@@ -1,8 +1,9 @@
-use nalgebra::{Unit, Vector3};
+use nalgebra::{Point3, Unit, Vector3};
 
 mod canvas;
 mod ray;
 mod scene;
+mod transform;
 
 fn main() {
     let mut scene = scene::Scene::default();
@@ -11,7 +12,7 @@ fn main() {
     let root = scene.group(vec![plane, sphere]);
 
     let ray = ray::Ray::new(
-        Vector3::new(0., 5., 5.),
+        Point3::new(0., 5., 5.),
         Unit::new_normalize(Vector3::new(0., -1., 1.)),
     );
     if let Some(res) = scene.march(0.01, 100., 200, root, ray) {
@@ -24,5 +25,5 @@ fn main() {
 
     c.get_mut(0, 0).r = 1.;
 
-    println!("{}", c.ppm());
+    image::save_buffer("test.png", &c.data(), c.width(), c.height(), image::ColorType::Rgb8).unwrap();
 }

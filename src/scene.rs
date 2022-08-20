@@ -119,9 +119,10 @@ impl Scene {
 impl Prim {
     /// Compute the distance from the current position of the ray to the primitive object.
     pub fn sdf(&self, ray: &Ray) -> Distance {
+        let vec = ray.position_vector();
         match self {
-            Prim::Plane { normal } => Distance(ray.position.dot(normal)),
-            Prim::Sphere { radius } => Distance(ray.position.norm() - radius),
+            Prim::Plane { normal } => Distance(vec.dot(normal)),
+            Prim::Sphere { radius } => Distance(vec.norm() - radius),
         }
     }
 }

@@ -43,6 +43,14 @@ impl Canvas {
         }
     }
 
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
     fn index(&self, x: usize, y: usize) -> usize {
         (self.width as usize) * y + x
     }
@@ -84,6 +92,20 @@ impl Canvas {
         }
 
         buf
+    }
+
+    /// Return raw image RGB8 data for the image.
+    pub fn data(&self) -> Vec<u8> {
+        let size = (self.width * self.height) as usize;
+        let mut data = Vec::with_capacity(size);
+
+        for row in self.rows() {
+            for pixel in row {
+                data.extend_from_slice(&pixel.to_u8())
+            }
+        }
+
+        data
     }
 }
 
