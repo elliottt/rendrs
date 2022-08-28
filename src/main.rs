@@ -24,6 +24,9 @@ fn main() {
     let mut c = canvas::Canvas::new(2, 2);
 
     c.get_mut(0, 0).r = 1.;
+    c.get_mut(0, 0).g = 0.5;
+    c.get_mut(0, 0).b = 1.;
 
-    image::save_buffer("test.png", &c.data(), c.width(), c.height(), image::ColorType::Rgb8).unwrap();
+    // image::save_buffer("test.png", &c.data(), c.width(), c.height(), image::ColorType::Rgb8).unwrap();
+    println!("{}", c.to_ascii());
 }

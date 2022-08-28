@@ -28,6 +28,11 @@ impl Pixel {
         [ convert(self.r), convert(self.g), convert(self.b) ]
     }
 
+    /// Convert the [`Pixel`] to grayscale.
+    pub fn to_grayscale(&self) -> f32 {
+        0.3 * self.r + 0.59 * self.g + 0.11 * self.b
+    }
+
 }
 
 impl Canvas {
@@ -75,25 +80,6 @@ impl Canvas {
         }
     }
 
-    /// Return a ppm image.
-    pub fn ppm(&self) -> String {
-        let mut buf = String::new();
-
-        writeln!(buf, "P3").unwrap();
-        writeln!(buf, "{} {}", self.width, self.height).unwrap();
-        writeln!(buf, "255").unwrap();
-
-        for row in self.rows() {
-            for pixel in row {
-                let [r, g, b] = pixel.to_u8();
-                write!(buf, "{} {} {} ", r, g, b).unwrap();
-            }
-            writeln!(buf, "").unwrap();
-        }
-
-        buf
-    }
-
     /// Return raw image RGB8 data for the image.
     pub fn data(&self) -> Vec<u8> {
         let size = (self.width * self.height) as usize;
@@ -106,6 +92,25 @@ impl Canvas {
         }
 
         data
+    }
+
+    /// Return an ascii version of the [`Canvas`].
+    pub fn to_ascii(&self) -> String {
+        let mut buf = String::new();
+        let palette = r#"$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,"^`'. "#;
+        let bytes = palette.as_bytes();
+        let bound = (palette.len() - 1) as f32;
+
+        for row in self.rows() {
+            for col in row {
+                let g = col.to_grayscale();
+                let index = (g * bound) as usize;
+                buf.push(bytes[index] as char);
+            }
+            buf.push('\n');
+        }
+
+        buf
     }
 }
 
