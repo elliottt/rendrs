@@ -1,5 +1,8 @@
 use nalgebra::{Point3, Unit, Vector3};
 
+use crate::camera::Camera;
+
+mod camera;
 mod canvas;
 mod ray;
 mod scene;
@@ -7,25 +10,38 @@ mod transform;
 
 fn main() {
     let mut scene = scene::Scene::default();
+    let sphere = scene.sphere(1.);
     let plane = scene.plane(Unit::new_normalize(Vector3::new(0., 1., 0.)));
-    let sphere = scene.sphere(2.);
     let root = scene.group(vec![plane, sphere]);
+    // let root = scene.group(vec![sphere]);
 
-    let ray = ray::Ray::new(
-        Point3::new(0., 5., 5.),
-        Unit::new_normalize(Vector3::new(0., -1., 1.)),
+    let camera = camera::PinholeCamera::new(
+        80,
+        24,
+        transform::Transform::new().translate(&Vector3::new(0., 0.1, 1.5)),
+        std::f32::consts::FRAC_PI_3,
     );
-    if let Some(res) = scene.march(0.01, 100., 200, root, ray) {
-        // println!("hit! steps: {}", res.steps);
-    } else {
-        // println!("no hit :(");
+
+    let mut c = canvas::Canvas::new(80, 24);
+    for row in 0..c.height() {
+        for col in 0..c.width() {
+            let cx = col as f32 + 0.5;
+            let rx = row as f32 + 0.5;
+            let ray = camera.generate_ray(camera::Sample::new(cx, rx));
+
+            let pixel = c.get_mut(col as usize, row as usize);
+            if let Some(res) = scene.march(0.01, 100., 200, root, ray.clone()) {
+                let val = (res.distance.0 / 10.0).min(1.0);
+                pixel.r = val;
+                pixel.g = val;
+                pixel.b = val;
+            } else {
+                pixel.r = 1.;
+                pixel.g = 1.;
+                pixel.b = 1.;
+            }
+        }
     }
-
-    let mut c = canvas::Canvas::new(2, 2);
-
-    c.get_mut(0, 0).r = 1.;
-    c.get_mut(0, 0).g = 0.5;
-    c.get_mut(0, 0).b = 1.;
 
     // image::save_buffer("test.png", &c.data(), c.width(), c.height(), image::ColorType::Rgb8).unwrap();
     println!("{}", c.to_ascii());
