@@ -1,4 +1,3 @@
-use std::fmt::Write;
 
 #[derive(Debug, Default)]
 pub struct Pixel {
