@@ -15,9 +15,10 @@ fn main() {
     let root = scene.group(vec![plane, sphere]);
     // let root = scene.group(vec![sphere]);
 
+    let info = camera::CanvasInfo::new(80., 24.).with_pixel_aspect_ratio(0.7);
+
     let camera = camera::PinholeCamera::new(
-        80,
-        24,
+        &info,
         transform::Transform::new().translate(&Vector3::new(0., 0.1, 1.5)),
         std::f32::consts::FRAC_PI_3,
     );
