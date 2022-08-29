@@ -31,7 +31,7 @@ pub enum Node {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct Distance(f32);
+pub struct Distance(pub f32);
 
 #[derive(Debug)]
 pub struct MarchResult {
@@ -47,30 +47,28 @@ pub struct SDFResult {
 }
 
 impl Scene {
-    /// Construct a plane with the given normal in the scene.
-    pub fn plane(&mut self, normal: Unit<Vector3<f32>>) -> NodeId {
+    fn add_node(&mut self, node: Node) -> NodeId {
         let id = NodeId(self.nodes.len() as u32);
-        self.nodes.push(Node::Prim {
-            prim: Prim::Plane { normal },
-        });
+        self.nodes.push(node);
         id
     }
 
-    /// Construct a sphere with the given normal in the scene.
+    /// Construct a plane with the given normal in the scene.
+    pub fn plane(&mut self, normal: Unit<Vector3<f32>>) -> NodeId {
+        self.add_node(Node::Prim {
+            prim: Prim::Plane { normal },
+        })
+    }
+
+    /// Construct a sphere with the given radius in the scene.
     pub fn sphere(&mut self, radius: f32) -> NodeId {
-        let id = NodeId(self.nodes.len() as u32);
-        self.nodes.push(Node::Prim {
+        self.add_node(Node::Prim {
             prim: Prim::Sphere { radius },
-        });
-        id
+        })
     }
 
     pub fn group(&mut self, nodes: Vec<NodeId>) -> NodeId {
-        let id = NodeId(self.nodes.len() as u32);
-        self.nodes.push(Node::Group {
-            nodes,
-        });
-        id
+        self.add_node(Node::Group { nodes })
     }
 
     /// Fetch a node from the scene.
