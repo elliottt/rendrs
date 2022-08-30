@@ -117,7 +117,7 @@ impl Camera for PinholeCamera {
 
         let ray = Ray::new(Point3::origin(), camera);
 
-        ray.apply(&self.camera.camera_to_world)
+        ray.invert(&self.camera.camera_to_world)
     }
 }
 

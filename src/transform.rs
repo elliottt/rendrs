@@ -20,8 +20,8 @@ impl Transform {
     }
 
     /// Construct the lhs look-at transform.
-    pub fn look_at_lh(eye: &Point3<f32>, target: &Point3<f32>, up: &Vector3<f32>) -> Self {
-        let matrix = Matrix4::look_at_lh(eye, target, up);
+    pub fn look_at(eye: &Point3<f32>, target: &Point3<f32>, up: &Vector3<f32>) -> Self {
+        let matrix = Matrix4::look_at_rh(eye, target, up);
         let inverse = matrix.try_inverse().unwrap();
         Self {
             matrix,

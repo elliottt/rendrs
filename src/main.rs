@@ -19,7 +19,12 @@ fn main() {
 
     let camera = camera::PinholeCamera::new(
         &info,
-        transform::Transform::new().translate(&Vector3::new(0., 0.1, 1.5)),
+        // transform::Transform::new().translate(&Vector3::new(0., 0.1, 1.5)),
+        transform::Transform::look_at(
+            &Point3::new(0., 2., 2.),
+            &Point3::new(0., 0., 0.),
+            &Vector3::new(0., 1., 0.),
+        ),
         std::f32::consts::FRAC_PI_3,
     );
 
@@ -32,7 +37,7 @@ fn main() {
 
             let pixel = c.get_mut(col as usize, row as usize);
             if let Some(res) = scene.march(0.01, 100., 200, root, ray.clone()) {
-                let val = (res.distance.0 / 10.0).min(1.0);
+                let val = (res.distance.0 / 20.0).min(1.0);
                 pixel.r = val;
                 pixel.g = val;
                 pixel.b = val;
