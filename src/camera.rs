@@ -123,7 +123,8 @@ impl Camera for PinholeCamera {
 
 #[test]
 fn test_projective_camera() {
-    let camera = ProjectiveCamera::new(10, 10, Transform::new(), Transform::new());
+    let info = CanvasInfo::new(10., 10.);
+    let camera = ProjectiveCamera::new(&info, Transform::new(), Transform::new());
 
     assert_eq!(
         Point3::origin(),
@@ -147,7 +148,8 @@ fn test_projective_camera() {
 fn test_pinhole_camera() {
     let t = Transform::new();
     let fov = std::f32::consts::FRAC_PI_2;
-    let camera = PinholeCamera::new(10, 10, t, fov);
+    let info = CanvasInfo::new(10., 10.);
+    let camera = PinholeCamera::new(&info, t, fov);
 
     let ray = camera.generate_ray(Sample::new(5., 5.));
 
