@@ -57,7 +57,6 @@ pub struct ProjectiveCamera {
 impl ProjectiveCamera {
     // TODO: support targeting pixels that aren't square, like ascii characters
     pub fn new(info: &CanvasInfo, camera_to_world: Transform, camera_to_screen: Transform) -> Self {
-
         let screen_to_raster = Transform::new()
             .scale(&Vector3::new(info.width(), info.height(), 1.))
             .scale(&Vector3::new(0.5, 0.5, 1.))

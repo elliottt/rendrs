@@ -4,6 +4,7 @@ use crate::camera::Camera;
 
 mod camera;
 mod canvas;
+mod integrator;
 mod ray;
 mod scene;
 mod transform;
@@ -29,6 +30,8 @@ fn main() {
     );
 
     let mut c = canvas::Canvas::new(80, 24);
+
+    let config = scene::MarchConfig::default();
     for row in 0..c.height() {
         for col in 0..c.width() {
             let cx = col as f32 + 0.5;
@@ -36,7 +39,7 @@ fn main() {
             let ray = camera.generate_ray(camera::Sample::new(cx, rx));
 
             let pixel = c.get_mut(col as usize, row as usize);
-            if let Some(res) = scene.march(0.01, 100., 200, root, ray.clone()) {
+            if let Some(res) = scene.march(&config, root, ray.clone()) {
                 let val = (res.distance.0 / 20.0).min(1.0);
                 pixel.r = val;
                 pixel.g = val;
@@ -51,4 +54,6 @@ fn main() {
 
     // image::save_buffer("test.png", &c.data(), c.width(), c.height(), image::ColorType::Rgb8).unwrap();
     println!("{}", c.to_ascii());
+
+    integrator::Whitted::new(c, camera);
 }
