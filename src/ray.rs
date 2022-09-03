@@ -19,9 +19,4 @@ impl Ray {
     pub fn step(&mut self, amount: f32) {
         self.position += self.direction.scale(amount);
     }
-
-    /// Translate the position to a vector.
-    pub fn position_vector(&self) -> Vector3<f32> {
-        Vector3::new(self.position.x, self.position.y, self.position.z)
-    }
 }

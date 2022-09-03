@@ -1,6 +1,4 @@
-use nalgebra::{Unit, Vector3};
-
-use crate::ray::Ray;
+use nalgebra::{Point3, Unit, Vector3};
 
 #[derive(Debug, Default)]
 pub struct Scene {
@@ -52,7 +50,13 @@ impl Default for MarchConfig {
 
 #[derive(Debug)]
 pub struct SDFResult {
+    /// The closest object.
     pub id: NodeId,
+
+    /// The point in object space.
+    pub object: Point3<f32>,
+
+    /// The distance between the world-space ray and this object.
     pub distance: Distance,
 }
 
@@ -88,9 +92,11 @@ impl Scene {
 }
 
 impl Prim {
-    /// Compute the distance from the current position of the ray to the primitive object.
-    pub fn sdf(&self, ray: &Ray) -> Distance {
-        let vec = ray.position_vector();
+    /// Compute the distance from the current position of the ray to the primitive object. As
+    /// primitives are all centered at the origin, there is no need to return more information than
+    /// the distance.
+    pub fn sdf(&self, p: &Point3<f32>) -> Distance {
+        let vec = Vector3::new(p.x, p.y, p.z);
         match self {
             Prim::Plane { normal } => Distance(vec.dot(normal)),
             Prim::Sphere { radius } => Distance(vec.norm() - radius),
@@ -99,17 +105,18 @@ impl Prim {
 }
 
 impl Node {
-    pub fn sdf(&self, scene: &Scene, id: NodeId, ray: &Ray) -> SDFResult {
+    pub fn sdf(&self, scene: &Scene, id: NodeId, point: &Point3<f32>) -> SDFResult {
         match self {
             Node::Prim { prim } => SDFResult {
                 id,
-                distance: prim.sdf(ray),
+                object: point.clone(),
+                distance: prim.sdf(point),
             },
 
             Node::Group { nodes } => nodes
                 .iter()
                 .copied()
-                .map(|id| scene.node(id).sdf(scene, id, ray))
+                .map(|id| scene.node(id).sdf(scene, id, point))
                 .min_by_key(|result| result.distance)
                 .unwrap(),
         }

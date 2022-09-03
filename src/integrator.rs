@@ -1,6 +1,11 @@
 use nalgebra::{Point3, Unit, Vector3};
 
-use crate::{camera::Camera, canvas::Canvas, ray::Ray, scene::{Distance, MarchConfig, NodeId, Scene}};
+use crate::{
+    camera::Camera,
+    canvas::Canvas,
+    ray::Ray,
+    scene::{Distance, MarchConfig, NodeId, Scene},
+};
 
 pub trait Integrator {
     fn render(&mut self, scene: &Scene);
@@ -49,23 +54,43 @@ pub struct Hit {
     pub steps: u32,
 }
 
-impl Hit {
+fn compute_normal(
+    scene: &Scene,
+    root: NodeId,
+    world: &Point3<f32>,
+    dist: Distance,
+) -> Unit<Vector3<f32>> {
+    let node = scene.node(root);
+    let offset = Vector3::new(0.0001, 0.0, 0.0);
+    let px = node.sdf(scene, root, &(world - offset.xyy()));
+    let py = node.sdf(scene, root, &(world - offset.yxy()));
+    let pz = node.sdf(scene, root, &(world - offset.yyx()));
 
+    Unit::new_normalize(Vector3::new(
+        dist.0 - px.distance.0,
+        dist.0 - py.distance.0,
+        dist.0 - pz.distance.0,
+    ))
+}
+
+impl Hit {
     pub fn march(config: &MarchConfig, scene: &Scene, root: NodeId, mut ray: Ray) -> Option<Self> {
         let mut total_dist = Distance::default();
 
         let node = scene.node(root);
 
         for i in 0..config.max_steps {
-            let result = node.sdf(scene, root, &ray);
+            let result = node.sdf(scene, root, &ray.position);
             let radius = result.distance.0;
 
             if radius < config.min_dist {
+                let world = ray.position;
+                let normal = compute_normal(scene, root, &world, result.distance);
                 return Some(Self {
                     node: result.id,
-                    object: ray.position.clone(),
-                    normal: Unit::new_unchecked(Vector3::new(1.,0.,0.)),
-                    world: ray.position,
+                    object: result.object,
+                    normal,
+                    world,
                     distance: total_dist,
                     steps: i,
                 });
@@ -82,5 +107,4 @@ impl Hit {
 
         None
     }
-
 }
