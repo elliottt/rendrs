@@ -39,7 +39,7 @@ fn main() {
             let ray = camera.generate_ray(camera::Sample::new(cx, rx));
 
             let pixel = c.get_mut(col as usize, row as usize);
-            if let Some(res) = scene.march(&config, root, ray.clone()) {
+            if let Some(res) = integrator::Hit::march(&config, &scene, root, ray.clone()) {
                 let val = (res.distance.0 / 20.0).min(1.0);
                 pixel.r = val;
                 pixel.g = val;

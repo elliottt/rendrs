@@ -34,13 +34,6 @@ pub enum Node {
 pub struct Distance(pub f32);
 
 #[derive(Debug)]
-pub struct MarchResult {
-    pub node: NodeId,
-    pub distance: Distance,
-    pub steps: u32,
-}
-
-#[derive(Debug)]
 pub struct MarchConfig {
     pub max_steps: u32,
     pub min_dist: f32,
@@ -59,8 +52,8 @@ impl Default for MarchConfig {
 
 #[derive(Debug)]
 pub struct SDFResult {
-    id: NodeId,
-    distance: Distance,
+    pub id: NodeId,
+    pub distance: Distance,
 }
 
 impl Scene {
@@ -91,41 +84,6 @@ impl Scene {
     /// Fetch a node from the scene.
     pub fn node(&self, NodeId(id): NodeId) -> &Node {
         &self.nodes[id as usize]
-    }
-
-    /// March this ray through the scene rooted at `root`.
-    pub fn march(
-        &self,
-        config: &MarchConfig,
-        root: NodeId,
-        mut ray: Ray,
-    ) -> Option<MarchResult> {
-        let mut total_dist = Distance::default();
-
-        let node = self.node(root);
-
-        for i in 0..config.max_steps {
-            let result = node.sdf(self, root, &ray);
-            let radius = result.distance.0;
-
-            if radius < config.min_dist {
-                return Some(MarchResult {
-                    node: result.id,
-                    distance: total_dist,
-                    steps: i,
-                });
-            }
-
-            total_dist.0 += radius;
-
-            if total_dist.0 > config.max_dist {
-                break;
-            }
-
-            ray.step(radius);
-        }
-
-        None
     }
 }
 
