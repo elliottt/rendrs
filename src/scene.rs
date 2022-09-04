@@ -1,5 +1,7 @@
 use nalgebra::{Point3, Unit, Vector2, Vector3};
 
+use crate::transform::{ApplyTransform, Transform};
+
 #[derive(Debug, Default)]
 pub struct Scene {
     nodes: Vec<Node>,
@@ -29,6 +31,9 @@ pub enum Node {
 
     /// A group of nodes.
     Group { nodes: Vec<NodeId> },
+
+    /// Apply this Transform the node.
+    Transform { transform: Transform, node: NodeId },
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -95,6 +100,15 @@ impl Scene {
         self.add_node(Node::Group { nodes })
     }
 
+    pub fn transform(&mut self, transform: Transform, node: NodeId) -> NodeId {
+        // as an optimization, compose transforms of transforms while building the scene.
+        if let Node::Transform { transform: t, node } = self.node(node) {
+            self.add_node(Node::Transform { transform: transform * t, node: *node })
+        } else {
+            self.add_node(Node::Transform { transform, node })
+        }
+    }
+
     /// Fetch a node from the scene.
     pub fn node(&self, NodeId(id): NodeId) -> &Node {
         &self.nodes[id as usize]
@@ -133,6 +147,12 @@ impl Node {
                 .map(|id| scene.node(id).sdf(scene, id, point))
                 .min_by_key(|result| result.distance)
                 .unwrap(),
+
+            Node::Transform { transform, node } => {
+                scene
+                    .node(*node)
+                    .sdf(scene, *node, &point.invert(transform))
+            }
         }
     }
 }
