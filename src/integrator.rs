@@ -1,34 +1,71 @@
 use nalgebra::{Point3, Unit, Vector3};
 
 use crate::{
-    camera::Camera,
-    canvas::Canvas,
+    camera::{Camera, Sample},
+    canvas::{Canvas, Color},
     ray::Ray,
     scene::{Distance, MarchConfig, NodeId, Scene},
 };
 
+pub fn render<I: Integrator>(canvas: &mut Canvas, scene: &Scene, root: NodeId, integrator: &mut I) {
+    // TODO: pass in a sampling strategy
+    for row in 0..canvas.height() {
+        let y = row as f32 + 0.5;
+        for col in 0..canvas.width() {
+            let x = col as f32 + 0.5;
+
+            let sample = Sample::new(x, y);
+            *canvas.get_mut(col as usize, row as usize) =
+                integrator.luminance(scene, root, &sample);
+        }
+    }
+}
+
 pub trait Integrator {
-    fn render(&mut self, scene: &Scene);
+    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color;
 }
 
 pub struct Whitted<C: Camera> {
-    pub canvas: Canvas,
-    pub camera: C,
+    camera: C,
+    config: MarchConfig,
+    max_reflections: usize,
 }
 
 impl<C: Camera> Whitted<C> {
-    pub fn new(canvas: Canvas, camera: C) -> Self {
-        Self { canvas, camera }
+    pub fn new(camera: C, config: MarchConfig, max_reflections: usize) -> Self {
+        Self {
+            camera,
+            config,
+            max_reflections,
+        }
+    }
+
+    pub fn shade(&mut self, depth: usize, scene: &Scene, root: NodeId, hit: &Hit) -> Color {
+        if depth == 0 {
+            return Color::black();
+        }
+
+        // TODO: this is incorrect, but gives something sort of realistic looking
+
+        // compute the new outgoing ray
+        let mut ray = hit.ray.reflect(&hit.normal(scene, root));
+        ray.step(self.config.min_dist);
+
+        0.5 * if let Some(hit) = Hit::march(&self.config, scene, root, ray) {
+            self.shade(depth - 1, scene, root, &hit)
+        } else {
+            let t = 0.5 * (hit.ray.direction.y + 1.0);
+            (1. - t) * Color::white()
+        }
     }
 }
 
 impl<C: Camera> Integrator for Whitted<C> {
-    fn render(&mut self, scene: &Scene) {
-        for y in 0..self.canvas.height() {
-            let y = y as f32 + 0.5;
-            for x in 0..self.canvas.width() {
-                let x = x as f32 + 0.5;
-            }
+    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+        if let Some(hit) = Hit::march(&self.config, scene, root, self.camera.generate_ray(sample)) {
+            self.shade(self.max_reflections, scene, root, &hit)
+        } else {
+            Color::white()
         }
     }
 }
@@ -41,39 +78,21 @@ pub struct Hit {
     /// The intersection point in object space.
     pub object: Point3<f32>,
 
-    /// The intersection point in world space.
-    pub world: Point3<f32>,
-
-    /// The normal computed at the hit.
-    pub normal: Unit<Vector3<f32>>,
+    /// The ray that caused the intersection.
+    pub ray: Ray,
 
     /// The distance traveled to get to this point.
     pub distance: Distance,
 
     /// The number of steps taken.
     pub steps: u32,
-}
 
-fn compute_normal(
-    scene: &Scene,
-    root: NodeId,
-    world: &Point3<f32>,
-    dist: Distance,
-) -> Unit<Vector3<f32>> {
-    let node = scene.node(root);
-    let offset = Vector3::new(0.0001, 0.0, 0.0);
-    let px = node.sdf(scene, root, &(world - offset.xyy()));
-    let py = node.sdf(scene, root, &(world - offset.yxy()));
-    let pz = node.sdf(scene, root, &(world - offset.yyx()));
-
-    Unit::new_normalize(Vector3::new(
-        dist.0 - px.distance.0,
-        dist.0 - py.distance.0,
-        dist.0 - pz.distance.0,
-    ))
+    /// The distance from the final measurement to the object, used when computing the normal.
+    last_distance: Distance,
 }
 
 impl Hit {
+    /// March the ray until it hits something in the geometry or runs out of fuel.
     pub fn march(config: &MarchConfig, scene: &Scene, root: NodeId, mut ray: Ray) -> Option<Self> {
         let mut total_dist = Distance::default();
 
@@ -84,15 +103,13 @@ impl Hit {
             let radius = result.distance.0;
 
             if radius < config.min_dist {
-                let world = ray.position;
-                let normal = compute_normal(scene, root, &world, result.distance);
                 return Some(Self {
                     node: result.id,
                     object: result.object,
-                    normal,
-                    world,
+                    ray,
                     distance: total_dist,
                     steps: i,
+                    last_distance: result.distance,
                 });
             }
 
@@ -106,5 +123,20 @@ impl Hit {
         }
 
         None
+    }
+
+    /// Compute the normal at this hit.
+    pub fn normal(&self, scene: &Scene, root: NodeId) -> Unit<Vector3<f32>> {
+        let node = scene.node(root);
+        let offset = Vector3::new(0.0001, 0.0, 0.0);
+        let px = node.sdf(scene, root, &(self.ray.position - offset.xyy()));
+        let py = node.sdf(scene, root, &(self.ray.position - offset.yxy()));
+        let pz = node.sdf(scene, root, &(self.ray.position - offset.yyx()));
+
+        Unit::new_normalize(Vector3::new(
+            self.last_distance.0 - px.distance.0,
+            self.last_distance.0 - py.distance.0,
+            self.last_distance.0 - pz.distance.0,
+        ))
     }
 }

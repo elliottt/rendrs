@@ -1,16 +1,15 @@
-
 #[derive(Debug, Default)]
-pub struct Pixel {
+pub struct Color {
     pub r: f32,
     pub g: f32,
     pub b: f32,
 }
 
-/// A buffer of pixel data, with the bottom-left being `(0,0)`.
+/// A buffer of color data, with the bottom-left being `(0,0)`.
 pub struct Canvas {
     width: u32,
     height: u32,
-    buffer: Vec<Pixel>,
+    buffer: Vec<Color>,
 }
 
 /// An iterator for the rows of the resulting image, starting at the top and working down. This is
@@ -20,18 +19,42 @@ pub struct Rows<'a> {
     row: usize,
 }
 
-impl Pixel {
-
-    pub fn to_u8(&self) -> [u8; 3] {
-        let convert = |x: f32| { (x * 255.0).min(255.0).max(0.0) as u8 };
-        [ convert(self.r), convert(self.g), convert(self.b) ]
+impl Color {
+    pub fn new(r: f32, g: f32, b: f32) -> Self {
+        Self { r, g, b }
     }
 
-    /// Convert the [`Pixel`] to grayscale.
+    pub fn black() -> Self {
+        Self::new(0., 0., 0.)
+    }
+
+    pub fn white() -> Self {
+        Self::new(1., 1., 1.)
+    }
+
+    pub fn to_u8(&self) -> [u8; 3] {
+        let convert = |x: f32| (x * 255.0).min(255.0).max(0.0) as u8;
+        [convert(self.r), convert(self.g), convert(self.b)]
+    }
+
+    /// Convert the [`Color`] to grayscale.
     pub fn to_grayscale(&self) -> f32 {
         0.3 * self.r + 0.59 * self.g + 0.11 * self.b
     }
+}
 
+impl std::ops::Mul<&Color> for f32 {
+    type Output = Color;
+    fn mul(self, rhs: &Color) -> Self::Output {
+        Color::new(rhs.r * self, rhs.g * self, rhs.b * self)
+    }
+}
+
+impl std::ops::Mul<Color> for f32 {
+    type Output = Color;
+    fn mul(self, rhs: Color) -> Self::Output {
+        self * &rhs
+    }
 }
 
 impl Canvas {
@@ -59,14 +82,14 @@ impl Canvas {
         (self.width as usize) * y + x
     }
 
-    /// Mutate a pixel in the [`Canvas`].
-    pub fn get_mut(&mut self, x: usize, y: usize) -> &mut Pixel {
+    /// Mutate a color in the [`Canvas`].
+    pub fn get_mut(&mut self, x: usize, y: usize) -> &mut Color {
         let ix = self.index(x, y);
         &mut self.buffer[ix]
     }
 
-    /// Fetch a pixel in the [`Canvas`].
-    pub fn get(&mut self, x: usize, y: usize) -> &Pixel {
+    /// Fetch a color in the [`Canvas`].
+    pub fn get(&mut self, x: usize, y: usize) -> &Color {
         let ix = self.index(x, y);
         &self.buffer[ix]
     }
@@ -85,8 +108,8 @@ impl Canvas {
         let mut data = Vec::with_capacity(size);
 
         for row in self.rows() {
-            for pixel in row {
-                data.extend_from_slice(&pixel.to_u8())
+            for color in row {
+                data.extend_from_slice(&color.to_u8())
             }
         }
 
@@ -114,7 +137,7 @@ impl Canvas {
 }
 
 impl<'a> Iterator for Rows<'a> {
-    type Item = &'a [Pixel];
+    type Item = &'a [Color];
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.row == 0 {

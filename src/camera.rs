@@ -1,5 +1,6 @@
 use nalgebra::{Point2, Point3, Unit, Vector3};
 
+use crate::canvas::Canvas;
 use crate::ray::Ray;
 use crate::transform::{ApplyTransform, Transform};
 
@@ -23,6 +24,10 @@ impl CanvasInfo {
             height,
             pixel_aspect_ratio: 1.,
         }
+    }
+
+    pub fn new_canvas(&self) -> Canvas {
+        Canvas::new(self.width as u32, self.height as u32)
     }
 
     /// Set the pixel aspect ratio.
@@ -104,12 +109,12 @@ impl Sample {
 }
 
 pub trait Camera {
-    /// Given a [`CameraSample`], generate a ray.
-    fn generate_ray(&self, sample: Sample) -> Ray;
+    /// Given a [`Sample`], generate a ray.
+    fn generate_ray(&self, sample: &Sample) -> Ray;
 }
 
 impl Camera for PinholeCamera {
-    fn generate_ray(&self, sample: Sample) -> Ray {
+    fn generate_ray(&self, sample: &Sample) -> Ray {
         let canvas =
             Point3::new(sample.film.x, sample.film.y, 0.).apply(&self.camera.raster_to_camera);
         let camera = Unit::new_normalize(canvas - Point3::origin());
@@ -150,7 +155,7 @@ fn test_pinhole_camera() {
     let info = CanvasInfo::new(10., 10.);
     let camera = PinholeCamera::new(&info, t, fov);
 
-    let ray = camera.generate_ray(Sample::new(5., 5.));
+    let ray = camera.generate_ray(&Sample::new(5., 5.));
 
     assert_eq!(Point3::new(0., 0., 0.), ray.position);
     assert_eq!(

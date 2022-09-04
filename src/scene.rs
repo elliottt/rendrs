@@ -31,7 +31,7 @@ pub enum Node {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Distance(pub f32);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MarchConfig {
     pub max_steps: u32,
     pub min_dist: f32,
