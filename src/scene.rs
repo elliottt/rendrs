@@ -1,4 +1,4 @@
-use nalgebra::{Point3, Unit, Vector3};
+use nalgebra::{Point3, Unit, Vector2, Vector3};
 
 #[derive(Debug, Default)]
 pub struct Scene {
@@ -16,6 +16,9 @@ pub enum Prim {
 
     /// A sphere with the given radius.
     Sphere { radius: f32 },
+
+    /// A torus with the given hole radius and ring radius.
+    Torus { hole: f32, radius: f32 },
 }
 
 /// Nodes in the scene graph.
@@ -81,6 +84,13 @@ impl Scene {
         })
     }
 
+    /// Construct a torus with the given inner and outer radii.
+    pub fn torus(&mut self, hole: f32, radius: f32) -> NodeId {
+        self.add_node(Node::Prim {
+            prim: Prim::Torus { hole, radius },
+        })
+    }
+
     pub fn group(&mut self, nodes: Vec<NodeId>) -> NodeId {
         self.add_node(Node::Group { nodes })
     }
@@ -96,10 +106,14 @@ impl Prim {
     /// primitives are all centered at the origin, there is no need to return more information than
     /// the distance.
     pub fn sdf(&self, p: &Point3<f32>) -> Distance {
-        let vec = Vector3::new(p.x, p.y, p.z);
+        let p = Vector3::new(p.x, p.y, p.z);
         match self {
-            Prim::Plane { normal } => Distance(vec.dot(normal)),
-            Prim::Sphere { radius } => Distance(vec.norm() - radius),
+            Prim::Plane { normal } => Distance(p.dot(normal)),
+            Prim::Sphere { radius } => Distance(p.norm() - radius),
+            Prim::Torus { hole, radius } => {
+                let q = Vector2::new(p.xz().norm() - hole, p.y);
+                return Distance(q.norm() - radius);
+            }
         }
     }
 }
