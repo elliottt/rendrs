@@ -19,6 +19,9 @@ pub enum Prim {
     /// A sphere with the given radius.
     Sphere { radius: f32 },
 
+    /// A box with the given dimensions.
+    Box { width: f32, height: f32, depth: f32 },
+
     /// A torus with the given hole radius and ring radius.
     Torus { hole: f32, radius: f32 },
 }
@@ -89,6 +92,17 @@ impl Scene {
         })
     }
 
+    /// Construct a box with the given dimensions in the scene.
+    pub fn rect(&mut self, width: f32, height: f32, depth: f32) -> NodeId {
+        self.add_node(Node::Prim {
+            prim: Prim::Box {
+                width,
+                height,
+                depth,
+            },
+        })
+    }
+
     /// Construct a torus with the given inner and outer radii.
     pub fn torus(&mut self, hole: f32, radius: f32) -> NodeId {
         self.add_node(Node::Prim {
@@ -103,7 +117,10 @@ impl Scene {
     pub fn transform(&mut self, transform: Transform, node: NodeId) -> NodeId {
         // as an optimization, compose transforms of transforms while building the scene.
         if let Node::Transform { transform: t, node } = self.node(node) {
-            self.add_node(Node::Transform { transform: transform * t, node: *node })
+            self.add_node(Node::Transform {
+                transform: transform * t,
+                node: *node,
+            })
         } else {
             self.add_node(Node::Transform { transform, node })
         }
@@ -124,6 +141,18 @@ impl Prim {
         match self {
             Prim::Plane { normal } => Distance(p.dot(normal)),
             Prim::Sphere { radius } => Distance(p.norm() - radius),
+            Prim::Box {
+                width,
+                height,
+                depth,
+            } => {
+                let x = p.x.abs() - *width;
+                let y = p.y.abs() - *height;
+                let z = p.z.abs() - *depth;
+                let diff = x.max(y.max(x)).min(0.0);
+                Distance(Vector3::new(x.max(0.), y.max(0.), z.max(0.)).norm() + diff)
+            }
+
             Prim::Torus { hole, radius } => {
                 let q = Vector2::new(p.xz().norm() - hole, p.y);
                 return Distance(q.norm() - radius);

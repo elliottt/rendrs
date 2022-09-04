@@ -24,21 +24,23 @@ fn main() {
         torus_rot_x,
     );
     let plane = scene.plane(Unit::new_normalize(Vector3::new(0., 1., 0.)));
+    let bx = scene.rect(1., 1., 1.);
     // let root = scene.group(vec![plane, sphere]);
     // let root = scene.group(vec![plane, torus]);
     // let root = scene.group(vec![sphere]);
     // let root = scene.group(vec![plane]);
     let root = scene.group(vec![torus, torus_rot_x, torus_rot_y]);
     // let root = scene.group(vec![torus, plane]);
+    // let root = bx;
 
-    // let info = camera::CanvasInfo::new(80., 24.);
-    let info = camera::CanvasInfo::new(512., 512.);
+    let info = camera::CanvasInfo::new(80., 24.);
+    // let info = camera::CanvasInfo::new(512., 512.);
 
     let camera = camera::PinholeCamera::new(
         &info,
         // Transform::new().translate(&Vector3::new(0., 0.1, -3.)),
         Transform::look_at(
-            &Point3::new(0., 1.3, 3.),
+            &Point3::new(1., 1.3, 3.),
             &Point3::new(0., 0., 0.),
             &Vector3::new(0., 1., 0.),
         ),
