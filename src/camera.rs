@@ -11,29 +11,16 @@ pub struct CanvasInfo {
 
     /// The height in pixels of the canvas.
     pub height: f32,
-
-    /// The aspect ratio of a single pixel, usually 1.0.
-    pub pixel_aspect_ratio: f32,
 }
 
 impl CanvasInfo {
     /// Create a new [`CanvasInfo`].
     pub fn new(width: f32, height: f32) -> Self {
-        Self {
-            width,
-            height,
-            pixel_aspect_ratio: 1.,
-        }
+        Self { width, height }
     }
 
     pub fn new_canvas(&self) -> Canvas {
         Canvas::new(self.width as u32, self.height as u32)
-    }
-
-    /// Set the pixel aspect ratio.
-    pub fn with_pixel_aspect_ratio(mut self, ratio: f32) -> Self {
-        self.pixel_aspect_ratio = ratio;
-        self
     }
 
     /// Compute the aspect ratio.
@@ -46,7 +33,7 @@ impl CanvasInfo {
     }
 
     pub fn height(&self) -> f32 {
-        self.height * self.pixel_aspect_ratio
+        self.height
     }
 }
 
