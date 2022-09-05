@@ -1,3 +1,5 @@
+use crate::math;
+
 #[derive(Debug, Default, Clone)]
 pub struct Color {
     pub r: f32,
@@ -22,6 +24,13 @@ pub struct Rows<'a> {
 impl Color {
     pub fn new(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b }
+    }
+
+    pub fn hex(hex: usize) -> Self {
+        let r = ((hex & 0xff0000) >> 16) as f32 / 255.;
+        let g = ((hex & 0x00ff00) >> 8) as f32 / 255.;
+        let b = (hex & 0x0000ff) as f32 / 255.;
+        Color::new(r, g, b)
     }
 
     pub fn black() -> Self {
@@ -61,26 +70,124 @@ impl std::ops::Mul<Color> for f32 {
     }
 }
 
-impl std::ops::Add for &Color {
+impl std::ops::Mul<f32> for Color {
     type Output = Color;
-    fn add(self, rhs: &Color) -> Self::Output {
+    fn mul(mut self, rhs: f32) -> Self::Output {
+        self *= rhs;
+        self
+    }
+}
+
+impl std::ops::Mul<f32> for &Color {
+    type Output = Color;
+    fn mul(self, rhs: f32) -> Self::Output {
         let mut out = self.clone();
-        out += rhs;
+        out *= rhs;
         out
     }
 }
 
-impl std::ops::AddAssign<&Color> for Color {
-    fn add_assign(&mut self, rhs: &Color) {
-        self.r += rhs.r;
-        self.g += rhs.g;
-        self.b += rhs.b;
+impl std::ops::MulAssign<f32> for Color {
+    fn mul_assign(&mut self, rhs: f32) {
+        self.r *= rhs;
+        self.g *= rhs;
+        self.b *= rhs;
+    }
+}
+
+impl std::ops::Mul for Color {
+    type Output = Color;
+    fn mul(mut self, rhs: Color) -> Self::Output {
+        self *= &rhs;
+        self
+    }
+}
+
+impl std::ops::Mul<&Color> for Color {
+    type Output = Color;
+    fn mul(mut self, rhs: &Color) -> Self::Output {
+        self *= rhs;
+        self
+    }
+}
+
+impl std::ops::Mul for &Color {
+    type Output = Color;
+    fn mul(self, rhs: &Color) -> Self::Output {
+        let mut out = self.clone();
+        out *= rhs;
+        out
+    }
+}
+
+impl std::ops::Mul<Color> for &Color {
+    type Output = Color;
+    fn mul(self, mut rhs: Color) -> Self::Output {
+        rhs *= self;
+        rhs
+    }
+}
+
+impl std::ops::MulAssign<&Color> for Color {
+    fn mul_assign(&mut self, rhs: &Color) {
+        self.r *= rhs.r;
+        self.g *= rhs.g;
+        self.b *= rhs.b;
+    }
+}
+
+impl std::ops::Add for Color {
+    type Output = Color;
+
+    #[inline]
+    fn add(mut self, rhs: Color) -> Self::Output {
+        self += &rhs;
+        self
+    }
+}
+
+impl std::ops::Add for &Color {
+    type Output = Color;
+
+    #[inline]
+    fn add(self, rhs: &Color) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
+impl std::ops::Add<&Color> for Color {
+    type Output = Color;
+
+    #[inline]
+    fn add(mut self, rhs: &Color) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl std::ops::Add<Color> for &Color {
+    type Output = Color;
+
+    #[inline]
+    fn add(self, mut rhs: Color) -> Self::Output {
+        rhs += self;
+        rhs
     }
 }
 
 impl std::ops::AddAssign for Color {
+    #[inline]
     fn add_assign(&mut self, rhs: Color) {
         self.add_assign(&rhs)
+    }
+}
+
+impl std::ops::AddAssign<&Color> for Color {
+    #[inline]
+    fn add_assign(&mut self, rhs: &Color) {
+        self.r += rhs.r;
+        self.g += rhs.g;
+        self.b += rhs.b;
     }
 }
 
@@ -152,7 +259,7 @@ impl Canvas {
 
         for row in self.rows() {
             for col in row {
-                let g = col.to_grayscale();
+                let g = math::clamp(0., 1., col.to_grayscale());
                 let index = (g * bound) as usize;
                 buf.push(bytes[index] as char);
             }

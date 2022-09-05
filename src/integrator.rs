@@ -3,8 +3,9 @@ use nalgebra::{Point3, Unit, Vector3};
 use crate::{
     camera::{Camera, Sample},
     canvas::{Canvas, Color},
+    lighting,
     ray::Ray,
-    scene::{Distance, MarchConfig, NodeId, Scene},
+    scene::{Distance, MarchConfig, MaterialId, NodeId, Scene},
 };
 
 pub fn render<I: Integrator>(canvas: &mut Canvas, scene: &Scene, root: NodeId, integrator: &mut I) {
@@ -56,15 +57,21 @@ impl<C: Camera> Integrator for Whitted<C> {
         let mut color = Color::black();
         let hit = hit.unwrap();
 
+        if hit.material.is_none() {
+            // TODO: what should this be?
+            return color;
+        }
 
-        // compute the new outgoing ray
+        let material = scene.material(hit.material.unwrap());
+
         let normal = hit.normal(scene, root);
+        let eye = -hit.ray.direction;
 
         // TODO: compute emitted light for emissive objects
 
         for light in scene.lights.iter() {
-            // TODO: check if light is visible by sampling it from the intersection point, don't
-            // forget to add the min_dist to the ray before marching
+            // TODO: check to see if the light is visible before computing the lighting
+            color += lighting::phong(material, light, &hit.ray.position, &eye, &normal);
         }
 
         // TODO: compute reflection contribution
@@ -81,6 +88,9 @@ pub struct Hit {
 
     /// The intersection point in object space.
     pub object: Point3<f32>,
+
+    /// The material for the object.
+    pub material: Option<MaterialId>,
 
     /// The ray that caused the intersection.
     pub ray: Ray,
@@ -110,6 +120,7 @@ impl Hit {
                 return Some(Self {
                     node: result.id,
                     object: result.object,
+                    material: result.material,
                     ray,
                     distance: total_dist,
                     steps: i,

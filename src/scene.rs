@@ -150,6 +150,10 @@ impl Scene {
         }
     }
 
+    pub fn paint(&mut self, material: MaterialId, node: NodeId) -> NodeId {
+        self.add_node(Node::Material { material, node })
+    }
+
     fn add_material(&mut self, material: Material) -> MaterialId {
         let id = MaterialId(self.materials.len() as u32);
         self.materials.push(material);
@@ -187,8 +191,8 @@ impl Scene {
         &self.lights[id as usize]
     }
 
-    pub fn point_light(&mut self, transform: Transform, color: Color) -> LightId {
-        self.add_light(Light::Point { transform, color })
+    pub fn point_light(&mut self, position: Point3<f32>, color: Color) -> LightId {
+        self.add_light(Light::Point { position, color })
     }
 
     pub fn diffuse_light(&mut self, color: Color) -> LightId {
@@ -289,7 +293,7 @@ pub enum Light {
     Diffuse { color: Color },
 
     /// A point light, positioned according to the given transform.
-    Point { transform: Transform, color: Color },
+    Point { position: Point3<f32>, color: Color },
 }
 
 impl Light {
@@ -298,6 +302,13 @@ impl Light {
         match self {
             Light::Diffuse { color } => color.clone(),
             Light::Point { .. } => Color::black(),
+        }
+    }
+
+    pub fn intensity(&self) -> &Color {
+        match self {
+            Light::Diffuse { color } => color,
+            Light::Point { color, .. } => color,
         }
     }
 }

@@ -1,5 +1,7 @@
 use nalgebra::{Point3, Unit, Vector3};
 
+use crate::math;
+
 #[derive(Debug, Clone)]
 pub struct Ray {
     pub position: Point3<f32>,
@@ -21,20 +23,22 @@ impl Ray {
     }
 
     pub fn reflect(&self, normal: &Unit<Vector3<f32>>) -> Ray {
-        let direction = self.direction.clone().into_inner();
-        let normal = normal.clone().into_inner();
-        let direction = direction - (2. * normal) * direction.dot(&normal);
-
         Ray {
             position: self.position.clone(),
-            direction: Unit::new_normalize(direction),
+            direction: math::reflect(&self.direction, normal),
         }
     }
 }
 
 #[test]
 fn test_reflect() {
-    let ray = Ray::new(Point3::origin(), Unit::new_unchecked(Vector3::new(0., 0., 1.)));
+    let ray = Ray::new(
+        Point3::origin(),
+        Unit::new_unchecked(Vector3::new(0., 0., 1.)),
+    );
     let next = ray.reflect(&Unit::new_unchecked(Vector3::new(0., 0., -1.)));
-    assert_eq!(Unit::new_unchecked(Vector3::new(0., 0., -1.)), next.direction);
+    assert_eq!(
+        Unit::new_unchecked(Vector3::new(0., 0., -1.)),
+        next.direction
+    );
 }
