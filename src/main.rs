@@ -9,6 +9,7 @@ mod ray;
 mod scene;
 mod transform;
 
+use canvas::Color;
 use transform::Transform;
 
 fn main() {
@@ -32,6 +33,9 @@ fn main() {
     let root = scene.group(vec![torus, torus_rot_x, torus_rot_y]);
     // let root = scene.group(vec![torus, plane]);
     // let root = bx;
+    // let root = scene.group(vec![plane, bx]);
+
+    scene.diffuse_light(Color::new(0.2, 0.2, 0.2));
 
     let info = camera::CanvasInfo::new(80., 24.);
     // let info = camera::CanvasInfo::new(512., 512.);

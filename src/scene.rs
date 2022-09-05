@@ -1,14 +1,27 @@
 use nalgebra::{Point3, Unit, Vector2, Vector3};
 
-use crate::transform::{ApplyTransform, Transform};
+use crate::{
+    canvas::Color,
+    transform::{ApplyTransform, Transform},
+};
 
 #[derive(Debug, Default)]
 pub struct Scene {
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
+    pub materials: Vec<Material>,
+    pub lights: Vec<Light>,
 }
+
+// TODO: make a macro for deriving the id/vector pairs
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NodeId(u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MaterialId(u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LightId(u32);
 
 /// Primitive shapes, centered at the origin.
 #[derive(Debug)]
@@ -37,6 +50,9 @@ pub enum Node {
 
     /// Apply this Transform the node.
     Transform { transform: Transform, node: NodeId },
+
+    /// Apply this material to the node.
+    Material { material: MaterialId, node: NodeId },
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -69,6 +85,9 @@ pub struct SDFResult {
 
     /// The distance between the world-space ray and this object.
     pub distance: Distance,
+
+    /// The material for the object.
+    pub material: Option<MaterialId>,
 }
 
 impl Scene {
@@ -76,6 +95,11 @@ impl Scene {
         let id = NodeId(self.nodes.len() as u32);
         self.nodes.push(node);
         id
+    }
+
+    /// Fetch a node from the scene.
+    pub fn node(&self, NodeId(id): NodeId) -> &Node {
+        &self.nodes[id as usize]
     }
 
     /// Construct a plane with the given normal in the scene.
@@ -126,9 +150,49 @@ impl Scene {
         }
     }
 
-    /// Fetch a node from the scene.
-    pub fn node(&self, NodeId(id): NodeId) -> &Node {
-        &self.nodes[id as usize]
+    fn add_material(&mut self, material: Material) -> MaterialId {
+        let id = MaterialId(self.materials.len() as u32);
+        self.materials.push(material);
+        id
+    }
+
+    pub fn material(&self, MaterialId(id): MaterialId) -> &Material {
+        &self.materials[id as usize]
+    }
+
+    pub fn phong(
+        &mut self,
+        pattern: Color,
+        ambient: f32,
+        diffuse: f32,
+        specular: f32,
+        shininess: f32,
+    ) -> MaterialId {
+        self.add_material(Material {
+            pattern,
+            ambient,
+            diffuse,
+            specular,
+            shininess,
+        })
+    }
+
+    fn add_light(&mut self, light: Light) -> LightId {
+        let id = LightId(self.lights.len() as u32);
+        self.lights.push(light);
+        id
+    }
+
+    pub fn light(&self, LightId(id): LightId) -> &Light {
+        &self.lights[id as usize]
+    }
+
+    pub fn point_light(&mut self, transform: Transform, color: Color) -> LightId {
+        self.add_light(Light::Point { transform, color })
+    }
+
+    pub fn diffuse_light(&mut self, color: Color) -> LightId {
+        self.add_light(Light::Diffuse { color })
     }
 }
 
@@ -146,10 +210,10 @@ impl Prim {
                 height,
                 depth,
             } => {
-                let x = p.x.abs() - *width;
-                let y = p.y.abs() - *height;
-                let z = p.z.abs() - *depth;
-                let diff = x.max(y.max(x)).min(0.0);
+                let x = p.x.abs() - width;
+                let y = p.y.abs() - height;
+                let z = p.z.abs() - depth;
+                let diff = x.max(y).max(z).min(0.0);
                 Distance(Vector3::new(x.max(0.), y.max(0.), z.max(0.)).norm() + diff)
             }
 
@@ -166,6 +230,7 @@ impl Node {
         match self {
             Node::Prim { prim } => SDFResult {
                 id,
+                material: None,
                 object: point.clone(),
                 distance: prim.sdf(point),
             },
@@ -181,6 +246,12 @@ impl Node {
                 scene
                     .node(*node)
                     .sdf(scene, *node, &point.invert(transform))
+            }
+
+            Node::Material { material, node } => {
+                let mut res = scene.node(*node).sdf(scene, *node, point);
+                res.material = Some(*material);
+                res
             }
         }
     }
@@ -210,4 +281,42 @@ impl Ord for Distance {
             }
         })
     }
+}
+
+#[derive(Debug)]
+pub enum Light {
+    /// A diffuse light, for rays that escape the scene.
+    Diffuse { color: Color },
+
+    /// A point light, positioned according to the given transform.
+    Point { transform: Transform, color: Color },
+}
+
+impl Light {
+    /// The light contribution for rays that escape the scene.
+    pub fn light_escape(&self) -> Color {
+        match self {
+            Light::Diffuse { color } => color.clone(),
+            Light::Point { .. } => Color::black(),
+        }
+    }
+}
+
+/// Materials using the Phong reflection model.
+#[derive(Debug)]
+pub struct Material {
+    /// For now, the pattern of a surface is just a color.
+    pub pattern: Color,
+
+    /// The ambient reflection of this surface.
+    pub ambient: f32,
+
+    /// The diffuse reflection of this surface.
+    pub diffuse: f32,
+
+    /// The specular reflection of this surface.
+    pub specular: f32,
+
+    /// The shininess of the surface.
+    pub shininess: f32,
 }

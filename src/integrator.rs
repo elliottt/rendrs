@@ -39,34 +39,38 @@ impl<C: Camera> Whitted<C> {
             max_reflections,
         }
     }
-
-    pub fn shade(&mut self, depth: usize, scene: &Scene, root: NodeId, hit: &Hit) -> Color {
-        if depth == 0 {
-            return Color::black();
-        }
-
-        // TODO: this is incorrect, but gives something sort of realistic looking
-
-        // compute the new outgoing ray
-        let mut ray = hit.ray.reflect(&hit.normal(scene, root));
-        ray.step(self.config.min_dist);
-
-        0.5 * if let Some(hit) = Hit::march(&self.config, scene, root, ray) {
-            self.shade(depth - 1, scene, root, &hit)
-        } else {
-            let t = 0.5 * (hit.ray.direction.y + 1.0);
-            (1. - t) * Color::white()
-        }
-    }
 }
 
 impl<C: Camera> Integrator for Whitted<C> {
     fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
-        if let Some(hit) = Hit::march(&self.config, scene, root, self.camera.generate_ray(sample)) {
-            self.shade(self.max_reflections, scene, root, &hit)
-        } else {
-            Color::white()
+        let hit = Hit::march(&self.config, scene, root, self.camera.generate_ray(sample));
+
+        if hit.is_none() {
+            let mut color = Color::black();
+            for light in scene.lights.iter() {
+                color += light.light_escape();
+            }
+            return color;
         }
+
+        let mut color = Color::black();
+        let hit = hit.unwrap();
+
+
+        // compute the new outgoing ray
+        let normal = hit.normal(scene, root);
+
+        // TODO: compute emitted light for emissive objects
+
+        for light in scene.lights.iter() {
+            // TODO: check if light is visible by sampling it from the intersection point, don't
+            // forget to add the min_dist to the ray before marching
+        }
+
+        // TODO: compute reflection contribution
+        // TODO: compute refraction contribution
+
+        color
     }
 }
 
@@ -128,7 +132,7 @@ impl Hit {
     /// Compute the normal at this hit.
     pub fn normal(&self, scene: &Scene, root: NodeId) -> Unit<Vector3<f32>> {
         let node = scene.node(root);
-        let offset = Vector3::new(0.0001, 0.0, 0.0);
+        let offset = Vector3::new(0.00001, 0.0, 0.0);
         let px = node.sdf(scene, root, &(self.ray.position - offset.xyy()));
         let py = node.sdf(scene, root, &(self.ray.position - offset.yxy()));
         let pz = node.sdf(scene, root, &(self.ray.position - offset.yyx()));

@@ -1,4 +1,4 @@
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Color {
     pub r: f32,
     pub g: f32,
@@ -28,6 +28,10 @@ impl Color {
         Self::new(0., 0., 0.)
     }
 
+    pub fn is_black(&self) -> bool {
+        self.r == 0. && self.g == 0. && self.b == 0.
+    }
+
     pub fn white() -> Self {
         Self::new(1., 1., 1.)
     }
@@ -54,6 +58,29 @@ impl std::ops::Mul<Color> for f32 {
     type Output = Color;
     fn mul(self, rhs: Color) -> Self::Output {
         self * &rhs
+    }
+}
+
+impl std::ops::Add for &Color {
+    type Output = Color;
+    fn add(self, rhs: &Color) -> Self::Output {
+        let mut out = self.clone();
+        out += rhs;
+        out
+    }
+}
+
+impl std::ops::AddAssign<&Color> for Color {
+    fn add_assign(&mut self, rhs: &Color) {
+        self.r += rhs.r;
+        self.g += rhs.g;
+        self.b += rhs.b;
+    }
+}
+
+impl std::ops::AddAssign for Color {
+    fn add_assign(&mut self, rhs: Color) {
+        self.add_assign(&rhs)
     }
 }
 
