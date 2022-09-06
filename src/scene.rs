@@ -338,6 +338,13 @@ impl Light {
             Light::Point { color, .. } => color,
         }
     }
+
+    pub fn position(&self) -> Option<Point3<f32>> {
+        match self {
+            Light::Diffuse { .. } => None,
+            Light::Point { position, .. } => Some(position.clone()),
+        }
+    }
 }
 
 /// Materials using the Phong reflection model.

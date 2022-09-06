@@ -69,7 +69,21 @@ impl<C: Camera> Integrator for Whitted<C> {
 
         let mut color = Color::black();
         for light in scene.lights.iter() {
-            // TODO: check to see if the light is visible before computing the lighting
+            // if this light has a position in the scene, check to see if it's visible from the
+            // intersection point.
+            if let Some(light) = light.position() {
+                /// move directly out from the surface by min_dist
+                let start = hit.ray.position + self.config.min_dist * hit.normal.as_ref();
+                let dir = light - start;
+                let dist_to_light = dir.norm();
+                let ray = Ray::new(start, Unit::new_normalize(dir));
+                if let Some(hit) = Hit::march(&self.config, scene, root, ray) {
+                    if hit.distance.0 < dist_to_light {
+                        continue;
+                    }
+                }
+            }
+
             color += lighting::phong(material, light, &hit.ray.position, &eye, &hit.normal);
         }
 

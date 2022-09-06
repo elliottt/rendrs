@@ -16,8 +16,8 @@ use transform::Transform;
 
 fn main() {
     let mut scene = scene::Scene::default();
-    let mat1 = scene.phong(Color::hex(0xc7edc9), 0.1, 0.9, 0.9, 200.);
-    let mat2 = scene.phong(Color::hex(0x6c7ba1), 0.1, 0.9, 0.0, 200.);
+    let mat1 = scene.phong(Color::hex(0xc7edc9), 0.2, 0.9, 0.9, 200.);
+    let mat2 = scene.phong(Color::hex(0x6c7ba1), 0.2, 0.9, 0.0, 200.);
 
     let sphere = scene.sphere(1.);
     let torus = scene.torus(1.5, 0.3);
@@ -45,7 +45,7 @@ fn main() {
 
     // let root = scene.paint(mat1, root);
 
-    // scene.diffuse_light(Color::new(0.2, 0.2, 0.2));
+    scene.diffuse_light(Color::hex(0xffffff));
     // scene.diffuse_light(Color::hex(0xe5ffe6));
     scene.point_light(Point3::new(2., 4., 0.), Color::new(1., 1., 1.));
 
