@@ -54,24 +54,23 @@ impl<C: Camera> Integrator for Whitted<C> {
             return color;
         }
 
-        let mut color = Color::black();
         let hit = hit.unwrap();
 
+        // return unlit magenta if there's no material for this object
         if hit.material.is_none() {
-            // TODO: what should this be?
-            return color;
+            return Color::hex(0xff00ff);
         }
 
         let material = scene.material(hit.material.unwrap());
 
-        let normal = hit.normal(scene, root);
         let eye = -hit.ray.direction;
 
         // TODO: compute emitted light for emissive objects
 
+        let mut color = Color::black();
         for light in scene.lights.iter() {
             // TODO: check to see if the light is visible before computing the lighting
-            color += lighting::phong(material, light, &hit.ray.position, &eye, &normal);
+            color += lighting::phong(material, light, &hit.ray.position, &eye, &hit.normal);
         }
 
         // TODO: compute reflection contribution
@@ -89,6 +88,9 @@ pub struct Hit {
     /// The intersection point in object space.
     pub object: Point3<f32>,
 
+    /// The normal of the object at the hit, in world space.
+    pub normal: Unit<Vector3<f32>>,
+
     /// The material for the object.
     pub material: Option<MaterialId>,
 
@@ -100,9 +102,6 @@ pub struct Hit {
 
     /// The number of steps taken.
     pub steps: u32,
-
-    /// The distance from the final measurement to the object, used when computing the normal.
-    last_distance: Distance,
 }
 
 impl Hit {
@@ -120,11 +119,11 @@ impl Hit {
                 return Some(Self {
                     node: result.id,
                     object: result.object,
+                    normal: result.normal,
                     material: result.material,
                     ray,
                     distance: total_dist,
                     steps: i,
-                    last_distance: result.distance,
                 });
             }
 
@@ -138,20 +137,5 @@ impl Hit {
         }
 
         None
-    }
-
-    /// Compute the normal at this hit.
-    pub fn normal(&self, scene: &Scene, root: NodeId) -> Unit<Vector3<f32>> {
-        let node = scene.node(root);
-        let offset = Vector3::new(0.00001, 0.0, 0.0);
-        let px = node.sdf(scene, root, &(self.ray.position - offset.xyy()));
-        let py = node.sdf(scene, root, &(self.ray.position - offset.yxy()));
-        let pz = node.sdf(scene, root, &(self.ray.position - offset.yyx()));
-
-        Unit::new_normalize(Vector3::new(
-            self.last_distance.0 - px.distance.0,
-            self.last_distance.0 - py.distance.0,
-            self.last_distance.0 - pz.distance.0,
-        ))
     }
 }

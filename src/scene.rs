@@ -83,6 +83,9 @@ pub struct SDFResult {
     /// The point in object space.
     pub object: Point3<f32>,
 
+    /// The normal in world space.
+    pub normal: Unit<Vector3<f32>>,
+
     /// The distance between the world-space ray and this object.
     pub distance: Distance,
 
@@ -227,6 +230,27 @@ impl Prim {
             }
         }
     }
+
+    /// Compute the normal for the primitive, relative to the point.
+    pub fn normal(&self, p: &Point3<f32>) -> Unit<Vector3<f32>> {
+        match self {
+            // The plane knows its normal already
+            Prim::Plane { normal } => normal.clone(),
+
+            // The sphere is always centered at the origin.
+            Prim::Sphere { .. } => Unit::new_normalize(Vector3::new(p.x, p.y, p.z)),
+
+            // For the other cases, we just fall back on multiple uses of the SDF.
+            _ => {
+                let offset = Vector3::new(0.00001, 0.0, 0.0);
+                let dist = self.sdf(p);
+                let px = self.sdf(&(p - offset.xyy()));
+                let py = self.sdf(&(p - offset.yxy()));
+                let pz = self.sdf(&(p - offset.yyx()));
+                Unit::new_normalize(Vector3::new(dist.0 - px.0, dist.0 - py.0, dist.0 - pz.0))
+            }
+        }
+    }
 }
 
 impl Node {
@@ -236,6 +260,7 @@ impl Node {
                 id,
                 material: None,
                 object: point.clone(),
+                normal: prim.normal(point),
                 distance: prim.sdf(point),
             },
 
@@ -247,9 +272,11 @@ impl Node {
                 .unwrap(),
 
             Node::Transform { transform, node } => {
-                scene
+                let mut res = scene
                     .node(*node)
-                    .sdf(scene, *node, &point.invert(transform))
+                    .sdf(scene, *node, &point.invert(transform));
+                res.normal = res.normal.apply(transform);
+                res
             }
 
             Node::Material { material, node } => {
