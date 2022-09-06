@@ -143,8 +143,7 @@ impl ApplyTransform for Vector3<f32> {
 impl<T: ApplyTransform> ApplyTransform for Unit<T> {
     #[inline]
     fn transform(&self, m: &Matrix4<f32>) -> Self {
-        let inner = &**self;
-        Unit::new_unchecked(inner.transform(m))
+        Unit::new_unchecked(self.as_ref().transform(m))
     }
 }
 
