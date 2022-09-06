@@ -12,9 +12,16 @@ pub fn phong(
     point: &Point3<f32>,
     eyev: &Unit<Vector3<f32>>,
     normal: &Unit<Vector3<f32>>,
+    in_shadow: bool,
 ) -> Color {
     let effective_color = &material.pattern * light.intensity();
     let ambient = material.ambient * &effective_color;
+
+    // When the point is out of view of this light, we only integrate the ambient component of the
+    // light.
+    if in_shadow {
+        return ambient;
+    }
 
     let diffuse_specular = match light {
         Light::Diffuse { .. } => Color::black(),

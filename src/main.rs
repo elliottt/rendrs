@@ -33,21 +33,21 @@ fn main() {
     let bx = scene.rect(1., 1., 1.);
     // let root = scene.group(vec![plane, sphere]);
     // let root = scene.group(vec![plane, torus]);
-    // let root = scene.group(vec![sphere]);
+    // let root = sphere;
     // let root = scene.group(vec![plane]);
-    let torus = scene.paint(mat1, torus);
-    let torus_rot_x = scene.paint(mat2, torus_rot_x);
-    let torus_rot_y = scene.paint(mat1, torus_rot_y);
+    // let torus = scene.paint(mat1, torus);
+    // let torus_rot_x = scene.paint(mat2, torus_rot_x);
+    // let torus_rot_y = scene.paint(mat1, torus_rot_y);
     let root = scene.group(vec![torus, torus_rot_x, torus_rot_y]);
     // let root = scene.group(vec![torus, plane]);
     // let root = bx;
     // let root = scene.group(vec![plane, bx]);
 
-    // let root = scene.paint(mat1, root);
+    let root = scene.paint(mat1, root);
 
     scene.diffuse_light(Color::hex(0xffffff));
     // scene.diffuse_light(Color::hex(0xe5ffe6));
-    scene.point_light(Point3::new(2., 4., 0.), Color::new(1., 1., 1.));
+    scene.point_light(Point3::new(2., 10., 0.), Color::new(1., 1., 1.));
 
     // let info = camera::CanvasInfo::new(80., 24.);
     let info = camera::CanvasInfo::new(512., 512.);

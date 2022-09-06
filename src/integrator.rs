@@ -5,7 +5,7 @@ use crate::{
     canvas::{Canvas, Color},
     lighting,
     ray::Ray,
-    scene::{Distance, MarchConfig, MaterialId, NodeId, Scene},
+    scene::{Distance, Light, MarchConfig, MaterialId, NodeId, Scene},
 };
 
 pub fn render<I: Integrator>(canvas: &mut Canvas, scene: &Scene, root: NodeId, integrator: &mut I) {
@@ -71,20 +71,17 @@ impl<C: Camera> Integrator for Whitted<C> {
         for light in scene.lights.iter() {
             // if this light has a position in the scene, check to see if it's visible from the
             // intersection point.
-            if let Some(light) = light.position() {
-                /// move directly out from the surface by min_dist
-                let start = hit.ray.position + self.config.min_dist * hit.normal.as_ref();
-                let dir = light - start;
-                let dist_to_light = dir.norm();
-                let ray = Ray::new(start, Unit::new_normalize(dir));
-                if let Some(hit) = Hit::march(&self.config, scene, root, ray) {
-                    if hit.distance.0 < dist_to_light {
-                        continue;
-                    }
-                }
-            }
-
-            color += lighting::phong(material, light, &hit.ray.position, &eye, &hit.normal);
+            let in_shadow = light.position().map_or(false, |light| {
+                hit.in_shadow(&self.config, scene, root, &light)
+            });
+            color += lighting::phong(
+                material,
+                light,
+                &hit.ray.position,
+                &eye,
+                &hit.normal,
+                in_shadow,
+            );
         }
 
         // TODO: compute reflection contribution
@@ -151,5 +148,23 @@ impl Hit {
         }
 
         None
+    }
+
+    /// Returns `true` when there is an object between the hit and the light at the point provided.
+    pub fn in_shadow(
+        &self,
+        config: &MarchConfig,
+        scene: &Scene,
+        root: NodeId,
+        light: &Point3<f32>,
+    ) -> bool {
+        // Move the point away from the hit by min_dist so that we ensure that there won't be an
+        // immediate intersection with the object.
+        let start = &self.ray.position + config.min_dist * self.normal.as_ref();
+
+        let dir = light - start;
+        let dist_to_light = dir.norm();
+        let ray = Ray::new(start, Unit::new_normalize(dir));
+        Hit::march(config, scene, root, ray).map_or(false, |hit| hit.distance.0 < dist_to_light)
     }
 }
