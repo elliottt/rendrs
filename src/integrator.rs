@@ -150,6 +150,32 @@ impl Hit {
         None
     }
 
+    /// March the ray until it hits something, but return only the distance.
+    pub fn march_dist(config: &MarchConfig, scene: &Scene, root: NodeId, mut ray: Ray) -> Option<Distance> {
+        let mut total_dist = Distance::default();
+
+        let node = scene.node(root);
+
+        for i in 0..config.max_steps {
+            let result = node.fast_sdf(scene, root, &ray.position);
+            let radius = result.distance.0;
+
+            if radius < config.min_dist {
+                return Some(total_dist);
+            }
+
+            total_dist.0 += radius;
+
+            if total_dist.0 > config.max_dist {
+                break;
+            }
+
+            ray.step(radius);
+        }
+
+        None
+    }
+
     /// Returns `true` when there is an object between the hit and the light at the point provided.
     pub fn in_shadow(
         &self,
@@ -165,6 +191,6 @@ impl Hit {
         let dir = light - start;
         let dist_to_light = dir.norm();
         let ray = Ray::new(start, Unit::new_normalize(dir));
-        Hit::march(config, scene, root, ray).map_or(false, |hit| hit.distance.0 < dist_to_light)
+        Hit::march_dist(config, scene, root, ray).map_or(false, |hit_dist| hit_dist.0 < dist_to_light)
     }
 }

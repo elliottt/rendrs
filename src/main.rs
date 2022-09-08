@@ -43,6 +43,9 @@ fn main() {
     // let root = bx;
     // let root = scene.group(vec![plane, bx]);
 
+    let root = scene.smooth_union(0.5, root, bx);
+    // let root = scene.union(vec![root, bx]);
+
     let root = scene.paint(mat1, root);
 
     scene.diffuse_light(Color::hex(0xffffff));

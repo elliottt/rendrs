@@ -2,6 +2,7 @@ use nalgebra::{Point3, Unit, Vector2, Vector3};
 
 use crate::{
     canvas::Color,
+    math,
     transform::{ApplyTransform, Transform},
 };
 
@@ -46,7 +47,10 @@ pub enum Node {
     Prim { prim: Prim },
 
     /// A group of nodes.
-    Group { nodes: Vec<NodeId> },
+    Group { union: bool, nodes: Vec<NodeId> },
+
+    /// A smooth union of two nodes.
+    SmoothUnion { k: f32, left: NodeId, right: NodeId },
 
     /// Apply this Transform the node.
     Transform { transform: Transform, node: NodeId },
@@ -86,6 +90,15 @@ pub struct SDFResult {
     /// The normal in world space.
     pub normal: Unit<Vector3<f32>>,
 
+    /// The distance between the world-space ray and this object.
+    pub distance: Distance,
+
+    /// The material for the object.
+    pub material: Option<MaterialId>,
+}
+
+#[derive(Debug)]
+pub struct FastSDFResult {
     /// The distance between the world-space ray and this object.
     pub distance: Distance,
 
@@ -138,7 +151,18 @@ impl Scene {
     }
 
     pub fn group(&mut self, nodes: Vec<NodeId>) -> NodeId {
-        self.add_node(Node::Group { nodes })
+        self.add_node(Node::Group {
+            union: false,
+            nodes,
+        })
+    }
+
+    pub fn union(&mut self, nodes: Vec<NodeId>) -> NodeId {
+        self.add_node(Node::Group { union: true, nodes })
+    }
+
+    pub fn smooth_union(&mut self, k: f32, left: NodeId, right: NodeId) -> NodeId {
+        self.add_node(Node::SmoothUnion { k, left, right })
     }
 
     pub fn transform(&mut self, transform: Transform, node: NodeId) -> NodeId {
@@ -264,12 +288,32 @@ impl Node {
                 distance: prim.sdf(point),
             },
 
-            Node::Group { nodes } => nodes
-                .iter()
-                .copied()
-                .map(|id| scene.node(id).sdf(scene, id, point))
-                .min_by_key(|result| result.distance)
-                .unwrap(),
+            Node::Group { union, nodes } => {
+                let mut res = nodes
+                    .iter()
+                    .copied()
+                    .map(|id| scene.node(id).sdf(scene, id, point))
+                    .min_by_key(|result| result.distance)
+                    .unwrap();
+
+                if *union {
+                    res.id = id;
+                    res.object = *point;
+                }
+
+                res
+            }
+
+            Node::SmoothUnion { k, left, right } => {
+                let res = self.fast_sdf(scene, id, point);
+                SDFResult {
+                    id,
+                    material: res.material,
+                    distance: res.distance,
+                    object: *point,
+                    normal: self.normal_sdf(scene, id, point, res.distance),
+                }
+            }
 
             Node::Transform { transform, node } => {
                 let mut res = scene
@@ -284,6 +328,66 @@ impl Node {
                 res.material = Some(*material);
                 res
             }
+        }
+    }
+
+    /// Compute the normal by using the SDF. Useful as an intermediate for combination nodes that
+    /// don't have a closed form normal computation.
+    fn normal_sdf(
+        &self,
+        scene: &Scene,
+        id: NodeId,
+        p: &Point3<f32>,
+        dist: Distance,
+    ) -> Unit<Vector3<f32>> {
+        let offset = Vector3::new(0.00001, 0.0, 0.0);
+        let px = self.fast_sdf(scene, id, &(p - offset.xyy())).distance;
+        let py = self.fast_sdf(scene, id, &(p - offset.yxy())).distance;
+        let pz = self.fast_sdf(scene, id, &(p - offset.yyx())).distance;
+        Unit::new_normalize(Vector3::new(dist.0 - px.0, dist.0 - py.0, dist.0 - pz.0))
+    }
+
+    // A version of `sdf` that only computes the distance and material information. Useful for
+    // things like lighting calculations.
+    pub fn fast_sdf(&self, scene: &Scene, id: NodeId, point: &Point3<f32>) -> FastSDFResult {
+        match self {
+            Node::Prim { prim } => FastSDFResult {
+                distance: prim.sdf(point),
+                material: None,
+            },
+
+            Node::Group { nodes, .. } => nodes
+                .iter()
+                .copied()
+                .map(|id| scene.node(id).fast_sdf(scene, id, point))
+                .min_by_key(|res| res.distance)
+                .unwrap(),
+
+            Node::SmoothUnion { k, left, right } => {
+                let mut left = scene.node(*left).fast_sdf(scene, *left, point);
+                let right = scene.node(*right).fast_sdf(scene, *right, point);
+
+                let diff = right.distance.0 - left.distance.0;
+
+                if diff < 0. {
+                    left.material = right.material;
+                }
+
+                let h = math::clamp(0.0, 1.0, 0.5 + 0.5 * diff / k);
+                let factor = k * h * (1.0 - h);
+
+                left.distance = Distance(math::mix(right.distance.0, left.distance.0, h) - factor);
+
+                left
+            }
+
+            Node::Transform { transform, node } => {
+                scene
+                    .node(*node)
+                    .fast_sdf(scene, *node, &point.invert(transform))
+            }
+
+            Node::Material { node, .. } => scene.node(*node).fast_sdf(scene, *node, point),
         }
     }
 }

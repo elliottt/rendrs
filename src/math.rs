@@ -6,6 +6,12 @@ pub fn reflect(vec: &Unit<Vector3<f32>>, normal: &Unit<Vector3<f32>>) -> Unit<Ve
 }
 
 /// Clamp a value to the range.
+#[inline]
 pub fn clamp(lo: f32, hi: f32, val: f32) -> f32 {
-    lo.max(val).min(hi)
+    val.max(lo).min(hi)
+}
+
+#[inline]
+pub fn mix(x: f32, y: f32, a: f32) -> f32 {
+    x * (1.0 - a) + y * a
 }
