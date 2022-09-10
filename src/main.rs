@@ -1,12 +1,14 @@
 use nalgebra::{Point3, Unit, Vector3};
 
 use crate::camera::Camera;
+use anyhow::Error;
 
 mod camera;
 mod canvas;
 mod integrator;
 mod lighting;
 mod math;
+mod parser;
 mod ray;
 mod scene;
 mod transform;
@@ -14,7 +16,8 @@ mod transform;
 use canvas::Color;
 use transform::Transform;
 
-fn main() {
+fn main() -> Result<(), Error> {
+    /*
     let mut scene = scene::Scene::default();
     let mat1 = scene.phong(Color::hex(0xc7edc9), 0.2, 0.9, 0.9, 200.);
     let mat2 = scene.phong(Color::hex(0x6c7ba1), 0.2, 0.9, 0.0, 200.);
@@ -43,7 +46,7 @@ fn main() {
     // let root = bx;
     // let root = scene.group(vec![plane, bx]);
 
-    let root = scene.smooth_union(0.5, root, bx);
+    let root = scene.smooth_union(0.2, root, bx);
     // let root = scene.union(vec![root, bx]);
 
     let root = scene.paint(mat1, root);
@@ -69,7 +72,7 @@ fn main() {
     let mut c = info.new_canvas();
     let mut whitted = integrator::Whitted::new(camera, scene::MarchConfig::default(), 10);
     integrator::render(&mut c, &scene, root, &mut whitted);
-    println!("---\n{}\n---", c.to_ascii());
+    // println!("---\n{}\n---", c.to_ascii());
 
     image::save_buffer(
         "test.jpg",
@@ -79,4 +82,14 @@ fn main() {
         image::ColorType::Rgb8,
     )
     .unwrap();
+    */
+
+    let input = std::fs::read_to_string("test.scene")?;
+    let lexer = parser::lexer::Lexer::new(&input);
+
+    for lexeme in lexer {
+        println!("{:?}", lexeme);
+    }
+
+    Ok(())
 }

@@ -277,6 +277,17 @@ impl Prim {
     }
 }
 
+/// Returns the difference between the right and left distances, `h` which is the linear
+/// interpolation value between the two distances, and the composite distance.
+fn smooth_union_parts(k: f32, left: Distance, right: Distance) -> (f32, f32, Distance) {
+    let diff = right.0 - left.0;
+
+    let h = math::clamp(0.0, 1.0, 0.5 + 0.5 * diff / k);
+    let factor = k * h * (1.0 - h);
+
+    (diff, h, Distance(math::mix(right.0, left.0, h) - factor))
+}
+
 impl Node {
     pub fn sdf(&self, scene: &Scene, id: NodeId, point: &Point3<f32>) -> SDFResult {
         match self {
@@ -305,14 +316,30 @@ impl Node {
             }
 
             Node::SmoothUnion { k, left, right } => {
-                let res = self.fast_sdf(scene, id, point);
-                SDFResult {
-                    id,
-                    material: res.material,
-                    distance: res.distance,
-                    object: *point,
-                    normal: self.normal_sdf(scene, id, point, res.distance),
+                let mut left = scene.node(*left).sdf(scene, *left, point);
+                let right = scene.node(*right).sdf(scene, *right, point);
+
+                let (diff, h, dist) = smooth_union_parts(*k, left.distance, right.distance);
+
+                if diff < 0. {
+                    left.material = right.material;
                 }
+
+                left.distance = dist;
+
+                // Try to preserve the normals of the left and right objects, but fall back on
+                // re-computing the normal for the points where the two are blending. This isn't
+                // necessarily an optimization if the unioned models are simple, as it's more
+                // costly to run `Node::sdf` than `Node::fast_sdf`.
+                if h < 1. {
+                    if h == 0. {
+                        left.normal = right.normal;
+                    } else {
+                        left.normal = self.normal_sdf(scene, id, point, left.distance);
+                    }
+                }
+
+                left
             }
 
             Node::Transform { transform, node } => {
@@ -367,16 +394,13 @@ impl Node {
                 let mut left = scene.node(*left).fast_sdf(scene, *left, point);
                 let right = scene.node(*right).fast_sdf(scene, *right, point);
 
-                let diff = right.distance.0 - left.distance.0;
+                let (diff, _, dist) = smooth_union_parts(*k, left.distance, right.distance);
 
                 if diff < 0. {
                     left.material = right.material;
                 }
 
-                let h = math::clamp(0.0, 1.0, 0.5 + 0.5 * diff / k);
-                let factor = k * h * (1.0 - h);
-
-                left.distance = Distance(math::mix(right.distance.0, left.distance.0, h) - factor);
+                left.distance = dist;
 
                 left
             }
