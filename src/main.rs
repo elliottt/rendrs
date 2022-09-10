@@ -85,11 +85,8 @@ fn main() -> Result<(), Error> {
     */
 
     let input = std::fs::read_to_string("test.scene")?;
-    let lexer = parser::lexer::Lexer::new(&input);
-
-    for lexeme in lexer {
-        println!("{:?}", lexeme);
-    }
+    let scene = parser::parse(&input)?;
+    println!("{:?}", scene);
 
     Ok(())
 }

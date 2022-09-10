@@ -41,6 +41,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub fn is_empty(&mut self) -> bool {
+        self.peek_char().is_none()
+    }
+
     fn peek_char(&mut self) -> Option<char> {
         self.chars.peek().map(|(ix, c)| *c)
     }
@@ -189,6 +193,11 @@ impl<'a> Iterator for Lexer<'a> {
                     } else {
                         Token::Error
                     }
+                }
+
+                '-' => {
+                    self.consume_number();
+                    Token::Number
                 }
 
                 _ if c.is_ascii_digit() => {
