@@ -2,7 +2,7 @@ use nalgebra::{Point3, Unit, Vector2, Vector3};
 
 use crate::{
     canvas::Color,
-    math,
+    math::{self, Mix},
     transform::{ApplyTransform, Transform},
 };
 
@@ -274,6 +274,18 @@ impl Scene {
     pub fn solid(&mut self, color: Color) -> PatternId {
         self.add_pattern(Pattern::Solid { color })
     }
+
+    pub fn gradiant(&mut self, first: PatternId, second: PatternId) -> PatternId {
+        self.add_pattern(Pattern::Gradiant { first, second })
+    }
+
+    pub fn stripes(&mut self, first: PatternId, second: PatternId) -> PatternId {
+        self.add_pattern(Pattern::Stripes { first, second })
+    }
+
+    pub fn checkers(&mut self, first: PatternId, second: PatternId) -> PatternId {
+        self.add_pattern(Pattern::Checkers { first, second })
+    }
 }
 
 impl Prim {
@@ -334,7 +346,7 @@ fn smooth_union_parts(k: f32, left: Distance, right: Distance) -> (f32, f32, Dis
     let h = math::clamp(0.0, 1.0, 0.5 + 0.5 * diff / k);
     let factor = k * h * (1.0 - h);
 
-    (diff, h, Distance(math::mix(right.0, left.0, h) - factor))
+    (diff, h, Distance(f32::mix(right.0, left.0, h) - factor))
 }
 
 impl Node {
@@ -365,15 +377,17 @@ impl Node {
             }
 
             Node::Subtract { left, right } => {
-                let left = scene.node(*left).sdf(scene, *left, point);
+                let mut left = scene.node(*left).sdf(scene, *left, point);
                 let mut right = scene.node(*right).sdf(scene, *right, point);
 
                 right.distance.0 = -right.distance.0;
 
                 if left.distance < right.distance {
+                    right.object = *point;
                     right.normal = -right.normal;
                     right
                 } else {
+                    left.object = *point;
                     left
                 }
             }
@@ -402,15 +416,23 @@ impl Node {
                     }
                 }
 
+                left.object = *point;
+
                 left
             }
 
-            Node::Intersect { nodes } => nodes
-                .iter()
-                .copied()
-                .map(|id| scene.node(id).sdf(scene, id, point))
-                .max_by_key(|res| res.distance)
-                .unwrap(),
+            Node::Intersect { nodes } => {
+                let mut res = nodes
+                    .iter()
+                    .copied()
+                    .map(|id| scene.node(id).sdf(scene, id, point))
+                    .max_by_key(|res| res.distance)
+                    .unwrap();
+
+                res.object = *point;
+
+                res
+            }
 
             Node::Transform { transform, node } => {
                 let mut res = scene
@@ -500,6 +522,15 @@ impl Node {
     }
 }
 
+impl Mix for Distance {
+    type Output = Distance;
+
+    #[inline]
+    fn mix(self, b: Distance, t: f32) -> Self::Output {
+        Distance(f32::mix(self.0, b.0, t))
+    }
+}
+
 impl PartialEq for Distance {
     fn eq(&self, other: &Distance) -> bool {
         self.cmp(other) == std::cmp::Ordering::Equal
@@ -583,12 +614,50 @@ pub struct Material {
 pub enum Pattern {
     /// Just a solid color.
     Solid { color: Color },
+
+    /// A gradient based on the object's x value.
+    Gradiant { first: PatternId, second: PatternId },
+
+    /// Stripes of two different patterns.
+    Stripes { first: PatternId, second: PatternId },
+
+    /// Checkers of two different patterns.
+    Checkers { first: PatternId, second: PatternId },
 }
 
 impl Pattern {
     pub fn color_at(&self, scene: &Scene, point: &Point3<f32>) -> Color {
         match self {
             Pattern::Solid { color } => color.clone(),
+
+            Pattern::Gradiant { first, second } => {
+                if point.x < 0. {
+                    scene.pattern(*first).color_at(scene, point)
+                } else if point.x > 1. {
+                    scene.pattern(*second).color_at(scene, point)
+                } else {
+                    let first = scene.pattern(*first).color_at(scene, point);
+                    let second = scene.pattern(*second).color_at(scene, point);
+                    first.mix(&second, point.x)
+                }
+            }
+
+            Pattern::Stripes { first, second } => {
+                if point.x.floor() % 2. == 0. {
+                    scene.pattern(*first).color_at(scene, point)
+                } else {
+                    scene.pattern(*second).color_at(scene, point)
+                }
+            }
+
+            Pattern::Checkers { first, second } => {
+                let val = point.x.floor() + point.y.floor() + point.z.floor();
+                if val % 2. == 0. {
+                    scene.pattern(*first).color_at(scene, point)
+                } else {
+                    scene.pattern(*second).color_at(scene, point)
+                }
+            }
         }
     }
 }

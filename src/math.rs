@@ -11,9 +11,19 @@ pub fn clamp(lo: f32, hi: f32, val: f32) -> f32 {
     val.max(lo).min(hi)
 }
 
-#[inline]
-pub fn mix(x: f32, y: f32, a: f32) -> f32 {
-    x * (1.0 - a) + y * a
+pub trait Mix {
+    type Output;
+
+    fn mix(self, b: Self, t: f32) -> Self::Output;
+}
+
+impl Mix for f32 {
+    type Output = f32;
+
+    #[inline]
+    fn mix(self, y: f32, t: f32) -> f32 {
+        self * (1.0 - t) + y * t
+    }
 }
 
 #[inline]

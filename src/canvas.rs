@@ -56,6 +56,24 @@ impl Color {
     }
 }
 
+impl math::Mix for &Color {
+    type Output = Color;
+
+    fn mix(self, b: Self, t: f32) -> Self::Output {
+        if t <= 0. {
+            self.clone()
+        } else if t >= 1. {
+            b.clone()
+        } else {
+            Color::new(
+                f32::mix(self.r, b.r, t),
+                f32::mix(self.g, b.g, t),
+                f32::mix(self.b, b.b, t),
+            )
+        }
+    }
+}
+
 impl std::ops::Mul<&Color> for f32 {
     type Output = Color;
     fn mul(self, rhs: &Color) -> Self::Output {

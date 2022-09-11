@@ -245,7 +245,7 @@ impl<'a> Parser<'a> {
         if self.peek_ident() {
             let name = self.ident()?;
             if let Some(id) = self.patterns.get(&name) {
-                return Ok(*id)
+                return Ok(*id);
             } else {
                 bail!("Unknown pattern: {}", name)
             }
@@ -255,6 +255,21 @@ impl<'a> Parser<'a> {
             "solid" => {
                 let color = me.color()?;
                 Ok(me.scene.solid(color))
+            }
+            "gradiant" => {
+                let first = me.parse_pattern()?;
+                let second = me.parse_pattern()?;
+                Ok(me.scene.gradiant(first, second))
+            }
+            "stripes" => {
+                let first = me.parse_pattern()?;
+                let second = me.parse_pattern()?;
+                Ok(me.scene.stripes(first, second))
+            }
+            "checkers" => {
+                let first = me.parse_pattern()?;
+                let second = me.parse_pattern()?;
+                Ok(me.scene.checkers(first, second))
             }
             pat => bail!("Unknown pattern type: {}", pat),
         })
