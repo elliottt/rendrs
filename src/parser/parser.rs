@@ -271,6 +271,16 @@ impl<'a> Parser<'a> {
                 let second = me.parse_pattern()?;
                 Ok(me.scene.checkers(first, second))
             }
+            "shells" => {
+                let first = me.parse_pattern()?;
+                let second = me.parse_pattern()?;
+                Ok(me.scene.shells(first, second))
+            }
+            "transform" => {
+                let transform = me.parse_transform()?;
+                let pattern = me.parse_pattern()?;
+                Ok(me.scene.transform_pat(transform, pattern))
+            }
             pat => bail!("Unknown pattern type: {}", pat),
         })
     }

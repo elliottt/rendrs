@@ -286,6 +286,14 @@ impl Scene {
     pub fn checkers(&mut self, first: PatternId, second: PatternId) -> PatternId {
         self.add_pattern(Pattern::Checkers { first, second })
     }
+
+    pub fn shells(&mut self, first: PatternId, second: PatternId) -> PatternId {
+        self.add_pattern(Pattern::Shells { first, second })
+    }
+
+    pub fn transform_pat(&mut self, transform: Transform, pattern: PatternId) -> PatternId {
+        self.add_pattern(Pattern::Transform { transform, pattern })
+    }
 }
 
 impl Prim {
@@ -623,40 +631,64 @@ pub enum Pattern {
 
     /// Checkers of two different patterns.
     Checkers { first: PatternId, second: PatternId },
+
+    /// Shells of two different patterns.
+    Shells { first: PatternId, second: PatternId },
+
+    /// Transform the point before rendering the pattern.
+    Transform {
+        transform: Transform,
+        pattern: PatternId,
+    },
 }
 
 impl Pattern {
-    pub fn color_at(&self, scene: &Scene, point: &Point3<f32>) -> Color {
+    /// Generate the color for a point in object space, along with its world normal.
+    pub fn color_at(&self, scene: &Scene, point: &Point3<f32>, normal: &Unit<Vector3<f32>>) -> Color {
         match self {
             Pattern::Solid { color } => color.clone(),
 
             Pattern::Gradiant { first, second } => {
                 if point.x < 0. {
-                    scene.pattern(*first).color_at(scene, point)
+                    scene.pattern(*first).color_at(scene, point, normal)
                 } else if point.x > 1. {
-                    scene.pattern(*second).color_at(scene, point)
+                    scene.pattern(*second).color_at(scene, point, normal)
                 } else {
-                    let first = scene.pattern(*first).color_at(scene, point);
-                    let second = scene.pattern(*second).color_at(scene, point);
+                    let first = scene.pattern(*first).color_at(scene, point, normal);
+                    let second = scene.pattern(*second).color_at(scene, point, normal);
                     first.mix(&second, point.x)
                 }
             }
 
             Pattern::Stripes { first, second } => {
                 if point.x.floor() % 2. == 0. {
-                    scene.pattern(*first).color_at(scene, point)
+                    scene.pattern(*first).color_at(scene, point, normal)
                 } else {
-                    scene.pattern(*second).color_at(scene, point)
+                    scene.pattern(*second).color_at(scene, point, normal)
                 }
             }
 
             Pattern::Checkers { first, second } => {
                 let val = point.x.floor() + point.y.floor() + point.z.floor();
                 if val % 2. == 0. {
-                    scene.pattern(*first).color_at(scene, point)
+                    scene.pattern(*first).color_at(scene, point, normal)
                 } else {
-                    scene.pattern(*second).color_at(scene, point)
+                    scene.pattern(*second).color_at(scene, point, normal)
                 }
+            }
+
+            Pattern::Shells { first, second } => {
+                let val = Vector3::new(point.x, point.y, point.z).norm().floor();
+                if val % 2. == 0. {
+                    scene.pattern(*first).color_at(scene, point, normal)
+                } else {
+                    scene.pattern(*second).color_at(scene, point, normal)
+                }
+            }
+
+            Pattern::Transform { transform, pattern } => {
+                let point = point.invert(transform);
+                scene.pattern(*pattern).color_at(scene, &point, normal)
             }
         }
     }
