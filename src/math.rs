@@ -15,3 +15,13 @@ pub fn clamp(lo: f32, hi: f32, val: f32) -> f32 {
 pub fn mix(x: f32, y: f32, a: f32) -> f32 {
     x * (1.0 - a) + y * a
 }
+
+#[inline]
+pub fn deg_to_rad(deg: f32) -> f32 {
+    (deg / 180.) * std::f32::consts::PI
+}
+
+#[test]
+fn test_deg_to_rad() {
+    assert_eq!(std::f32::consts::PI, deg_to_rad(180.));
+}

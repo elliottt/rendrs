@@ -26,6 +26,12 @@ pub trait Integrator {
     fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color;
 }
 
+impl<C> Integrator for Box<C> where C: Integrator + ?Sized {
+    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+        self.as_mut().luminance(scene, root, sample)
+    }
+}
+
 pub struct Whitted<C: Camera> {
     camera: C,
     config: MarchConfig,

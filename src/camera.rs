@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use nalgebra::{Point2, Point3, Unit, Vector3};
 
 use crate::canvas::Canvas;
@@ -98,6 +100,12 @@ impl Sample {
 pub trait Camera {
     /// Given a [`Sample`], generate a ray.
     fn generate_ray(&self, sample: &Sample) -> Ray;
+}
+
+impl<C> Camera for Rc<C> where C: Camera + ?Sized {
+    fn generate_ray(&self, sample: &Sample) -> Ray {
+        self.as_ref().generate_ray(sample)
+    }
 }
 
 impl Camera for PinholeCamera {
