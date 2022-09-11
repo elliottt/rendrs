@@ -84,8 +84,10 @@ impl<C: Camera> Integrator for Whitted<C> {
                 hit.in_shadow(&self.config, scene, root, &light)
             });
             color += lighting::phong(
+                scene,
                 material,
                 light,
+                &hit.object,
                 &hit.ray.position,
                 &eye,
                 &hit.normal,

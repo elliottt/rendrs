@@ -7,7 +7,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use crate::canvas::Canvas;
 use crate::integrator::Whitted;
-use crate::scene::MarchConfig;
+use crate::scene::{MarchConfig, PatternId};
 use crate::{
     camera::{Camera, CanvasInfo, PinholeCamera},
     canvas::Color,
@@ -47,6 +47,7 @@ struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
     scene: Scene,
     nodes: HashMap<String, NodeId>,
+    patterns: HashMap<String, PatternId>,
     materials: HashMap<String, MaterialId>,
     cameras: Vec<(String, CanvasInfo, Rc<dyn Camera>)>,
     renders: Vec<Render>,
@@ -58,6 +59,7 @@ impl<'a> Parser<'a> {
             lexer: lexer.peekable(),
             scene: Scene::default(),
             nodes: HashMap::new(),
+            patterns: HashMap::new(),
             materials: HashMap::new(),
             cameras: Vec::new(),
             renders: Vec::new(),
@@ -239,9 +241,21 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_pattern(&mut self) -> Result<Color> {
+    fn parse_pattern(&mut self) -> Result<PatternId> {
+        if self.peek_ident() {
+            let name = self.ident()?;
+            if let Some(id) = self.patterns.get(&name) {
+                return Ok(*id)
+            } else {
+                bail!("Unknown pattern: {}", name)
+            }
+        }
+
         self.parens(|me| match me.ident()?.as_ref() {
-            "color" => me.color(),
+            "solid" => {
+                let color = me.color()?;
+                Ok(me.scene.solid(color))
+            }
             pat => bail!("Unknown pattern type: {}", pat),
         })
     }
@@ -431,6 +445,12 @@ impl<'a> Parser<'a> {
     fn parse_command(&mut self) -> Result<()> {
         self.parens(|me| {
             match me.ident()?.as_ref() {
+                "pattern" => {
+                    let name = me.ident()?;
+                    let id = me.parse_pattern()?;
+                    me.patterns.insert(name, id);
+                }
+
                 "material" => {
                     let name = me.ident()?;
                     let id = me.parse_material()?;

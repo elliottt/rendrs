@@ -9,6 +9,7 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct Scene {
     pub nodes: Vec<Node>,
+    pub patterns: Vec<Pattern>,
     pub materials: Vec<Material>,
     pub lights: Vec<Light>,
 }
@@ -17,6 +18,9 @@ pub struct Scene {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NodeId(u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PatternId(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MaterialId(u32);
@@ -113,6 +117,7 @@ pub struct FastSDFResult {
 }
 
 impl Scene {
+    #[inline]
     fn add_node(&mut self, node: Node) -> NodeId {
         let id = NodeId(self.nodes.len() as u32);
         self.nodes.push(node);
@@ -120,6 +125,7 @@ impl Scene {
     }
 
     /// Fetch a node from the scene.
+    #[inline]
     pub fn node(&self, NodeId(id): NodeId) -> &Node {
         &self.nodes[id as usize]
     }
@@ -204,19 +210,21 @@ impl Scene {
         self.add_node(Node::Material { material, node })
     }
 
+    #[inline]
     fn add_material(&mut self, material: Material) -> MaterialId {
         let id = MaterialId(self.materials.len() as u32);
         self.materials.push(material);
         id
     }
 
+    #[inline]
     pub fn material(&self, MaterialId(id): MaterialId) -> &Material {
         &self.materials[id as usize]
     }
 
     pub fn phong(
         &mut self,
-        pattern: Color,
+        pattern: PatternId,
         ambient: f32,
         diffuse: f32,
         specular: f32,
@@ -231,12 +239,14 @@ impl Scene {
         })
     }
 
+    #[inline]
     fn add_light(&mut self, light: Light) -> LightId {
         let id = LightId(self.lights.len() as u32);
         self.lights.push(light);
         id
     }
 
+    #[inline]
     pub fn light(&self, LightId(id): LightId) -> &Light {
         &self.lights[id as usize]
     }
@@ -247,6 +257,22 @@ impl Scene {
 
     pub fn diffuse_light(&mut self, color: Color) -> LightId {
         self.add_light(Light::Diffuse { color })
+    }
+
+    #[inline]
+    fn add_pattern(&mut self, pattern: Pattern) -> PatternId {
+        let id = PatternId(self.patterns.len() as u32);
+        self.patterns.push(pattern);
+        id
+    }
+
+    #[inline]
+    pub fn pattern(&self, PatternId(id): PatternId) -> &Pattern {
+        &self.patterns[id as usize]
+    }
+
+    pub fn solid(&mut self, color: Color) -> PatternId {
+        self.add_pattern(Pattern::Solid { color })
     }
 }
 
@@ -537,7 +563,7 @@ impl Light {
 #[derive(Debug)]
 pub struct Material {
     /// For now, the pattern of a surface is just a color.
-    pub pattern: Color,
+    pub pattern: PatternId,
 
     /// The ambient reflection of this surface.
     pub ambient: f32,
@@ -550,4 +576,19 @@ pub struct Material {
 
     /// The shininess of the surface.
     pub shininess: f32,
+}
+
+/// Patterns for texturing a surface with.
+#[derive(Debug)]
+pub enum Pattern {
+    /// Just a solid color.
+    Solid { color: Color },
+}
+
+impl Pattern {
+    pub fn color_at(&self, scene: &Scene, point: &Point3<f32>) -> Color {
+        match self {
+            Pattern::Solid { color } => color.clone(),
+        }
+    }
 }

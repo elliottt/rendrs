@@ -1,20 +1,18 @@
 use nalgebra::{Point3, Unit, Vector3};
 
-use crate::{
-    canvas::Color,
-    math,
-    scene::{Light, Material},
-};
+use crate::{canvas::Color, math, scene::{Light, Material, Scene}};
 
 pub fn phong(
+    scene: &Scene,
     material: &Material,
     light: &Light,
+    object_point: &Point3<f32>,
     point: &Point3<f32>,
     eyev: &Unit<Vector3<f32>>,
     normal: &Unit<Vector3<f32>>,
     in_shadow: bool,
 ) -> Color {
-    let effective_color = &material.pattern * light.intensity();
+    let effective_color = scene.pattern(material.pattern).color_at(scene, object_point) * light.intensity();
     let ambient = material.ambient * &effective_color;
 
     // When the point is out of view of this light, we only integrate the ambient component of the
