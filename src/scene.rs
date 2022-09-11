@@ -351,7 +351,7 @@ impl Prim {
 fn smooth_union_parts(k: f32, left: Distance, right: Distance) -> (f32, f32, Distance) {
     let diff = right.0 - left.0;
 
-    let h = math::clamp(0.0, 1.0, 0.5 + 0.5 * diff / k);
+    let h = (0.5 + 0.5 * diff / k).clamp(0., 1.);
     let factor = k * h * (1.0 - h);
 
     (diff, h, Distance(f32::mix(right.0, left.0, h) - factor))

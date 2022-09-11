@@ -1,4 +1,4 @@
-use crate::math;
+use crate::math::{Clamp, Mix};
 
 #[derive(Debug, Default, Clone)]
 pub struct Color {
@@ -56,7 +56,19 @@ impl Color {
     }
 }
 
-impl math::Mix for &Color {
+impl Clamp<f32> for &Color {
+    type Output = Color;
+
+    fn clamp(self, lo: f32, hi: f32) -> Self::Output {
+        Color::new(
+            self.r.clamp(lo, hi),
+            self.g.clamp(lo, hi),
+            self.b.clamp(lo, hi),
+        )
+    }
+}
+
+impl Mix for &Color {
     type Output = Color;
 
     fn mix(self, b: Self, t: f32) -> Self::Output {
@@ -277,7 +289,7 @@ impl Canvas {
 
         for row in self.rows() {
             for col in row {
-                let g = math::clamp(0., 1., col.to_grayscale());
+                let g = col.to_grayscale().clamp(0., 1.);
                 let index = (g * bound) as usize;
                 buf.push(bytes[index] as char);
             }
