@@ -27,11 +27,20 @@ pub fn parse(input: &str) -> Result<(Scene, Vec<Render>)> {
     Ok((parser.scene, parser.renders))
 }
 
+/// How to handle the result of rendering.
+pub enum Target {
+    /// Write the output to this file.
+    File { path: PathBuf },
+
+    /// Output the image to the console.
+    Ascii,
+}
+
 pub struct Render {
+    pub target: Target,
     pub canvas: Canvas,
     pub root: NodeId,
     pub integrator: Box<dyn Integrator>,
-    pub path: PathBuf,
 }
 
 struct Parser<'a> {
@@ -90,6 +99,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    #[inline]
     fn parens<Body, T>(&mut self, body: Body) -> Result<T>
     where
         Body: FnOnce(&mut Self) -> Result<T>,
@@ -373,6 +383,21 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_camera(&mut self) -> Result<(CanvasInfo, Rc<dyn Camera>)> {
+        if self.peek_ident() {
+            let camera_name = self.ident()?;
+            let res = self
+                .cameras
+                .iter()
+                .rev()
+                .find(|(name, _, _)| *name == camera_name);
+            let (info, camera): (CanvasInfo, Rc<dyn Camera>) = if let Some((_, info, camera)) = res
+            {
+                return Ok((info.clone(), camera.clone()));
+            } else {
+                bail!("Unknown camera: {}", camera_name);
+            };
+        }
+
         self.parens(|me| match me.ident()?.as_ref() {
             "pinhole" => {
                 let width = me.number()?;
@@ -385,6 +410,21 @@ impl<'a> Parser<'a> {
             }
 
             camera => bail!("Unknown camera type: {}", camera),
+        })
+    }
+
+    fn parse_target(&mut self) -> Result<Target> {
+        self.parens(|me| match me.ident()?.as_ref() {
+            "file" => {
+                let string = me.string()?;
+                Ok(Target::File {
+                    path: PathBuf::from(string),
+                })
+            }
+
+            "ascii" => Ok(Target::Ascii),
+
+            target => bail!("Unknown target type: {}", target),
         })
     }
 
@@ -415,32 +455,19 @@ impl<'a> Parser<'a> {
 
                 "render" => match me.symbol()?.as_ref() {
                     ":whitted" => {
-                        // TODO: maybe allow specifying a camera here?
-                        let camera_name = me.ident()?;
-                        let res = me
-                            .cameras
-                            .iter()
-                            .rev()
-                            .find(|(name, _, _)| *name == camera_name);
-                        let (info, camera): (CanvasInfo, Rc<dyn Camera>) =
-                            if let Some((_, info, camera)) = res {
-                                (info.clone(), camera.clone())
-                            } else {
-                                bail!("Unknown camera: {}", camera_name);
-                            };
+                        let target = me.parse_target()?;
 
+                        let (info, camera) = me.parse_camera()?;
                         let root = me.parse_node()?;
 
                         let canvas = info.new_canvas();
                         let integrator = Whitted::new(camera, MarchConfig::default(), 10);
 
-                        let path = PathBuf::from(me.string()?);
-
                         me.renders.push(Render {
+                            target,
                             canvas,
                             root,
                             integrator: Box::new(integrator),
-                            path,
                         })
                     }
 

@@ -3,7 +3,7 @@ use thiserror::Error;
 mod lexer;
 mod parser;
 
-pub use parser::parse;
+pub use parser::{parse, Target};
 pub use lexer::Range;
 
 #[derive(Error, Debug)]

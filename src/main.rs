@@ -10,6 +10,8 @@ mod ray;
 mod scene;
 mod transform;
 
+use parser::Target;
+
 fn main() -> Result<(), Error> {
     let input = std::fs::read_to_string("test.scene")?;
     let (scene, renders) = parser::parse(&input)?;
@@ -24,15 +26,21 @@ fn main() -> Result<(), Error> {
         let width = render.canvas.width();
         let height = render.canvas.height();
 
-        println!("Writing {}", &render.path.to_str().unwrap());
-        image::save_buffer(
-            render.path,
-            &render.canvas.data(),
-            width,
-            height,
-            image::ColorType::Rgb8,
-        )
-        .unwrap();
+        match render.target {
+            Target::File { path } => {
+                println!("Writing {}", &path.to_str().unwrap());
+                image::save_buffer(
+                    path,
+                    &render.canvas.data(),
+                    width,
+                    height,
+                    image::ColorType::Rgb8,
+                )
+                .unwrap();
+            }
+
+            Target::Ascii => println!("{}", render.canvas.to_ascii()),
+        }
     }
 
     Ok(())
