@@ -90,6 +90,16 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    fn parens<Body, T>(&mut self, body: Body) -> Result<T>
+    where
+        Body: FnOnce(&mut Self) -> Result<T>,
+    {
+        self.lparen()?;
+        let ret = body(self)?;
+        self.rparen()?;
+        Ok(ret)
+    }
+
     fn peek_rparen(&mut self) -> bool {
         if let Some(tok) = self.lexer.peek() {
             tok.token == Token::RParen
@@ -110,7 +120,7 @@ impl<'a> Parser<'a> {
 
     fn string(&mut self) -> Result<String> {
         let tok = self.guard(Token::String)?;
-        Ok(String::from(&tok.text[1..tok.text.len()-1]))
+        Ok(String::from(&tok.text[1..tok.text.len() - 1]))
     }
 
     fn peek_ident(&mut self) -> bool {
@@ -132,19 +142,14 @@ impl<'a> Parser<'a> {
     }
 
     fn angle(&mut self) -> Result<f32> {
-        self.lparen()?;
-
-        let angle = match self.ident()?.as_ref() {
+        self.parens(|me| match me.ident()?.as_ref() {
             "degrees" => {
-                let deg = self.number()?;
-                math::deg_to_rad(deg)
+                let deg = me.number()?;
+                Ok(math::deg_to_rad(deg))
             }
-            "radians" => self.number()?,
+            "radians" => me.number(),
             angle => bail!("Unknown angle type: {}", angle),
-        };
-
-        self.rparen()?;
-        Ok(angle)
+        })
     }
 
     fn color(&mut self) -> Result<Color> {
@@ -160,21 +165,21 @@ impl<'a> Parser<'a> {
     }
 
     fn point(&mut self) -> Result<Point3<f32>> {
-        self.lparen()?;
-        let x = self.number()?;
-        let y = self.number()?;
-        let z = self.number()?;
-        self.rparen()?;
-        Ok(Point3::new(x, y, z))
+        self.parens(|me| {
+            let x = me.number()?;
+            let y = me.number()?;
+            let z = me.number()?;
+            Ok(Point3::new(x, y, z))
+        })
     }
 
     fn vector(&mut self) -> Result<Vector3<f32>> {
-        self.lparen()?;
-        let x = self.number()?;
-        let y = self.number()?;
-        let z = self.number()?;
-        self.rparen()?;
-        Ok(Vector3::new(x, y, z))
+        self.parens(|me| {
+            let x = me.number()?;
+            let y = me.number()?;
+            let z = me.number()?;
+            Ok(Vector3::new(x, y, z))
+        })
     }
 
     fn parse_transforms(&mut self) -> Result<Transform> {
@@ -188,60 +193,47 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_transform(&mut self) -> Result<Transform> {
-        self.lparen()?;
-
-        let t = match self.ident()?.as_ref() {
-            "compose" => {
-                self.parse_transforms()?
-            }
+        self.parens(|me| match me.ident()?.as_ref() {
+            "compose" => me.parse_transforms(),
 
             "translate" => {
-                let x = self.number()?;
-                let y = self.number()?;
-                let z = self.number()?;
-                Transform::new().translate(&Vector3::new(x, y, z))
+                let x = me.number()?;
+                let y = me.number()?;
+                let z = me.number()?;
+                Ok(Transform::new().translate(&Vector3::new(x, y, z)))
             }
 
             "rotate" => {
-                let axisangle = self.vector()?;
-                Transform::new().rotate(&axisangle)
+                let axisangle = me.vector()?;
+                Ok(Transform::new().rotate(&axisangle))
             }
 
             "uniform-scale" => {
-                let amount = self.number()?;
-                Transform::new().uniform_scale(amount)
+                let amount = me.number()?;
+                Ok(Transform::new().uniform_scale(amount))
             }
 
             "scale" => {
-                let vec = self.vector()?;
-                Transform::new().scale(&vec)
+                let vec = me.vector()?;
+                Ok(Transform::new().scale(&vec))
             }
 
             "look-at" => {
-                let eye = self.point()?;
-                let target = self.point()?;
-                let up = self.vector()?;
-                Transform::look_at(&eye, &target, &up)
+                let eye = me.point()?;
+                let target = me.point()?;
+                let up = me.vector()?;
+                Ok(Transform::look_at(&eye, &target, &up))
             }
 
             t => bail!("Unknown transform type: {}", t),
-        };
-
-        self.rparen()?;
-        Ok(t)
+        })
     }
 
     fn parse_pattern(&mut self) -> Result<Color> {
-        self.lparen()?;
-
-        let pat = match self.ident()?.as_ref() {
-            "color" => self.color(),
+        self.parens(|me| match me.ident()?.as_ref() {
+            "color" => me.color(),
             pat => bail!("Unknown pattern type: {}", pat),
-        };
-
-        self.rparen()?;
-
-        pat
+        })
     }
 
     fn parse_material(&mut self) -> Result<MaterialId> {
@@ -254,25 +246,20 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.lparen()?;
-
-        let node = match self.ident()?.as_ref() {
+        self.parens(|me| match me.ident()?.as_ref() {
             "phong" => {
-                let pattern = self.parse_pattern()?;
-                let ambient = self.number()?;
-                let diffuse = self.number()?;
-                let specular = self.number()?;
-                let shininess = self.number()?;
-                self.scene
-                    .phong(pattern, ambient, diffuse, specular, shininess)
+                let pattern = me.parse_pattern()?;
+                let ambient = me.number()?;
+                let diffuse = me.number()?;
+                let specular = me.number()?;
+                let shininess = me.number()?;
+                Ok(me
+                    .scene
+                    .phong(pattern, ambient, diffuse, specular, shininess))
             }
 
             name => bail!("Unknown material type: {}", name),
-        };
-
-        self.rparen()?;
-
-        Ok(node)
+        })
     }
 
     fn parse_nodes(&mut self) -> Result<Vec<NodeId>> {
@@ -280,6 +267,11 @@ impl<'a> Parser<'a> {
         while !self.peek_rparen() {
             nodes.push(self.parse_node()?);
         }
+
+        if nodes.is_empty() {
+            bail!("Found an empty node list");
+        }
+
         Ok(nodes)
     }
 
@@ -293,178 +285,172 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.lparen()?;
-
-        let node = match self.ident()?.as_ref() {
+        self.parens(|me| match me.ident()?.as_ref() {
             "plane" => {
-                let normal = self.vector()?;
-                self.scene.plane(Unit::new_normalize(normal))
+                let normal = me.vector()?;
+                Ok(me.scene.plane(Unit::new_normalize(normal)))
             }
 
             "sphere" => {
-                let radius = self.number()?;
-                self.scene.sphere(radius)
+                let radius = me.number()?;
+                Ok(me.scene.sphere(radius))
             }
 
             "box" => {
-                let width = self.number()?;
-                let height = self.number()?;
-                let depth = self.number()?;
-                self.scene.rect(width, height, depth)
+                let width = me.number()?;
+                let height = me.number()?;
+                let depth = me.number()?;
+                Ok(me.scene.rect(width, height, depth))
             }
 
             "torus" => {
-                let hole = self.number()?;
-                let radius = self.number()?;
-                self.scene.torus(hole, radius)
+                let hole = me.number()?;
+                let radius = me.number()?;
+                Ok(me.scene.torus(hole, radius))
             }
 
             "group" => {
-                let nodes = self.parse_nodes()?;
-                self.scene.group(nodes)
+                let nodes = me.parse_nodes()?;
+                Ok(me.scene.group(nodes))
             }
 
             "union" => {
-                let nodes = self.parse_nodes()?;
-                self.scene.union(nodes)
+                let nodes = me.parse_nodes()?;
+                Ok(me.scene.union(nodes))
             }
 
-            // TODO: take a list of nodes
+            "subtract" => {
+                let left = me.parse_node()?;
+                let right = me.parse_node()?;
+                Ok(me.scene.subtract(left, right))
+            }
+
+            "intersect" => {
+                let nodes = me.parse_nodes()?;
+                Ok(me.scene.intersect(nodes))
+            }
+
             "smooth-union" => {
-                let k = self.number()?;
-                let left = self.parse_node()?;
-                let right = self.parse_node()?;
-                self.scene.smooth_union(k, left, right)
+                let k = me.number()?;
+                let nodes = me.parse_nodes()?;
+                Ok(me.scene.smooth_union(k, &nodes))
             }
 
             "transform" => {
-                let t = self.parse_transform()?;
-                let sub = self.parse_node()?;
-                self.scene.transform(t, sub)
+                let t = me.parse_transform()?;
+                let sub = me.parse_node()?;
+                Ok(me.scene.transform(t, sub))
             }
 
             "paint" => {
-                let mat = self.parse_material()?;
-                let node = self.parse_node()?;
-                self.scene.paint(mat, node)
+                let mat = me.parse_material()?;
+                let node = me.parse_node()?;
+                Ok(me.scene.paint(mat, node))
             }
 
             node => bail!("Unknown node type: {}", node),
-        };
-
-        self.rparen()?;
-        Ok(node)
+        })
     }
 
     fn parse_light(&mut self) -> Result<()> {
-        self.lparen()?;
+        self.parens(|me| {
+            match me.ident()?.as_ref() {
+                "diffuse" => {
+                    let color = me.color()?;
+                    me.scene.diffuse_light(color);
+                }
 
-        match self.ident()?.as_ref() {
-            "diffuse" => {
-                let color = self.color()?;
-                self.scene.diffuse_light(color);
+                "point" => {
+                    let color = me.color()?;
+                    let point = me.point()?;
+                    me.scene.point_light(point, color);
+                }
+
+                _ => bail!("Failed to parse light"),
             }
-
-            "point" => {
-                let color = self.color()?;
-                let point = self.point()?;
-                self.scene.point_light(point, color);
-            }
-
-            _ => bail!("Failed to parse light"),
-        }
-
-        self.rparen()
+            Ok(())
+        })
     }
 
     fn parse_camera(&mut self) -> Result<(CanvasInfo, Rc<dyn Camera>)> {
-        self.lparen()?;
-
-        let res = match self.ident()?.as_ref() {
+        self.parens(|me| match me.ident()?.as_ref() {
             "pinhole" => {
-                let width = self.number()?;
-                let height = self.number()?;
-                let t = self.parse_transform()?;
-                let fov = self.angle()?;
+                let width = me.number()?;
+                let height = me.number()?;
+                let t = me.parse_transform()?;
+                let fov = me.number()?;
                 let info = CanvasInfo::new(width, height);
                 let camera = Rc::new(PinholeCamera::new(&info, t, fov)) as Rc<dyn Camera>;
-                (info, camera)
+                Ok((info, camera))
             }
 
             camera => bail!("Unknown camera type: {}", camera),
-        };
-
-        self.rparen()?;
-
-        Ok(res)
+        })
     }
 
     fn parse_command(&mut self) -> Result<()> {
-        self.lparen()?;
-
-        match self.ident()?.as_ref() {
-            "material" => {
-                let name = self.ident()?;
-                let id = self.parse_material()?;
-                self.materials.insert(name, id);
-            }
-
-            "node" => {
-                let name = self.ident()?;
-                let id = self.parse_node()?;
-                self.nodes.insert(name, id);
-            }
-
-            "light" => {
-                self.parse_light()?;
-            }
-
-            "camera" => {
-                let name = self.ident()?;
-                let (info, camera) = self.parse_camera()?;
-                self.cameras.push((name, info, camera));
-            }
-
-            "render" => match self.symbol()?.as_ref() {
-                ":whitted" => {
-                    // TODO: maybe allow specifying a camera here?
-                    let camera_name = self.ident()?;
-                    let res = self
-                        .cameras
-                        .iter()
-                        .rev()
-                        .find(|(name, _, _)| *name == camera_name);
-                    let (info, camera): (CanvasInfo, Rc<dyn Camera>) =
-                        if let Some((_, info, camera)) = res {
-                            (info.clone(), camera.clone())
-                        } else {
-                            bail!("Unknown camera: {}", camera_name);
-                        };
-
-                    let root = self.parse_node()?;
-
-                    let canvas = info.new_canvas();
-                    let integrator = Whitted::new(camera, MarchConfig::default(), 10);
-
-                    let path = PathBuf::from(self.string()?);
-
-                    self.renders.push(Render {
-                        canvas,
-                        root,
-                        integrator: Box::new(integrator),
-                        path,
-                    })
+        self.parens(|me| {
+            match me.ident()?.as_ref() {
+                "material" => {
+                    let name = me.ident()?;
+                    let id = me.parse_material()?;
+                    me.materials.insert(name, id);
                 }
 
-                integrator => bail!("Unknown integrator: {}", integrator),
-            },
+                "node" => {
+                    let name = me.ident()?;
+                    let id = me.parse_node()?;
+                    me.nodes.insert(name, id);
+                }
 
-            command => bail!("Failed to parse command: {}", command),
-        }
+                "light" => {
+                    me.parse_light()?;
+                }
 
-        self.rparen()?;
+                "camera" => {
+                    let name = me.ident()?;
+                    let (info, camera) = me.parse_camera()?;
+                    me.cameras.push((name, info, camera));
+                }
 
-        Ok(())
+                "render" => match me.symbol()?.as_ref() {
+                    ":whitted" => {
+                        // TODO: maybe allow specifying a camera here?
+                        let camera_name = me.ident()?;
+                        let res = me
+                            .cameras
+                            .iter()
+                            .rev()
+                            .find(|(name, _, _)| *name == camera_name);
+                        let (info, camera): (CanvasInfo, Rc<dyn Camera>) =
+                            if let Some((_, info, camera)) = res {
+                                (info.clone(), camera.clone())
+                            } else {
+                                bail!("Unknown camera: {}", camera_name);
+                            };
+
+                        let root = me.parse_node()?;
+
+                        let canvas = info.new_canvas();
+                        let integrator = Whitted::new(camera, MarchConfig::default(), 10);
+
+                        let path = PathBuf::from(me.string()?);
+
+                        me.renders.push(Render {
+                            canvas,
+                            root,
+                            integrator: Box::new(integrator),
+                            path,
+                        })
+                    }
+
+                    integrator => bail!("Unknown integrator: {}", integrator),
+                },
+
+                command => bail!("Failed to parse command: {}", command),
+            }
+            Ok(())
+        })
     }
 
     fn parse(&mut self) -> Result<()> {

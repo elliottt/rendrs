@@ -49,8 +49,14 @@ pub enum Node {
     /// A group of nodes.
     Group { union: bool, nodes: Vec<NodeId> },
 
+    /// Subtracting one node from another.
+    Subtract { left: NodeId, right: NodeId },
+
     /// A smooth union of two nodes.
     SmoothUnion { k: f32, left: NodeId, right: NodeId },
+
+    /// The intersection of nodes.
+    Intersect { nodes: Vec<NodeId> },
 
     /// Apply this Transform the node.
     Transform { transform: Transform, node: NodeId },
@@ -161,8 +167,25 @@ impl Scene {
         self.add_node(Node::Group { union: true, nodes })
     }
 
-    pub fn smooth_union(&mut self, k: f32, left: NodeId, right: NodeId) -> NodeId {
-        self.add_node(Node::SmoothUnion { k, left, right })
+    pub fn subtract(&mut self, left: NodeId, right: NodeId) -> NodeId {
+        self.add_node(Node::Subtract { left, right })
+    }
+
+    pub fn smooth_union(&mut self, k: f32, nodes: &[NodeId]) -> NodeId {
+        match nodes.len() {
+            0 => panic!("no nodes given to `smooth_union`"),
+            1 => nodes[0],
+            len => {
+                let (left, right) = nodes.split_at(len / 2);
+                let left = self.smooth_union(k, left);
+                let right = self.smooth_union(k, right);
+                self.add_node(Node::SmoothUnion { k, left, right })
+            }
+        }
+    }
+
+    pub fn intersect(&mut self, nodes: Vec<NodeId>) -> NodeId {
+        self.add_node(Node::Intersect { nodes })
     }
 
     pub fn transform(&mut self, transform: Transform, node: NodeId) -> NodeId {
@@ -315,6 +338,20 @@ impl Node {
                 res
             }
 
+            Node::Subtract { left, right } => {
+                let left = scene.node(*left).sdf(scene, *left, point);
+                let mut right = scene.node(*right).sdf(scene, *right, point);
+
+                right.distance.0 = -right.distance.0;
+
+                if left.distance < right.distance {
+                    right.normal = -right.normal;
+                    right
+                } else {
+                    left
+                }
+            }
+
             Node::SmoothUnion { k, left, right } => {
                 let mut left = scene.node(*left).sdf(scene, *left, point);
                 let right = scene.node(*right).sdf(scene, *right, point);
@@ -342,11 +379,19 @@ impl Node {
                 left
             }
 
+            Node::Intersect { nodes } => nodes
+                .iter()
+                .copied()
+                .map(|id| scene.node(id).sdf(scene, id, point))
+                .max_by_key(|res| res.distance)
+                .unwrap(),
+
             Node::Transform { transform, node } => {
                 let mut res = scene
                     .node(*node)
                     .sdf(scene, *node, &point.invert(transform));
                 res.normal = res.normal.apply(transform);
+                res.distance.0 *= transform.scale_factor();
                 res
             }
 
@@ -360,12 +405,7 @@ impl Node {
 
     /// Compute the normal by using the SDF. Useful as an intermediate for combination nodes that
     /// don't have a closed form normal computation.
-    fn normal_sdf(
-        &self,
-        scene: &Scene,
-        p: &Point3<f32>,
-        dist: Distance,
-    ) -> Unit<Vector3<f32>> {
+    fn normal_sdf(&self, scene: &Scene, p: &Point3<f32>, dist: Distance) -> Unit<Vector3<f32>> {
         let offset = Vector3::new(0.00001, 0.0, 0.0);
         let px = self.fast_sdf(scene, &(p - offset.xyy())).distance;
         let py = self.fast_sdf(scene, &(p - offset.yxy())).distance;
@@ -389,6 +429,18 @@ impl Node {
                 .min_by_key(|res| res.distance)
                 .unwrap(),
 
+            Node::Subtract { left, right } => {
+                let left = scene.node(*left).fast_sdf(scene, point);
+                let mut right = scene.node(*right).fast_sdf(scene, point);
+
+                right.distance.0 = -right.distance.0;
+                if left.distance < right.distance {
+                    right
+                } else {
+                    left
+                }
+            }
+
             Node::SmoothUnion { k, left, right } => {
                 let mut left = scene.node(*left).fast_sdf(scene, point);
                 let right = scene.node(*right).fast_sdf(scene, point);
@@ -404,10 +456,17 @@ impl Node {
                 left
             }
 
+            Node::Intersect { nodes } => nodes
+                .iter()
+                .copied()
+                .map(|id| scene.node(id).fast_sdf(scene, point))
+                .max_by_key(|res| res.distance)
+                .unwrap(),
+
             Node::Transform { transform, node } => {
-                scene
-                    .node(*node)
-                    .fast_sdf(scene, &point.invert(transform))
+                let mut res = scene.node(*node).fast_sdf(scene, &point.invert(transform));
+                res.distance.0 *= transform.scale_factor();
+                res
             }
 
             Node::Material { node, .. } => scene.node(*node).fast_sdf(scene, point),
