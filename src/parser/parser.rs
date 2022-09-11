@@ -165,15 +165,44 @@ impl<'a> Parser<'a> {
         Ok(Vector3::new(x, y, z))
     }
 
+    fn parse_transforms(&mut self) -> Result<Transform> {
+        let mut res = Transform::new();
+
+        while !self.peek_rparen() {
+            res = res * &self.parse_transform()?;
+        }
+
+        Ok(res)
+    }
+
     fn parse_transform(&mut self) -> Result<Transform> {
         self.lparen()?;
 
         let t = match self.ident()?.as_ref() {
+            "compose" => {
+                self.parse_transforms()?
+            }
+
             "translate" => {
                 let x = self.number()?;
                 let y = self.number()?;
                 let z = self.number()?;
                 Transform::new().translate(&Vector3::new(x, y, z))
+            }
+
+            "rotate" => {
+                let axisangle = self.vector()?;
+                Transform::new().rotate(&axisangle)
+            }
+
+            "uniform-scale" => {
+                let amount = self.number()?;
+                Transform::new().uniform_scale(amount)
+            }
+
+            "scale" => {
+                let vec = self.vector()?;
+                Transform::new().scale(&vec)
             }
 
             "look-at" => {

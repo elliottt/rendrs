@@ -5,7 +5,7 @@ use crate::{
     canvas::{Canvas, Color},
     lighting,
     ray::Ray,
-    scene::{Distance, Light, MarchConfig, MaterialId, NodeId, Scene},
+    scene::{Distance, MarchConfig, MaterialId, NodeId, Scene},
 };
 
 pub fn render<I: Integrator>(canvas: &mut Canvas, scene: &Scene, root: NodeId, integrator: &mut I) {
@@ -26,7 +26,10 @@ pub trait Integrator {
     fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color;
 }
 
-impl<C> Integrator for Box<C> where C: Integrator + ?Sized {
+impl<C> Integrator for Box<C>
+where
+    C: Integrator + ?Sized,
+{
     fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
         self.as_mut().luminance(scene, root, sample)
     }
@@ -157,13 +160,18 @@ impl Hit {
     }
 
     /// March the ray until it hits something, but return only the distance.
-    pub fn march_dist(config: &MarchConfig, scene: &Scene, root: NodeId, mut ray: Ray) -> Option<Distance> {
+    pub fn march_dist(
+        config: &MarchConfig,
+        scene: &Scene,
+        root: NodeId,
+        mut ray: Ray,
+    ) -> Option<Distance> {
         let mut total_dist = Distance::default();
 
         let node = scene.node(root);
 
-        for i in 0..config.max_steps {
-            let result = node.fast_sdf(scene, root, &ray.position);
+        for _ in 0..config.max_steps {
+            let result = node.fast_sdf(scene, &ray.position);
             let radius = result.distance.0;
 
             if radius < config.min_dist {
@@ -197,6 +205,7 @@ impl Hit {
         let dir = light - start;
         let dist_to_light = dir.norm();
         let ray = Ray::new(start, Unit::new_normalize(dir));
-        Hit::march_dist(config, scene, root, ray).map_or(false, |hit_dist| hit_dist.0 < dist_to_light)
+        Hit::march_dist(config, scene, root, ray)
+            .map_or(false, |hit_dist| hit_dist.0 < dist_to_light)
     }
 }

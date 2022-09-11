@@ -335,7 +335,7 @@ impl Node {
                     if h == 0. {
                         left.normal = right.normal;
                     } else {
-                        left.normal = self.normal_sdf(scene, id, point, left.distance);
+                        left.normal = self.normal_sdf(scene, point, left.distance);
                     }
                 }
 
@@ -363,20 +363,19 @@ impl Node {
     fn normal_sdf(
         &self,
         scene: &Scene,
-        id: NodeId,
         p: &Point3<f32>,
         dist: Distance,
     ) -> Unit<Vector3<f32>> {
         let offset = Vector3::new(0.00001, 0.0, 0.0);
-        let px = self.fast_sdf(scene, id, &(p - offset.xyy())).distance;
-        let py = self.fast_sdf(scene, id, &(p - offset.yxy())).distance;
-        let pz = self.fast_sdf(scene, id, &(p - offset.yyx())).distance;
+        let px = self.fast_sdf(scene, &(p - offset.xyy())).distance;
+        let py = self.fast_sdf(scene, &(p - offset.yxy())).distance;
+        let pz = self.fast_sdf(scene, &(p - offset.yyx())).distance;
         Unit::new_normalize(Vector3::new(dist.0 - px.0, dist.0 - py.0, dist.0 - pz.0))
     }
 
     // A version of `sdf` that only computes the distance and material information. Useful for
     // things like lighting calculations.
-    pub fn fast_sdf(&self, scene: &Scene, id: NodeId, point: &Point3<f32>) -> FastSDFResult {
+    pub fn fast_sdf(&self, scene: &Scene, point: &Point3<f32>) -> FastSDFResult {
         match self {
             Node::Prim { prim } => FastSDFResult {
                 distance: prim.sdf(point),
@@ -386,13 +385,13 @@ impl Node {
             Node::Group { nodes, .. } => nodes
                 .iter()
                 .copied()
-                .map(|id| scene.node(id).fast_sdf(scene, id, point))
+                .map(|id| scene.node(id).fast_sdf(scene, point))
                 .min_by_key(|res| res.distance)
                 .unwrap(),
 
             Node::SmoothUnion { k, left, right } => {
-                let mut left = scene.node(*left).fast_sdf(scene, *left, point);
-                let right = scene.node(*right).fast_sdf(scene, *right, point);
+                let mut left = scene.node(*left).fast_sdf(scene, point);
+                let right = scene.node(*right).fast_sdf(scene, point);
 
                 let (diff, _, dist) = smooth_union_parts(*k, left.distance, right.distance);
 
@@ -408,10 +407,10 @@ impl Node {
             Node::Transform { transform, node } => {
                 scene
                     .node(*node)
-                    .fast_sdf(scene, *node, &point.invert(transform))
+                    .fast_sdf(scene, &point.invert(transform))
             }
 
-            Node::Material { node, .. } => scene.node(*node).fast_sdf(scene, *node, point),
+            Node::Material { node, .. } => scene.node(*node).fast_sdf(scene, point),
         }
     }
 }

@@ -41,12 +41,8 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn is_empty(&mut self) -> bool {
-        self.peek_char().is_none()
-    }
-
     fn peek_char(&mut self) -> Option<char> {
-        self.chars.peek().map(|(ix, c)| *c)
+        self.chars.peek().map(|(_, c)| *c)
     }
 
     fn next_char(&mut self) -> Option<char> {
