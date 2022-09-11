@@ -77,6 +77,14 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    fn peek_lparen(&mut self) -> bool {
+        if let Some(tok) = self.lexer.peek() {
+            tok.token == Token::LParen
+        } else {
+            false
+        }
+    }
+
     fn rparen(&mut self) -> Result<()> {
         self.guard(Token::RParen)?;
         Ok(())
@@ -114,6 +122,10 @@ impl<'a> Parser<'a> {
     }
 
     fn number(&mut self) -> Result<f32> {
+        if self.peek_lparen() {
+            return self.angle();
+        }
+
         let tok = self.guard(Token::Number)?;
         let num = f32::from_str(&tok.text)?;
         Ok(num)
@@ -317,6 +329,7 @@ impl<'a> Parser<'a> {
                 self.scene.union(nodes)
             }
 
+            // TODO: take a list of nodes
             "smooth-union" => {
                 let k = self.number()?;
                 let left = self.parse_node()?;

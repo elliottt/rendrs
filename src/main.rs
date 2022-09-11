@@ -23,6 +23,8 @@ fn main() -> Result<(), Error> {
         );
         let width = render.canvas.width();
         let height = render.canvas.height();
+
+        println!("Writing {}", &render.path.to_str().unwrap());
         image::save_buffer(
             render.path,
             &render.canvas.data(),
