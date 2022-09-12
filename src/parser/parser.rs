@@ -3,9 +3,9 @@ use nalgebra::{Point3, Unit, Vector3};
 use std::iter::Peekable;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::{collections::HashMap, rc::Rc};
 
-use crate::canvas::Canvas;
 use crate::integrator::Whitted;
 use crate::scene::{MarchConfig, PatternId};
 use crate::{
@@ -38,7 +38,7 @@ pub enum Target {
 
 pub struct Render {
     pub target: Target,
-    pub canvas: Canvas,
+    pub canvas_info: CanvasInfo,
     pub root: NodeId,
     pub integrator: Box<dyn Integrator>,
 }
@@ -49,7 +49,7 @@ struct Parser<'a> {
     nodes: HashMap<String, NodeId>,
     patterns: HashMap<String, PatternId>,
     materials: HashMap<String, MaterialId>,
-    cameras: Vec<(String, CanvasInfo, Rc<dyn Camera>)>,
+    cameras: Vec<(String, CanvasInfo, Arc<dyn Camera>)>,
     renders: Vec<Render>,
 }
 
@@ -421,7 +421,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_camera(&mut self) -> Result<(CanvasInfo, Rc<dyn Camera>)> {
+    fn parse_camera(&mut self) -> Result<(CanvasInfo, Arc<dyn Camera>)> {
         if self.peek_ident() {
             let camera_name = self.ident()?;
             let res = self
@@ -429,7 +429,7 @@ impl<'a> Parser<'a> {
                 .iter()
                 .rev()
                 .find(|(name, _, _)| *name == camera_name);
-            let (info, camera): (CanvasInfo, Rc<dyn Camera>) = if let Some((_, info, camera)) = res
+            if let Some((_, info, camera)) = res
             {
                 return Ok((info.clone(), camera.clone()));
             } else {
@@ -444,7 +444,7 @@ impl<'a> Parser<'a> {
                 let t = me.parse_transform()?;
                 let fov = me.number()?;
                 let info = CanvasInfo::new(width, height);
-                let camera = Rc::new(PinholeCamera::new(&info, t, fov)) as Rc<dyn Camera>;
+                let camera = Arc::new(PinholeCamera::new(&info, t, fov)) as Arc<dyn Camera>;
                 Ok((info, camera))
             }
 
@@ -502,15 +502,14 @@ impl<'a> Parser<'a> {
                     ":whitted" => {
                         let target = me.parse_target()?;
 
-                        let (info, camera) = me.parse_camera()?;
+                        let (canvas_info, camera) = me.parse_camera()?;
                         let root = me.parse_node()?;
 
-                        let canvas = info.new_canvas();
                         let integrator = Whitted::new(camera, MarchConfig::default(), 10);
 
                         me.renders.push(Render {
                             target,
-                            canvas,
+                            canvas_info,
                             root,
                             integrator: Box::new(integrator),
                         })

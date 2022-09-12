@@ -513,6 +513,7 @@ dependencies = [
  "anyhow",
  "image",
  "nalgebra",
+ "rayon",
  "thiserror",
 ]
 

@@ -17,21 +17,21 @@ fn main() -> Result<(), Error> {
     let (scene, renders) = parser::parse(&input)?;
 
     for mut render in renders {
-        integrator::render(
-            &mut render.canvas,
+        let canvas = integrator::render(
+            render.canvas_info.clone(),
             &scene,
             render.root,
-            &mut render.integrator,
+            &render.integrator,
         );
-        let width = render.canvas.width();
-        let height = render.canvas.height();
+        let width = canvas.width();
+        let height = canvas.height();
 
         match render.target {
             Target::File { path } => {
                 println!("Writing {}", &path.to_str().unwrap());
                 image::save_buffer(
                     path,
-                    &render.canvas.data(),
+                    &canvas.data(),
                     width,
                     height,
                     image::ColorType::Rgb8,
@@ -39,7 +39,7 @@ fn main() -> Result<(), Error> {
                 .unwrap();
             }
 
-            Target::Ascii => println!("{}", render.canvas.to_ascii()),
+            Target::Ascii => println!("{}", canvas.to_ascii()),
         }
     }
 

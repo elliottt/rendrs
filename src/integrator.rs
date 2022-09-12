@@ -1,47 +1,149 @@
+use std::{cell::RefCell, sync::{Arc, Mutex}};
+
 use nalgebra::{Point3, Unit, Vector3};
+use rayon::prelude::*;
 
 use crate::{
-    camera::{Camera, Sample},
+    camera::{Camera, CanvasInfo, Sample},
     canvas::{Canvas, Color},
     lighting,
     ray::Ray,
     scene::{Distance, MarchConfig, MaterialId, NodeId, Scene},
 };
 
-pub fn render<I: Integrator>(canvas: &mut Canvas, scene: &Scene, root: NodeId, integrator: &mut I) {
-    // TODO: pass in a sampling strategy
-    for row in 0..canvas.height() {
-        let y = row as f32 + 0.5;
-        for col in 0..canvas.width() {
-            let x = col as f32 + 0.5;
+/// An individual tile in the rendering target.
+#[derive(Debug)]
+struct Tile {
+    offset_x: f32,
+    offset_y: f32,
+    width: u32,
+    height: u32,
+}
 
-            let sample = Sample::new(x, y);
-            *canvas.get_mut(col as usize, row as usize) =
-                integrator.luminance(scene, root, &sample);
+/// An iterator for tiles in a rendering target.
+#[derive(Debug)]
+struct Tiles {
+    width: u32,
+    height: u32,
+    chunks_x: u32,
+    chunks_y: u32,
+    x: u32,
+    y: u32,
+}
+
+impl Tiles {
+    fn new(width: u32, height: u32) -> Self {
+        let chunks_x = (width + 15) / 16;
+        let chunks_y = (height + 15) / 16;
+
+        Self {
+            width,
+            height,
+            chunks_x,
+            chunks_y,
+            x: 0,
+            y: 0,
         }
     }
 }
 
-pub trait Integrator {
-    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color;
+impl Iterator for Tiles {
+    type Item = Tile;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.x >= self.chunks_x {
+            self.x = 0;
+            self.y += 1;
+        }
+
+        if self.y >= self.chunks_y {
+            return None;
+        }
+
+        let offset_x = self.x * 16;
+        let offset_y = self.y * 16;
+        let width = (self.width - offset_x).min(16);
+        let height = (self.height - offset_y).min(16);
+
+        self.x += 1;
+
+        Some(Tile {
+            offset_x: offset_x as f32,
+            offset_y: offset_y as f32,
+            width,
+            height,
+        })
+    }
+}
+
+pub fn render<I: Integrator>(
+    info: CanvasInfo,
+    scene: &Scene,
+    root: NodeId,
+    integrator: &I,
+) -> Canvas {
+
+    let canvas = info.new_canvas();
+    let tiles = Tiles::new(canvas.width(), canvas.height());
+    let canvas = Arc::new(Mutex::new(RefCell::new(canvas)));
+
+    tiles
+        .par_bridge()
+        .map(|tile: Tile| {
+            let mut chunk = Canvas::new(tile.width, tile.height);
+
+            for row in 0..tile.height {
+                let y = row as f32 + tile.offset_y + 0.5;
+                for col in 0..tile.width {
+                    let x = col as f32 + tile.offset_x + 0.5;
+
+                    let sample = Sample::new(x, y);
+                    *chunk.get_mut(col as usize,row as usize) =
+                        integrator.luminance(scene, root, &sample);
+                }
+            }
+
+            (tile, chunk)
+        })
+        .for_each(|(tile, chunk)| {
+            let offset_x = tile.offset_x as u32;
+            let offset_y = tile.offset_y as u32;
+            let lock = canvas.lock().unwrap();
+            let mut thing = lock.borrow_mut();
+            for row in 0..tile.height {
+                let row_ix = (offset_y + row) as usize;
+                for col in 0..tile.width {
+                    let col_ix = (offset_x + col) as usize;
+                    *thing.get_mut(col_ix, row_ix) = chunk.get(col as usize, row as usize).clone()
+                }
+            }
+        });
+
+    let canvas = canvas.lock().unwrap();
+    canvas.take()
+}
+
+pub trait Integrator: std::marker::Send + std::marker::Sync {
+    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color;
 }
 
 impl<C> Integrator for Box<C>
 where
     C: Integrator + ?Sized,
 {
-    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
-        self.as_mut().luminance(scene, root, sample)
+    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+        self.as_ref().luminance(scene, root, sample)
     }
 }
 
-pub struct Whitted<C: Camera> {
+#[derive(Clone)]
+pub struct Whitted<C> {
     camera: C,
     config: MarchConfig,
     max_reflections: usize,
 }
 
-impl<C: Camera> Whitted<C> {
+impl<C> Whitted<C> {
     pub fn new(camera: C, config: MarchConfig, max_reflections: usize) -> Self {
         Self {
             camera,
@@ -51,8 +153,8 @@ impl<C: Camera> Whitted<C> {
     }
 }
 
-impl<C: Camera> Integrator for Whitted<C> {
-    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+impl<C: Camera + std::marker::Send + std::marker::Sync> Integrator for Whitted<C> {
+    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
         let hit = Hit::march(&self.config, scene, root, self.camera.generate_ray(sample));
 
         if hit.is_none() {

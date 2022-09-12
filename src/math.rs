@@ -36,6 +36,19 @@ impl Mix for f32 {
     }
 }
 
+impl Mix for &Vector3<f32> {
+    type Output = Vector3<f32>;
+
+    #[inline]
+    fn mix(self, other: Self, t: f32) -> Self::Output {
+        Vector3::new(
+            self.x.mix(other.x, t),
+            self.y.mix(other.y, t),
+            self.z.mix(other.z, t),
+        )
+    }
+}
+
 #[inline]
 pub fn deg_to_rad(deg: f32) -> f32 {
     (deg / 180.) * std::f32::consts::PI

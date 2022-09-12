@@ -8,6 +8,7 @@ pub struct Color {
 }
 
 /// A buffer of color data, with the bottom-left being `(0,0)`.
+#[derive(Debug, Default, Clone)]
 pub struct Canvas {
     width: u32,
     height: u32,
@@ -253,7 +254,7 @@ impl Canvas {
     }
 
     /// Fetch a color in the [`Canvas`].
-    pub fn get(&mut self, x: usize, y: usize) -> &Color {
+    pub fn get(&self, x: usize, y: usize) -> &Color {
         let ix = self.index(x, y);
         &self.buffer[ix]
     }
