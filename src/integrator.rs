@@ -124,10 +124,7 @@ pub struct Whitted<C> {
 
 impl<C> Whitted<C> {
     pub fn new(camera: C, config: MarchConfig) -> Self {
-        Self {
-            camera,
-            config,
-        }
+        Self { camera, config }
     }
 }
 

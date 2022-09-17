@@ -96,7 +96,10 @@ pub trait Camera: std::marker::Send + std::marker::Sync {
     fn generate_ray(&self, sample: &Sample) -> Ray;
 }
 
-impl<C> Camera for Arc<C> where C: Camera + ?Sized {
+impl<C> Camera for Arc<C>
+where
+    C: Camera + ?Sized,
+{
     fn generate_ray(&self, sample: &Sample) -> Ray {
         self.as_ref().generate_ray(sample)
     }

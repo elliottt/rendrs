@@ -30,14 +30,8 @@ fn main() -> Result<(), Error> {
         match render.target {
             Target::File { path } => {
                 println!("Writing {}", &path.to_str().unwrap());
-                image::save_buffer(
-                    path,
-                    &canvas.data(),
-                    width,
-                    height,
-                    image::ColorType::Rgb8,
-                )
-                .unwrap();
+                image::save_buffer(path, &canvas.data(), width, height, image::ColorType::Rgb8)
+                    .unwrap();
             }
 
             Target::Ascii => println!("{}", canvas.to_ascii()),
