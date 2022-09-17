@@ -9,15 +9,15 @@ use crate::transform::{ApplyTransform, Transform};
 #[derive(Debug, Clone)]
 pub struct CanvasInfo {
     /// The width in pixels of the canvas.
-    pub width: f32,
+    pub width: u32,
 
     /// The height in pixels of the canvas.
-    pub height: f32,
+    pub height: u32,
 }
 
 impl CanvasInfo {
     /// Create a new [`CanvasInfo`].
-    pub fn new(width: f32, height: f32) -> Self {
+    pub fn new(width: u32, height: u32) -> Self {
         Self { width, height }
     }
 
@@ -27,15 +27,15 @@ impl CanvasInfo {
 
     /// Compute the aspect ratio.
     pub fn aspect_ratio(&self) -> f32 {
-        self.width / self.height
+        self.width_f32() / self.height_f32()
     }
 
-    pub fn width(&self) -> f32 {
-        self.width
+    pub fn width_f32(&self) -> f32 {
+        self.width as f32
     }
 
-    pub fn height(&self) -> f32 {
-        self.height
+    pub fn height_f32(&self) -> f32 {
+        self.height as f32
     }
 }
 
@@ -52,7 +52,7 @@ impl ProjectiveCamera {
     // TODO: support targeting pixels that aren't square, like ascii characters
     pub fn new(info: &CanvasInfo, camera_to_world: Transform, camera_to_screen: Transform) -> Self {
         let screen_to_raster = Transform::new()
-            .scale(&Vector3::new(info.width(), info.height(), 1.))
+            .scale(&Vector3::new(info.width_f32(), info.height_f32(), 1.))
             .scale(&Vector3::new(0.5, 0.5, 1.))
             .translate(&Vector3::new(1., 1., 0.));
 

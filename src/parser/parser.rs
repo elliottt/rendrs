@@ -439,8 +439,8 @@ impl<'a> Parser<'a> {
 
         self.parens(|me| match me.ident()?.as_ref() {
             "pinhole" => {
-                let width = me.number()?;
-                let height = me.number()?;
+                let width = me.number()? as u32;
+                let height = me.number()? as u32;
                 let t = me.parse_transform()?;
                 let fov = me.number()?;
                 let info = CanvasInfo::new(width, height);

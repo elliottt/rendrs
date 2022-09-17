@@ -235,6 +235,23 @@ impl Canvas {
         }
     }
 
+    pub fn merge(mut self, other: Canvas) -> Self {
+        assert!(self.buffer.len() == other.buffer.len());
+        for (l, r) in self.buffer.iter_mut().zip(other.buffer.into_iter()) {
+            *l += r
+        }
+        self
+    }
+
+    pub fn blit(&mut self, off_x: u32, off_y: u32, other: &Canvas) {
+        let start = off_x as usize;
+        let end = start + other.width as usize;
+        for (y, src) in other.rows() {
+            let dst = self.row_mut(y + off_y as usize);
+            dst[start..end].clone_from_slice(src);
+        }
+    }
+
     pub fn width(&self) -> u32 {
         self.width
     }
@@ -253,10 +270,16 @@ impl Canvas {
         &mut self.buffer[ix]
     }
 
-    /// Fetch a color in the [`Canvas`].
-    pub fn get(&self, x: usize, y: usize) -> &Color {
-        let ix = self.index(x, y);
-        &self.buffer[ix]
+    /// Fetch a row of the canvas.
+    pub fn row(&self, y: usize) -> &[Color] {
+        let start = y * self.width as usize;
+        &self.buffer[start..start + self.width as usize]
+    }
+
+    /// Fetch a mutable row of the canvas.
+    pub fn row_mut(&mut self, y: usize) -> &mut [Color] {
+        let start = y * self.width as usize;
+        &mut self.buffer[start..start + self.width as usize]
     }
 
     /// Return an iterator to the rows of the image.
@@ -272,7 +295,7 @@ impl Canvas {
         let size = (self.width * self.height) as usize;
         let mut data = Vec::with_capacity(size);
 
-        for row in self.rows() {
+        for (_, row) in self.rows() {
             for color in row {
                 data.extend_from_slice(&color.to_u8())
             }
@@ -288,7 +311,7 @@ impl Canvas {
         let bytes = palette.as_bytes();
         let bound = (palette.len() - 1) as f32;
 
-        for row in self.rows() {
+        for (_, row) in self.rows() {
             for col in row {
                 let g = col.to_grayscale().clamp(0., 1.);
                 let index = (g * bound) as usize;
@@ -302,7 +325,7 @@ impl Canvas {
 }
 
 impl<'a> Iterator for Rows<'a> {
-    type Item = &'a [Color];
+    type Item = (usize, &'a [Color]);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.row == 0 {
@@ -311,9 +334,6 @@ impl<'a> Iterator for Rows<'a> {
 
         self.row -= 1;
 
-        let len = self.canvas.width as usize;
-        let start = self.row * len;
-
-        Some(&self.canvas.buffer[start..start + len])
+        Some((self.row, self.canvas.row(self.row)))
     }
 }

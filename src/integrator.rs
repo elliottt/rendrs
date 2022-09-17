@@ -83,13 +83,9 @@ pub fn render<I: Integrator>(
     integrator: &I,
 ) -> Canvas {
 
-    let canvas = info.new_canvas();
-    let tiles = Tiles::new(canvas.width(), canvas.height());
-    let canvas = Arc::new(Mutex::new(RefCell::new(canvas)));
-
-    tiles
+    Tiles::new(info.width, info.height)
         .par_bridge()
-        .map(|tile: Tile| {
+        .fold(|| info.new_canvas(), |mut canvas, tile| {
             let mut chunk = Canvas::new(tile.width, tile.height);
 
             for row in 0..tile.height {
@@ -103,24 +99,11 @@ pub fn render<I: Integrator>(
                 }
             }
 
-            (tile, chunk)
-        })
-        .for_each(|(tile, chunk)| {
-            let offset_x = tile.offset_x as u32;
-            let offset_y = tile.offset_y as u32;
-            let lock = canvas.lock().unwrap();
-            let mut thing = lock.borrow_mut();
-            for row in 0..tile.height {
-                let row_ix = (offset_y + row) as usize;
-                for col in 0..tile.width {
-                    let col_ix = (offset_x + col) as usize;
-                    *thing.get_mut(col_ix, row_ix) = chunk.get(col as usize, row as usize).clone()
-                }
-            }
-        });
+            canvas.blit(tile.offset_x as u32, tile.offset_y as u32, &chunk);
 
-    let canvas = canvas.lock().unwrap();
-    canvas.take()
+            canvas
+        })
+        .reduce(|| info.new_canvas(), Canvas::merge)
 }
 
 pub trait Integrator: std::marker::Send + std::marker::Sync {
