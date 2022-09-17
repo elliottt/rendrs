@@ -1,5 +1,6 @@
 use anyhow::Error;
 
+mod bvh;
 mod camera;
 mod canvas;
 mod integrator;

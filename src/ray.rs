@@ -20,16 +20,3 @@ impl Ray {
         self.position += self.direction.scale(amount);
     }
 }
-
-#[test]
-fn test_reflect() {
-    let ray = Ray::new(
-        Point3::origin(),
-        Unit::new_unchecked(Vector3::new(0., 0., 1.)),
-    );
-    let next = ray.reflect(&Unit::new_unchecked(Vector3::new(0., 0., -1.)));
-    assert_eq!(
-        Unit::new_unchecked(Vector3::new(0., 0., -1.)),
-        next.direction
-    );
-}

@@ -1,6 +1,7 @@
 use nalgebra::{Point3, Unit, Vector2, Vector3};
 
 use crate::{
+    bvh::BoundingBox,
     canvas::Color,
     math::Mix,
     transform::{ApplyTransform, Transform},
@@ -292,6 +293,35 @@ impl Scene {
 }
 
 impl Prim {
+    /// Determine the bounding box for this primitive.
+    pub fn bounding_box(&self) -> BoundingBox {
+        match self {
+            Prim::Plane { .. } => BoundingBox::max(),
+
+            &Prim::Sphere { radius } => BoundingBox::new(
+                Point3::new(-radius, -radius, -radius),
+                Point3::new(radius, radius, radius),
+            ),
+
+            &Prim::Box {
+                width,
+                height,
+                depth,
+            } => BoundingBox::new(
+                Point3::new(-width, -height, -depth),
+                Point3::new(width, height, depth),
+            ),
+
+            &Prim::Torus { hole, radius } => {
+                let rad = hole + radius;
+                BoundingBox::new(
+                    Point3::new(-rad, -radius, -rad),
+                    Point3::new(rad, radius, rad),
+                )
+            }
+        }
+    }
+
     /// Compute the distance from the current position of the ray to the primitive object. As
     /// primitives are all centered at the origin, there is no need to return more information than
     /// the distance.
@@ -353,6 +383,36 @@ fn smooth_union_parts(k: f32, left: Distance, right: Distance) -> (f32, f32, Dis
 }
 
 impl Node {
+    pub fn bounding_box(&self, scene: &Scene) -> BoundingBox {
+        match self {
+            Node::Prim { prim } => prim.bounding_box(),
+
+            Node::Group { nodes, .. } => nodes.iter().fold(BoundingBox::min(), |left, id| {
+                left.union(&scene.node(*id).bounding_box(scene))
+            }),
+
+            Node::Subtract { left, .. } => scene.node(*left).bounding_box(scene),
+
+            Node::SmoothUnion { left, right, .. } => scene
+                .node(*left)
+                .bounding_box(scene)
+                .union(&scene.node(*right).bounding_box(scene)),
+
+            Node::Intersect { nodes } => nodes
+                .iter()
+                .copied()
+                .map(|id| scene.node(id).bounding_box(scene))
+                .reduce(|l, r| l.intersect(&r))
+                .unwrap(),
+
+            Node::Transform { transform, node } => {
+                scene.node(*node).bounding_box(scene).apply(transform)
+            }
+
+            Node::Material { node, .. } => scene.node(*node).bounding_box(scene),
+        }
+    }
+
     pub fn sdf(&self, scene: &Scene, id: NodeId, point: &Point3<f32>) -> SDFResult {
         match self {
             Node::Prim { prim } => SDFResult {
