@@ -1,10 +1,10 @@
 use anyhow::bail;
 use nalgebra::{Point3, Unit, Vector3};
+use std::collections::HashMap;
 use std::iter::Peekable;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{collections::HashMap, rc::Rc};
 
 use crate::integrator::Whitted;
 use crate::scene::{MarchConfig, PatternId};
@@ -429,8 +429,7 @@ impl<'a> Parser<'a> {
                 .iter()
                 .rev()
                 .find(|(name, _, _)| *name == camera_name);
-            if let Some((_, info, camera)) = res
-            {
+            if let Some((_, info, camera)) = res {
                 return Ok((info.clone(), camera.clone()));
             } else {
                 bail!("Unknown camera: {}", camera_name);
@@ -505,7 +504,7 @@ impl<'a> Parser<'a> {
                         let (canvas_info, camera) = me.parse_camera()?;
                         let root = me.parse_node()?;
 
-                        let integrator = Whitted::new(camera, MarchConfig::default(), 10);
+                        let integrator = Whitted::new(camera, MarchConfig::default());
 
                         me.renders.push(Render {
                             target,

@@ -16,7 +16,7 @@ fn main() -> Result<(), Error> {
     let input = std::fs::read_to_string("test.scene")?;
     let (scene, renders) = parser::parse(&input)?;
 
-    for mut render in renders {
+    for render in renders {
         let canvas = integrator::render(
             render.canvas_info.clone(),
             &scene,

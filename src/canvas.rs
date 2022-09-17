@@ -260,16 +260,6 @@ impl Canvas {
         self.height
     }
 
-    fn index(&self, x: usize, y: usize) -> usize {
-        (self.width as usize) * y + x
-    }
-
-    /// Mutate a color in the [`Canvas`].
-    pub fn get_mut(&mut self, x: usize, y: usize) -> &mut Color {
-        let ix = self.index(x, y);
-        &mut self.buffer[ix]
-    }
-
     /// Fetch a row of the canvas.
     pub fn row(&self, y: usize) -> &[Color] {
         let start = y * self.width as usize;
@@ -288,6 +278,16 @@ impl Canvas {
             canvas: self,
             row: (self.height as usize),
         }
+    }
+
+    pub fn coords(&self) -> impl Iterator<Item=(usize, usize)> {
+        let width = self.width as usize;
+        (0..self.height as usize).flat_map(move |y| (0..width).map(move |x| (x,y)))
+    }
+
+    /// Return an iterator to the mutable pixels of the image.
+    pub fn pixels_mut(&mut self) -> &mut [Color] {
+        &mut self.buffer
     }
 
     /// Return raw image RGB8 data for the image.

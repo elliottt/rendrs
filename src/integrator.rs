@@ -1,5 +1,3 @@
-use std::{cell::RefCell, sync::{Arc, Mutex}};
-
 use nalgebra::{Point3, Unit, Vector3};
 use rayon::prelude::*;
 
@@ -82,27 +80,26 @@ pub fn render<I: Integrator>(
     root: NodeId,
     integrator: &I,
 ) -> Canvas {
-
     Tiles::new(info.width, info.height)
         .par_bridge()
-        .fold(|| info.new_canvas(), |mut canvas, tile| {
-            let mut chunk = Canvas::new(tile.width, tile.height);
+        .fold(
+            || info.new_canvas(),
+            |mut canvas, tile| {
+                let mut chunk = Canvas::new(tile.width, tile.height);
 
-            for row in 0..tile.height {
-                let y = row as f32 + tile.offset_y + 0.5;
-                for col in 0..tile.width {
+                for ((col, row), pixel) in chunk.coords().zip(chunk.pixels_mut()) {
+                    let y = row as f32 + tile.offset_y + 0.5;
                     let x = col as f32 + tile.offset_x + 0.5;
 
                     let sample = Sample::new(x, y);
-                    *chunk.get_mut(col as usize,row as usize) =
-                        integrator.luminance(scene, root, &sample);
+                    *pixel = integrator.luminance(scene, root, &sample);
                 }
-            }
 
-            canvas.blit(tile.offset_x as u32, tile.offset_y as u32, &chunk);
+                canvas.blit(tile.offset_x as u32, tile.offset_y as u32, &chunk);
 
-            canvas
-        })
+                canvas
+            },
+        )
         .reduce(|| info.new_canvas(), Canvas::merge)
 }
 
@@ -123,15 +120,13 @@ where
 pub struct Whitted<C> {
     camera: C,
     config: MarchConfig,
-    max_reflections: usize,
 }
 
 impl<C> Whitted<C> {
-    pub fn new(camera: C, config: MarchConfig, max_reflections: usize) -> Self {
+    pub fn new(camera: C, config: MarchConfig) -> Self {
         Self {
             camera,
             config,
-            max_reflections,
         }
     }
 }

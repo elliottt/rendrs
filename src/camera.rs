@@ -42,10 +42,7 @@ impl CanvasInfo {
 #[derive(Debug, Clone)]
 pub struct ProjectiveCamera {
     camera_to_world: Transform,
-    camera_to_screen: Transform,
     raster_to_camera: Transform,
-    screen_to_raster: Transform,
-    raster_to_screen: Transform,
 }
 
 impl ProjectiveCamera {
@@ -61,10 +58,7 @@ impl ProjectiveCamera {
 
         Self {
             camera_to_world,
-            camera_to_screen,
             raster_to_camera,
-            screen_to_raster,
-            raster_to_screen,
         }
     }
 }

@@ -1,7 +1,5 @@
 use nalgebra::{Point3, Unit, Vector3};
 
-use crate::math;
-
 #[derive(Debug, Clone)]
 pub struct Ray {
     pub position: Point3<f32>,
@@ -20,13 +18,6 @@ impl Ray {
     /// Move the position of the ray along `direction` by `amount`.
     pub fn step(&mut self, amount: f32) {
         self.position += self.direction.scale(amount);
-    }
-
-    pub fn reflect(&self, normal: &Unit<Vector3<f32>>) -> Ray {
-        Ray {
-            position: self.position.clone(),
-            direction: math::reflect(&self.direction, normal),
-        }
     }
 }
 

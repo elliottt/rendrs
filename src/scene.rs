@@ -2,7 +2,7 @@ use nalgebra::{Point3, Unit, Vector2, Vector3};
 
 use crate::{
     canvas::Color,
-    math::{self, Mix},
+    math::Mix,
     transform::{ApplyTransform, Transform},
 };
 
@@ -244,11 +244,6 @@ impl Scene {
         let id = LightId(self.lights.len() as u32);
         self.lights.push(light);
         id
-    }
-
-    #[inline]
-    pub fn light(&self, LightId(id): LightId) -> &Light {
-        &self.lights[id as usize]
     }
 
     pub fn point_light(&mut self, position: Point3<f32>, color: Color) -> LightId {
@@ -644,7 +639,12 @@ pub enum Pattern {
 
 impl Pattern {
     /// Generate the color for a point in object space, along with its world normal.
-    pub fn color_at(&self, scene: &Scene, point: &Point3<f32>, normal: &Unit<Vector3<f32>>) -> Color {
+    pub fn color_at(
+        &self,
+        scene: &Scene,
+        point: &Point3<f32>,
+        normal: &Unit<Vector3<f32>>,
+    ) -> Color {
         match self {
             Pattern::Solid { color } => color.clone(),
 
