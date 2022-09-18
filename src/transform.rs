@@ -147,13 +147,6 @@ impl<T: ApplyTransform> ApplyTransform for Unit<T> {
     }
 }
 
-impl ApplyTransform for Ray {
-    #[inline]
-    fn transform(&self, m: &Matrix4<f32>) -> Self {
-        Ray::new(self.position.transform(m), self.direction.transform(m))
-    }
-}
-
 #[test]
 fn test_translate() {
     let t = Transform::new().translate(&Vector3::new(1., 0., 0.));
