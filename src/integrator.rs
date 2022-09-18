@@ -250,7 +250,7 @@ impl Hit {
         let node = scene.node(root);
 
         for _ in 0..config.max_steps {
-            let result = node.fast_sdf(scene, root, &ray);
+            let result = node.fast_sdf(scene, &ray);
             let radius = result.distance.0;
 
             if radius < config.min_dist {

@@ -1,8 +1,6 @@
 use nalgebra::{Matrix4, Point3, Unit, Vector3};
 use std::ops::Neg;
 
-use crate::ray::Ray;
-
 #[derive(Debug, Clone)]
 pub struct Transform {
     matrix: Matrix4<f32>,

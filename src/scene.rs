@@ -197,7 +197,6 @@ impl Scene {
             .into_iter()
             .map(|id| (self.bounding_box(id).clone(), id))
             .collect();
-        println!("adding group of {:?} nodes", nodes);
         let nodes = BVH::from_nodes(nodes);
         self.add_node(Node::Group { union, nodes })
     }
@@ -508,7 +507,7 @@ impl Node {
                     if h == 0. {
                         left.normal = right.normal;
                     } else {
-                        left.normal = self.normal_sdf(scene, id, ray.clone(), left.distance);
+                        left.normal = self.normal_sdf(scene, ray.clone(), left.distance);
                     }
                 }
 
@@ -550,7 +549,6 @@ impl Node {
     fn normal_sdf(
         &self,
         scene: &Scene,
-        id: NodeId,
         mut ray: Ray,
         dist: Distance,
     ) -> Unit<Vector3<f32>> {
@@ -558,19 +556,19 @@ impl Node {
         let offset = Vector3::new(0.00001, 0.0, 0.0);
 
         ray.position = p - offset.xyy();
-        let px = self.fast_sdf(scene, id, &ray).distance;
+        let px = self.fast_sdf(scene, &ray).distance;
 
         ray.position = p - offset.yxy();
-        let py = self.fast_sdf(scene, id, &ray).distance;
+        let py = self.fast_sdf(scene, &ray).distance;
 
         ray.position = p - offset.yyx();
-        let pz = self.fast_sdf(scene, id, &ray).distance;
+        let pz = self.fast_sdf(scene, &ray).distance;
         Unit::new_normalize(Vector3::new(dist.0 - px.0, dist.0 - py.0, dist.0 - pz.0))
     }
 
     // A version of `sdf` that only computes the distance and material information. Useful for
     // things like lighting calculations.
-    pub fn fast_sdf(&self, scene: &Scene, id: NodeId, ray: &Ray) -> FastSDFResult {
+    pub fn fast_sdf(&self, scene: &Scene, ray: &Ray) -> FastSDFResult {
         match self {
             Node::Prim { prim } => FastSDFResult {
                 distance: prim.sdf(&ray.position),
@@ -579,7 +577,7 @@ impl Node {
 
             Node::Group { nodes, .. } => {
                 nodes.fold_intersections(ray, FastSDFResult::new(), |acc, id| {
-                    let res = scene.node(id).fast_sdf(scene, id, ray);
+                    let res = scene.node(id).fast_sdf(scene, ray);
                     if res.distance < acc.distance {
                         res
                     } else {
@@ -589,8 +587,8 @@ impl Node {
             }
 
             Node::Subtract { left, right } => {
-                let left = scene.node(*left).fast_sdf(scene, *left, ray);
-                let mut right = scene.node(*right).fast_sdf(scene, *right, ray);
+                let left = scene.node(*left).fast_sdf(scene, ray);
+                let mut right = scene.node(*right).fast_sdf(scene, ray);
 
                 right.distance.0 = -right.distance.0;
                 if left.distance < right.distance {
@@ -601,8 +599,8 @@ impl Node {
             }
 
             Node::SmoothUnion { k, left, right } => {
-                let mut left = scene.node(*left).fast_sdf(scene, *left, ray);
-                let right = scene.node(*right).fast_sdf(scene, *right, ray);
+                let mut left = scene.node(*left).fast_sdf(scene, ray);
+                let right = scene.node(*right).fast_sdf(scene, ray);
 
                 let (diff, _, dist) = smooth_union_parts(*k, left.distance, right.distance);
 
@@ -619,7 +617,7 @@ impl Node {
                 nodes
                     .iter()
                     .copied()
-                    .map(|id| scene.node(id).fast_sdf(scene, id, ray))
+                    .map(|id| scene.node(id).fast_sdf(scene, ray))
                     .max_by_key(|res| res.distance)
                     .unwrap()
             }
@@ -627,12 +625,12 @@ impl Node {
             Node::Transform { transform, node } => {
                 let mut res = scene
                     .node(*node)
-                    .fast_sdf(scene, *node, &ray.invert(transform));
+                    .fast_sdf(scene, &ray.invert(transform));
                 res.distance.0 *= transform.scale_factor();
                 res
             }
 
-            Node::Material { node, .. } => scene.node(*node).fast_sdf(scene, *node, ray),
+            Node::Material { node, .. } => scene.node(*node).fast_sdf(scene, ray),
         }
     }
 }

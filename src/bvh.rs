@@ -71,17 +71,9 @@ impl BoundingBox {
         }
     }
 
+    #[cfg(test)]
     pub fn contains(&self, p: &Point3<f32>) -> bool {
         self.min < p.clone() && self.max > p.clone()
-    }
-
-    pub fn add_point(&mut self, p: &Point3<f32>) {
-        self.min.x = self.min.x.min(p.x);
-        self.min.y = self.min.y.min(p.y);
-        self.min.z = self.min.z.min(p.z);
-        self.max.x = self.max.x.max(p.x);
-        self.max.y = self.max.y.max(p.y);
-        self.max.z = self.max.z.max(p.z);
     }
 
     /// True when the ray would intersect this bounding box.
@@ -175,9 +167,6 @@ enum Axis {
 
 #[derive(Debug, Clone)]
 struct Node {
-    /// When this is an internal node, the axis on which it splits.
-    axis: Option<Axis>,
-
     /// The offset to the right subtree, or the start of the values.
     offset: u16,
 
@@ -189,9 +178,8 @@ struct Node {
 }
 
 impl Node {
-    fn internal(bounds: BoundingBox, axis: Axis) -> Self {
+    fn internal(bounds: BoundingBox) -> Self {
         Self {
-            axis: Some(axis),
             offset: 0,
             len: 0,
             bounds,
@@ -200,7 +188,6 @@ impl Node {
 
     fn leaf(bounds: BoundingBox, offset: usize, len: usize) -> Self {
         Self {
-            axis: None,
             offset: offset as u16,
             len: len as u16,
             bounds,
@@ -263,7 +250,7 @@ impl<T: Clone> BVH<T> {
         assert!(!left.is_empty() && !right.is_empty());
 
         let cur = self.nodes.len();
-        self.nodes.push(Node::internal(bounds, axis));
+        self.nodes.push(Node::internal(bounds));
 
         self.build(left, start);
 
@@ -315,25 +302,4 @@ fn largest_axis(bound: &BoundingBox) -> (f32, Axis) {
     } else {
         (bound.min.y + diff.y / 2., Axis::Y)
     }
-}
-
-#[test]
-fn test_bvh_build() {
-    let values = vec![
-        (
-            BoundingBox::new(Point3::new(0., 0., 0.), Point3::new(1., 1., 1.)),
-            0,
-        ),
-        (
-            BoundingBox::new(Point3::new(-1., -1., -1.), Point3::new(-0.5, -0.5, -0.5)),
-            1,
-        ),
-        (
-            BoundingBox::new(Point3::new(-0.5, -0.5, -0.5), Point3::new(0.5, 0., 0.)),
-            2,
-        ),
-    ];
-    let bvh = BVH::from_nodes(values);
-
-    // TODO: intersection iteration
 }
