@@ -24,11 +24,11 @@ impl BoundingBox {
     }
 
     pub fn centroid(&self) -> Point3<f32> {
-        Point3::new(
-            self.min.x + (self.max.x - self.min.x) / 2.,
-            self.min.y + (self.max.y - self.min.y) / 2.,
-            self.min.z + (self.max.z - self.min.z) / 2.,
-        )
+        self.min + self.extent()
+    }
+
+    pub fn extent(&self) -> Vector3<f32> {
+        (self.max - self.min) / 2.
     }
 
     /// True when the bound contains no volume.
@@ -107,38 +107,6 @@ impl BoundingBox {
     }
 }
 
-impl ApplyTransform for BoundingBox {
-    fn transform(&self, m: &Matrix4<f32>) -> Self {
-        let right = m.column(0);
-        let xa = right * self.min.x;
-        let xb = right * self.max.x;
-        let xmin = Vector3::new(xa.x.min(xb.x), xa.y.min(xb.y), xa.z.min(xb.z));
-        let xmax = Vector3::new(xa.x.max(xb.x), xa.y.max(xb.y), xa.z.max(xb.z));
-
-        let up = m.column(1);
-        let ya = up * self.min.y;
-        let yb = up * self.max.y;
-        let ymin = Vector3::new(ya.x.min(yb.x), ya.y.min(yb.y), ya.z.min(yb.z));
-        let ymax = Vector3::new(ya.x.max(yb.x), ya.y.max(yb.y), ya.z.max(yb.z));
-
-        let back = m.column(2);
-        let za = back * self.min.z;
-        let zb = back * self.max.z;
-        let zmin = Vector3::new(za.x.min(zb.x), za.y.min(zb.y), za.z.min(zb.z));
-        let zmax = Vector3::new(za.x.max(zb.x), za.y.max(zb.y), za.z.max(zb.z));
-
-        let translate = {
-            let col = m.column(3);
-            Point3::new(col[0], col[1], col[2])
-        };
-
-        Self::new(
-            translate + (xmin + ymin + zmin),
-            translate + (xmax + ymax + zmax),
-        )
-    }
-}
-
 #[test]
 fn test_contains() {
     let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
@@ -165,6 +133,37 @@ fn test_intersect() {
     let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
     assert_eq!(a, a.intersect(&BoundingBox::max()));
     assert_eq!(BoundingBox::min(), a.intersect(&BoundingBox::min()));
+}
+
+impl ApplyTransform for BoundingBox {
+    fn transform(&self, m: &Matrix4<f32>) -> Self {
+        // compute the centroid and extent
+        let extent = self.extent();
+        let centroid = self.min + extent;
+
+        // transform the centroid to find the new origin
+        let centroid = centroid.transform(m);
+
+        // transform the extent by the abs matrix to find the new extent
+        let extent = extent.transform(&m.abs());
+
+        Self {
+            min: centroid - extent,
+            max: centroid + extent,
+        }
+    }
+}
+
+#[test]
+fn test_bounding_box_transform() {
+    use crate::transform::Transform;
+
+    let bound = BoundingBox::new(Point3::new(-1., -1., 0.), Point3::new(1., 1., 0.));
+    let other =
+        bound.apply(&Transform::new().rotate(&Vector3::new(std::f32::consts::FRAC_PI_2, 0., 0.)));
+    let total = bound.union(&other);
+
+    assert!(total.contains(&Point3::new(0.5, 0.5, 0.5)));
 }
 
 #[derive(Debug, Clone)]
