@@ -298,7 +298,7 @@ impl<T: Clone> BVH<T> {
     }
 
     pub fn bounding_box(&self) -> BoundingBox {
-        assert!(self.nodes.is_empty());
+        assert!(!self.nodes.is_empty());
         self.nodes[0].bounds.clone()
     }
 }

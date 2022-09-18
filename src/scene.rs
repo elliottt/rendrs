@@ -10,7 +10,7 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub struct Scene {
-    pub nodes: Vec<Node>,
+    pub nodes: Vec<(BoundingBox, Node)>,
     pub patterns: Vec<Pattern>,
     pub materials: Vec<Material>,
     pub lights: Vec<Light>,
@@ -143,14 +143,20 @@ impl Scene {
     #[inline]
     fn add_node(&mut self, node: Node) -> NodeId {
         let id = NodeId(self.nodes.len() as u32);
-        self.nodes.push(node);
+        let bounds = node.bounding_box(self);
+        self.nodes.push((bounds, node));
         id
     }
 
     /// Fetch a node from the scene.
     #[inline]
     pub fn node(&self, NodeId(id): NodeId) -> &Node {
-        &self.nodes[id as usize]
+        &self.nodes[id as usize].1
+    }
+
+    #[inline]
+    pub fn bounding_box(&self, NodeId(id): NodeId) -> &BoundingBox {
+        &self.nodes[id as usize].0
     }
 
     /// Construct a plane with the given normal in the scene.
@@ -186,15 +192,14 @@ impl Scene {
     }
 
     fn add_group(&mut self, union: bool, nodes: Vec<NodeId>) -> NodeId {
-        self.add_node(Node::Group {
-            union,
-            nodes: BVH::from_nodes(
-                nodes
-                    .into_iter()
-                    .map(|id| (self.node(id).bounding_box(self), id))
-                    .collect(),
-            ),
-        })
+        assert!(!nodes.is_empty());
+        let nodes = nodes
+            .into_iter()
+            .map(|id| (self.bounding_box(id).clone(), id))
+            .collect();
+        println!("adding group of {:?} nodes", nodes);
+        let nodes = BVH::from_nodes(nodes);
+        self.add_node(Node::Group { union, nodes })
     }
 
     pub fn group(&mut self, nodes: Vec<NodeId>) -> NodeId {
@@ -420,25 +425,23 @@ impl Node {
 
             Node::Group { nodes, .. } => nodes.bounding_box(),
 
-            Node::Subtract { left, .. } => scene.node(*left).bounding_box(scene),
+            Node::Subtract { left, .. } => scene.bounding_box(*left).clone(),
 
-            Node::SmoothUnion { left, right, .. } => scene
-                .node(*left)
-                .bounding_box(scene)
-                .union(&scene.node(*right).bounding_box(scene)),
-
-            Node::Intersect { nodes } => nodes
-                .iter()
-                .copied()
-                .map(|id| scene.node(id).bounding_box(scene))
-                .reduce(|l, r| l.intersect(&r))
-                .unwrap(),
-
-            Node::Transform { transform, node } => {
-                scene.node(*node).bounding_box(scene).apply(transform)
+            Node::SmoothUnion { left, right, .. } => {
+                scene.bounding_box(*left).union(scene.bounding_box(*right))
             }
 
-            Node::Material { node, .. } => scene.node(*node).bounding_box(scene),
+            Node::Intersect { nodes } => {
+                nodes.iter().copied().fold(BoundingBox::min(), |acc, id| {
+                    acc.union(scene.bounding_box(id))
+                })
+            }
+
+            Node::Transform { transform, node } => {
+                scene.bounding_box(*node).apply(transform)
+            }
+
+            Node::Material { node, .. } => scene.bounding_box(*node).clone(),
         }
     }
 
