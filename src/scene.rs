@@ -1,7 +1,7 @@
 use nalgebra::{Point3, Unit, Vector2, Vector3};
 
 use crate::{
-    bvh::BoundingBox,
+    bvh::{BoundingBox, BVH},
     canvas::Color,
     math::Mix,
     ray::Ray,
@@ -53,7 +53,7 @@ pub enum Node {
     Prim { prim: Prim },
 
     /// A group of nodes.
-    Group { union: bool, nodes: Vec<NodeId> },
+    Group { union: bool, nodes: BVH<NodeId> },
 
     /// Subtracting one node from another.
     Subtract { left: NodeId, right: NodeId },
@@ -109,6 +109,18 @@ pub struct SDFResult {
     pub material: Option<MaterialId>,
 }
 
+impl SDFResult {
+    fn new(id: NodeId, object: Point3<f32>) -> Self {
+        Self {
+            id,
+            object,
+            normal: Unit::new_unchecked(Vector3::new(0., 0., 1.)),
+            distance: Distance(std::f32::INFINITY),
+            material: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FastSDFResult {
     /// The distance between the world-space ray and this object.
@@ -116,6 +128,15 @@ pub struct FastSDFResult {
 
     /// The material for the object.
     pub material: Option<MaterialId>,
+}
+
+impl FastSDFResult {
+    fn new() -> Self {
+        Self {
+            distance: Distance(std::f32::INFINITY),
+            material: None,
+        }
+    }
 }
 
 impl Scene {
@@ -164,15 +185,24 @@ impl Scene {
         })
     }
 
-    pub fn group(&mut self, nodes: Vec<NodeId>) -> NodeId {
+    fn add_group(&mut self, union: bool, nodes: Vec<NodeId>) -> NodeId {
         self.add_node(Node::Group {
-            union: false,
-            nodes,
+            union,
+            nodes: BVH::from_nodes(
+                nodes
+                    .into_iter()
+                    .map(|id| (self.node(id).bounding_box(self), id))
+                    .collect(),
+            ),
         })
     }
 
+    pub fn group(&mut self, nodes: Vec<NodeId>) -> NodeId {
+        self.add_group(false, nodes)
+    }
+
     pub fn union(&mut self, nodes: Vec<NodeId>) -> NodeId {
-        self.add_node(Node::Group { union: true, nodes })
+        self.add_group(true, nodes)
     }
 
     pub fn subtract(&mut self, left: NodeId, right: NodeId) -> NodeId {
@@ -388,9 +418,7 @@ impl Node {
         match self {
             Node::Prim { prim } => prim.bounding_box(),
 
-            Node::Group { nodes, .. } => nodes.iter().fold(BoundingBox::min(), |left, id| {
-                left.union(&scene.node(*id).bounding_box(scene))
-            }),
+            Node::Group { nodes, .. } => nodes.bounding_box(),
 
             Node::Subtract { left, .. } => scene.node(*left).bounding_box(scene),
 
@@ -425,12 +453,15 @@ impl Node {
             },
 
             Node::Group { union, nodes } => {
-                let mut res = nodes
-                    .iter()
-                    .copied()
-                    .map(|id| scene.node(id).sdf(scene, id, ray))
-                    .min_by_key(|result| result.distance)
-                    .unwrap();
+                let mut res =
+                    nodes.fold_intersections(ray, SDFResult::new(id, ray.position), |acc, id| {
+                        let res = scene.node(id).sdf(scene, id, ray);
+                        if res.distance < acc.distance {
+                            res
+                        } else {
+                            acc
+                        }
+                    });
 
                 if *union {
                     res.id = id;
@@ -539,12 +570,16 @@ impl Node {
                 material: None,
             },
 
-            Node::Group { nodes, .. } => nodes
-                .iter()
-                .copied()
-                .map(|id| scene.node(id).fast_sdf(scene, ray))
-                .min_by_key(|res| res.distance)
-                .unwrap(),
+            Node::Group { nodes, .. } => {
+                nodes.fold_intersections(ray, FastSDFResult::new(), |acc, id| {
+                    let res = scene.node(id).fast_sdf(scene, ray);
+                    if res.distance < acc.distance {
+                        res
+                    } else {
+                        acc
+                    }
+                })
+            }
 
             Node::Subtract { left, right } => {
                 let left = scene.node(*left).fast_sdf(scene, ray);

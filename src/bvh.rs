@@ -216,7 +216,7 @@ pub struct BVH<T> {
 }
 
 impl<T: Clone> BVH<T> {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             nodes: Vec::new(),
             values: Vec::new(),
@@ -274,22 +274,32 @@ impl<T: Clone> BVH<T> {
         self.build(right, start + middle);
     }
 
-    pub fn intersections<F: FnMut(T)>(&self, ray: &Ray, mut fun: F) {
-        self.intersections_rec(ray, 0, &mut fun);
+    pub fn fold_intersections<R, F: FnMut(R, T) -> R>(&self, ray: &Ray, acc: R, mut fun: F) -> R {
+        self.intersections_rec(ray, 0, acc, &mut fun)
     }
 
-    fn intersections_rec<F: FnMut(T)>(&self, ray: &Ray, ix: usize, fun: &mut F) {
+    fn intersections_rec<R, F>(&self, ray: &Ray, ix: usize, acc: R, fun: &mut F) -> R
+    where
+        F: FnMut(R, T) -> R,
+    {
         let node = &self.nodes[ix];
         if node.bounds.intersects(ray) {
             if node.len > 0 {
                 let start = node.offset as usize;
                 let end = start + node.len as usize;
-                self.values[start..end].iter().cloned().for_each(fun);
+                self.values[start..end].iter().cloned().fold(acc, fun)
             } else {
-                self.intersections_rec(ray, ix + 1, fun);
-                self.intersections_rec(ray, ix + node.offset as usize, fun);
+                let acc = self.intersections_rec(ray, ix + 1, acc, fun);
+                self.intersections_rec(ray, ix + node.offset as usize, acc, fun)
             }
+        } else {
+            acc
         }
+    }
+
+    pub fn bounding_box(&self) -> BoundingBox {
+        assert!(self.nodes.is_empty());
+        self.nodes[0].bounds.clone()
     }
 }
 
