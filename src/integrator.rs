@@ -120,20 +120,28 @@ where
 pub struct Whitted<C> {
     camera: C,
     config: MarchConfig,
+    max_reflections: u32,
 }
 
 impl<C> Whitted<C> {
     pub fn new(camera: C, config: MarchConfig) -> Self {
-        Self { camera, config }
+        Self {
+            camera,
+            config,
+            max_reflections: 10,
+        }
     }
-}
 
-impl<C: Camera + std::marker::Send + std::marker::Sync> Integrator for Whitted<C> {
-    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
-        let hit = Hit::march(&self.config, scene, root, self.camera.generate_ray(sample));
+    pub fn color_for_ray(&self, scene: &Scene, root: NodeId, ray: Ray, reflection: u32) -> Color {
+        let mut color = Color::black();
+
+        if reflection >= self.max_reflections {
+            return color;
+        }
+
+        let hit = Hit::march(&self.config, scene, root, ray);
 
         if hit.is_none() {
-            let mut color = Color::black();
             for light in scene.lights.iter() {
                 color += light.light_escape();
             }
@@ -153,7 +161,6 @@ impl<C: Camera + std::marker::Send + std::marker::Sync> Integrator for Whitted<C
 
         // TODO: compute emitted light for emissive objects
 
-        let mut color = Color::black();
         for light in scene.lights.iter() {
             // if this light has a position in the scene, check to see if it's visible from the
             // intersection point.
@@ -172,10 +179,22 @@ impl<C: Camera + std::marker::Send + std::marker::Sync> Integrator for Whitted<C
             );
         }
 
-        // TODO: compute reflection contribution
+        if material.reflective > 0. {
+            let mut reflect_ray = hit.ray.reflect(&hit.normal);
+            reflect_ray.step(self.config.min_dist);
+            color +=
+                material.reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
+        }
+
         // TODO: compute refraction contribution
 
         color
+    }
+}
+
+impl<C: Camera + std::marker::Send + std::marker::Sync> Integrator for Whitted<C> {
+    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+        self.color_for_ray(scene, root, self.camera.generate_ray(sample), 0)
     }
 }
 

@@ -302,9 +302,10 @@ impl<'a> Parser<'a> {
                 let diffuse = me.number()?;
                 let specular = me.number()?;
                 let shininess = me.number()?;
+                let reflective = me.number()?;
                 Ok(me
                     .scene
-                    .phong(pattern, ambient, diffuse, specular, shininess))
+                    .phong(pattern, ambient, diffuse, specular, shininess, reflective))
             }
 
             name => bail!("Unknown material type: {}", name),

@@ -265,6 +265,7 @@ impl Scene {
         diffuse: f32,
         specular: f32,
         shininess: f32,
+        reflective: f32,
     ) -> MaterialId {
         self.add_material(Material {
             pattern,
@@ -272,6 +273,7 @@ impl Scene {
             diffuse,
             specular,
             shininess,
+            reflective,
         })
     }
 
@@ -546,12 +548,7 @@ impl Node {
 
     /// Compute the normal by using the SDF. Useful as an intermediate for combination nodes that
     /// don't have a closed form normal computation.
-    fn normal_sdf(
-        &self,
-        scene: &Scene,
-        mut ray: Ray,
-        dist: Distance,
-    ) -> Unit<Vector3<f32>> {
+    fn normal_sdf(&self, scene: &Scene, mut ray: Ray, dist: Distance) -> Unit<Vector3<f32>> {
         let p = ray.position;
         let offset = Vector3::new(0.00001, 0.0, 0.0);
 
@@ -613,19 +610,15 @@ impl Node {
                 left
             }
 
-            Node::Intersect { nodes } => {
-                nodes
-                    .iter()
-                    .copied()
-                    .map(|id| scene.node(id).fast_sdf(scene, ray))
-                    .max_by_key(|res| res.distance)
-                    .unwrap()
-            }
+            Node::Intersect { nodes } => nodes
+                .iter()
+                .copied()
+                .map(|id| scene.node(id).fast_sdf(scene, ray))
+                .max_by_key(|res| res.distance)
+                .unwrap(),
 
             Node::Transform { transform, node } => {
-                let mut res = scene
-                    .node(*node)
-                    .fast_sdf(scene, &ray.invert(transform));
+                let mut res = scene.node(*node).fast_sdf(scene, &ray.invert(transform));
                 res.distance.0 *= transform.scale_factor();
                 res
             }
@@ -720,6 +713,9 @@ pub struct Material {
 
     /// The shininess of the surface.
     pub shininess: f32,
+
+    /// How reflective the surface is.
+    pub reflective: f32,
 }
 
 /// Patterns for texturing a surface with.

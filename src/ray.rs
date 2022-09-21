@@ -1,6 +1,6 @@
 use nalgebra::{Matrix4, Point3, Unit, Vector3};
 
-use crate::transform::ApplyTransform;
+use crate::{math, transform::ApplyTransform};
 
 #[derive(Debug, Clone)]
 pub struct Ray {
@@ -42,6 +42,11 @@ impl Ray {
     pub fn step(&mut self, amount: f32) {
         self.position += self.direction.scale(amount);
     }
+
+    /// Construct a new ray reflected through a normal.
+    pub fn reflect(&self, normal: &Unit<Vector3<f32>>) -> Self {
+        Self::new(self.position, math::reflect(&self.direction, normal))
+    }
 }
 
 impl ApplyTransform for Ray {
@@ -50,4 +55,3 @@ impl ApplyTransform for Ray {
         Ray::new(self.position.transform(m), self.direction.transform(m))
     }
 }
-
