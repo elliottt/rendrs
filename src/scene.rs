@@ -386,24 +386,16 @@ impl Prim {
         }
     }
 
-    /// Compute the normal for the primitive, relative to the point.
-    pub fn normal(&self, p: &Point3<f32>) -> Unit<Vector3<f32>> {
+    /// Compute the normal for the primitive when possible.
+    pub fn normal(&self, p: &Point3<f32>) -> Option<Unit<Vector3<f32>>> {
         match self {
             // The plane knows its normal already
-            Prim::Plane { normal } => normal.clone(),
+            Prim::Plane { normal } => Some(normal.clone()),
 
             // The sphere is always centered at the origin.
-            Prim::Sphere { .. } => Unit::new_normalize(Vector3::new(p.x, p.y, p.z)),
+            Prim::Sphere { .. } => Some(Unit::new_normalize(Vector3::new(p.x, p.y, p.z))),
 
-            // For the other cases, we just fall back on multiple uses of the SDF.
-            _ => {
-                let offset = Vector3::new(0.00001, 0.0, 0.0);
-                let dist = self.sdf(p);
-                let px = self.sdf(&(p - offset.xyy()));
-                let py = self.sdf(&(p - offset.yxy()));
-                let pz = self.sdf(&(p - offset.yyx()));
-                Unit::new_normalize(Vector3::new(dist.0 - px.0, dist.0 - py.0, dist.0 - pz.0))
-            }
+            _ => None,
         }
     }
 }
@@ -446,13 +438,18 @@ impl Node {
 
     pub fn sdf(&self, scene: &Scene, id: NodeId, ray: &Ray) -> SDFResult {
         match self {
-            Node::Prim { prim } => SDFResult {
-                id,
-                material: None,
-                object: ray.position,
-                normal: prim.normal(&ray.position),
-                distance: prim.sdf(&ray.position),
-            },
+            Node::Prim { prim } => {
+                let distance = prim.sdf(&ray.position);
+                SDFResult {
+                    id,
+                    material: None,
+                    object: ray.position,
+                    normal: prim
+                        .normal(&ray.position)
+                        .unwrap_or_else(|| self.normal_sdf(scene, ray.clone(), distance)),
+                    distance,
+                }
+            }
 
             Node::Group { union, nodes } => {
                 let mut res =
