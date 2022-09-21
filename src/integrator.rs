@@ -124,14 +124,15 @@ pub struct Whitted<C> {
 }
 
 impl<C> Whitted<C> {
-    pub fn new(camera: C, config: MarchConfig) -> Self {
+    pub fn new(camera: C, config: MarchConfig, max_reflections: u32) -> Self {
         Self {
             camera,
             config,
-            max_reflections: 10,
+            max_reflections,
         }
     }
 
+    /// Determine the color that would result from a ray intersection with the scene.
     pub fn color_for_ray(&self, scene: &Scene, root: NodeId, ray: Ray, reflection: u32) -> Color {
         let mut color = Color::black();
 

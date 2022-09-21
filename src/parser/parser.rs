@@ -297,12 +297,30 @@ impl<'a> Parser<'a> {
 
         self.parens(|me| match me.ident()?.as_ref() {
             "phong" => {
-                let pattern = me.parse_pattern()?;
-                let ambient = me.number()?;
-                let diffuse = me.number()?;
-                let specular = me.number()?;
-                let shininess = me.number()?;
-                let reflective = me.number()?;
+                let mut pattern = None;
+                let mut ambient = 0.1;
+                let mut diffuse = 0.9;
+                let mut specular = 0.9;
+                let mut shininess = 200.0;
+                let mut reflective = 0.0;
+
+                while !me.peek_rparen() {
+                    match me.symbol()?.as_ref() {
+                        ":pattern" => pattern = Some(me.parse_pattern()?),
+                        ":ambient" => ambient = me.number()?,
+                        ":diffuse" => diffuse = me.number()?,
+                        ":specular" => specular = me.number()?,
+                        ":shininess" => shininess = me.number()?,
+                        ":reflective" => reflective = me.number()?,
+                        sym => bail!("Unknown material field `{}`", sym),
+                    }
+                }
+
+                let pattern = match pattern {
+                    Some(pat) => pat,
+                    None => bail!("Material is missing a :pattern"),
+                };
+
                 Ok(me
                     .scene
                     .phong(pattern, ambient, diffuse, specular, shininess, reflective))
@@ -467,6 +485,34 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_integrator(&mut self) -> Result<(CanvasInfo, Box<dyn Integrator>)> {
+        self.parens(|me| match me.ident()?.as_ref() {
+            "whitted" => {
+                let (info, camera) = me.parse_camera()?;
+
+                let mut num_reflections = 10;
+                let mut config = MarchConfig::default();
+
+                while !me.peek_rparen() {
+                    match me.symbol()?.as_ref() {
+                        ":max-reflections" => num_reflections = me.number()? as u32,
+                        ":max-steps" => config.max_steps = me.number()? as u32,
+                        ":min-dist" => config.min_dist = me.number()?,
+                        ":max-dist" => config.max_dist = me.number()?,
+                        sym => bail!("Unknown field `{}`", sym),
+                    }
+                }
+
+                Ok((
+                    info,
+                    Box::new(Whitted::new(camera, config, num_reflections)) as Box<dyn Integrator>,
+                ))
+            }
+
+            integrator => bail!("Unknown integrator: `{}`", integrator),
+        })
+    }
+
     fn parse_command(&mut self) -> Result<()> {
         self.parens(|me| {
             match me.ident()?.as_ref() {
@@ -498,25 +544,20 @@ impl<'a> Parser<'a> {
                     me.cameras.push((name, info, camera));
                 }
 
-                "render" => match me.symbol()?.as_ref() {
-                    ":whitted" => {
-                        let target = me.parse_target()?;
+                "render" => {
+                    let target = me.parse_target()?;
 
-                        let (canvas_info, camera) = me.parse_camera()?;
-                        let root = me.parse_node()?;
+                    let (canvas_info, integrator) = me.parse_integrator()?;
 
-                        let integrator = Whitted::new(camera, MarchConfig::default());
+                    let root = me.parse_node()?;
 
-                        me.renders.push(Render {
-                            target,
-                            canvas_info,
-                            root,
-                            integrator: Box::new(integrator),
-                        })
-                    }
-
-                    integrator => bail!("Unknown integrator: {}", integrator),
-                },
+                    me.renders.push(Render {
+                        target,
+                        canvas_info,
+                        root,
+                        integrator,
+                    })
+                }
 
                 command => bail!("Failed to parse command: {}", command),
             }

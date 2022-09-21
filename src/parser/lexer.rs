@@ -94,12 +94,14 @@ impl<'a> Lexer<'a> {
 
     /// Consume an identifier.
     fn consume_ident(&mut self, is_tail: bool) -> bool {
-        self.consume_while(|consumed, c| {
+        self.consume_while(|mut consumed, c| {
             if c.is_ascii_alphabetic() {
                 return true;
             }
 
-            if !is_tail || !consumed {
+            consumed = consumed || is_tail;
+
+            if !consumed {
                 return false;
             }
 
@@ -246,9 +248,10 @@ fn test_lex_basic() {
 
 #[test]
 fn test_lex_leading_space() {
-    let input = "         :symbol";
+    let input = "         :symbol1 :symbol-2";
     let mut lexer = Lexer::new(input);
-    lexer_next!(lexer, Token::Symbol, ":symbol");
+    lexer_next!(lexer, Token::Symbol, ":symbol1");
+    lexer_next!(lexer, Token::Symbol, ":symbol-2");
 }
 
 #[test]
