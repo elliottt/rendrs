@@ -1,5 +1,5 @@
+use crossbeam::{channel, thread};
 use nalgebra::{Point3, Unit, Vector3};
-use rayon::prelude::*;
 
 use crate::{
     camera::{Camera, CanvasInfo, Sample},
@@ -80,27 +80,50 @@ pub fn render<I: Integrator>(
     root: NodeId,
     integrator: &I,
 ) -> Canvas {
-    Tiles::new(info.width, info.height)
-        .par_bridge()
-        .fold(
-            || info.new_canvas(),
-            |mut canvas, tile| {
-                let mut chunk = Canvas::new(tile.width, tile.height);
+    let mut canvas = info.new_canvas();
 
-                for ((col, row), pixel) in chunk.coords().zip(chunk.pixels_mut()) {
-                    let y = row as f32 + tile.offset_y + 0.5;
-                    let x = col as f32 + tile.offset_x + 0.5;
+    let (input, tiles): (_, channel::Receiver<Tile>) = channel::unbounded();
+    let (results, chunks) = channel::unbounded();
 
-                    let sample = Sample::new(x, y);
-                    *pixel = integrator.luminance(scene, root, &sample);
+    thread::scope(|s| {
+        for _ in 0..num_cpus::get() {
+            s.spawn(|_| {
+                let results = results.clone();
+                for tile in tiles.clone() {
+                    let mut chunk = Canvas::new(tile.width, tile.height);
+
+                    for ((col, row), pixel) in chunk.coords().zip(chunk.pixels_mut()) {
+                        let y = row as f32 + tile.offset_y + 0.5;
+                        let x = col as f32 + tile.offset_x + 0.5;
+
+                        let sample = Sample::new(x, y);
+                        *pixel = integrator.luminance(scene, root, &sample);
+                    }
+
+                    results
+                        .send((tile.offset_x as u32, tile.offset_y as u32, chunk))
+                        .unwrap();
                 }
+            });
+        }
 
-                canvas.blit(tile.offset_x as u32, tile.offset_y as u32, &chunk);
+        let expecting = Tiles::new(info.width, info.height)
+            .map(|tile| {
+                input.send(tile).unwrap();
+            })
+            .count();
 
-                canvas
-            },
-        )
-        .reduce(|| info.new_canvas(), Canvas::merge)
+        // Explicitly drop the input channel to signal to the threads consuming `tiles` that no
+        // more work is coming.
+        drop(input);
+
+        for (offset_x, offset_y, chunk) in chunks.into_iter().take(expecting) {
+            canvas.blit(offset_x, offset_y, &chunk)
+        }
+    })
+    .unwrap();
+
+    canvas
 }
 
 pub trait Integrator: std::marker::Send + std::marker::Sync {

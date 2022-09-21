@@ -235,14 +235,6 @@ impl Canvas {
         }
     }
 
-    pub fn merge(mut self, other: Canvas) -> Self {
-        assert!(self.buffer.len() == other.buffer.len());
-        for (l, r) in self.buffer.iter_mut().zip(other.buffer.into_iter()) {
-            *l += r
-        }
-        self
-    }
-
     pub fn blit(&mut self, off_x: u32, off_y: u32, other: &Canvas) {
         let start = off_x as usize;
         let end = start + other.width as usize;
