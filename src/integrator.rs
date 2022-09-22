@@ -43,6 +43,10 @@ impl Tiles {
             y: 0,
         }
     }
+
+    fn total(&self) -> u32 {
+        self.chunks_x * self.chunks_y
+    }
 }
 
 impl Iterator for Tiles {
@@ -107,15 +111,14 @@ pub fn render<I: Integrator>(
             });
         }
 
-        let expecting = Tiles::new(info.width, info.height)
-            .map(|tile| {
-                input.send(tile).unwrap();
-            })
-            .count();
+        let tiles = Tiles::new(info.width, info.height);
+        let expecting = tiles.total() as usize;
 
-        // Explicitly drop the input channel to signal to the threads consuming `tiles` that no
-        // more work is coming.
-        drop(input);
+        s.spawn(move |_| {
+            for tile in tiles {
+                input.send(tile).unwrap();
+            }
+        });
 
         for (offset_x, offset_y, chunk) in chunks.into_iter().take(expecting) {
             canvas.blit(offset_x, offset_y, &chunk)
