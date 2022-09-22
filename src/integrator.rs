@@ -83,6 +83,7 @@ pub fn render<I: Integrator>(
     scene: &Scene,
     root: NodeId,
     integrator: &I,
+    num_threads: usize,
 ) -> Canvas {
     let mut canvas = info.new_canvas();
 
@@ -90,7 +91,7 @@ pub fn render<I: Integrator>(
     let (results, chunks) = channel::unbounded();
 
     thread::scope(|s| {
-        for _ in 0..num_cpus::get() {
+        for _ in 0..num_threads {
             s.spawn(|_| {
                 let results = results.clone();
                 for tile in tiles.clone() {
