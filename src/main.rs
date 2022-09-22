@@ -5,7 +5,6 @@ mod bvh;
 mod camera;
 mod canvas;
 mod integrator;
-mod lighting;
 mod math;
 mod parser;
 mod ray;

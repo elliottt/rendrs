@@ -4,9 +4,9 @@ use nalgebra::{Point3, Unit, Vector3};
 use crate::{
     camera::{Camera, CanvasInfo, Sample},
     canvas::{Canvas, Color},
-    lighting,
+    math,
     ray::Ray,
-    scene::{Distance, MarchConfig, MaterialId, NodeId, Scene},
+    scene::{Distance, Light, MarchConfig, Material, MaterialId, NodeId, Scene},
 };
 
 /// An individual tile in the rendering target.
@@ -184,35 +184,84 @@ impl<C> Whitted<C> {
         }
 
         let material = scene.material(hit.material.unwrap());
+        let color = match material {
+            &Material::Phong {
+                pattern,
+                ambient,
+                diffuse,
+                specular,
+                shininess,
+                reflective,
+            } => {
+                let eyev = -hit.ray.direction;
 
-        let eye = -hit.ray.direction;
+                let base_color = scene
+                    .pattern(pattern)
+                    .color_at(scene, &hit.object, &hit.normal);
 
-        // TODO: compute emitted light for emissive objects
+                let mut total = Color::black();
+                for light in scene.lights.iter() {
+                    let effective_color = &base_color * light.intensity();
+                    total += ambient * &effective_color;
 
-        for light in scene.lights.iter() {
-            // if this light has a position in the scene, check to see if it's visible from the
-            // intersection point.
-            let in_shadow = light.position().map_or(false, |light| {
-                hit.in_shadow(&self.config, scene, root, &light)
-            });
-            color += lighting::shade(
-                scene,
-                material,
-                light,
-                &hit.object,
-                &hit.ray.position,
-                &eye,
-                &hit.normal,
-                in_shadow,
-            );
-        }
+                    // When the point is out of view of this light, we only integrate the ambient component of the
+                    // light.
+                    if light.position().map_or(false, |light| {
+                        hit.in_shadow(&self.config, scene, root, &light)
+                    }) {
+                        continue;
+                    }
 
-        let reflectance = material.reflectance();
-        if reflectance > 0. {
-            let mut reflect_ray = hit.ray.reflect(&hit.normal);
-            reflect_ray.step(self.config.min_dist);
-            color += reflectance * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
-        }
+                    let diffuse_specular = match light {
+                        Light::Diffuse { .. } => Color::black(),
+                        Light::Point { position, color } => {
+                            // direction to the light
+                            let lightv = Unit::new_normalize(position - &hit.ray.position);
+
+                            let light_dot_normal = lightv.dot(&hit.normal);
+
+                            if light_dot_normal < 0. {
+                                Color::black()
+                            } else {
+                                let diffuse = effective_color * diffuse * light_dot_normal;
+
+                                // direction to the eye
+                                if specular > 0. {
+                                    let reflectv = math::reflect(&(-lightv), &hit.normal);
+                                    let reflect_dot_eye = reflectv.dot(&eyev);
+                                    let specular = if reflect_dot_eye <= 0. {
+                                        Color::black()
+                                    } else {
+                                        let factor = reflect_dot_eye.powf(shininess);
+                                        color * specular * factor
+                                    };
+                                    diffuse + specular
+                                } else {
+                                    diffuse
+                                }
+                            }
+                        }
+                    };
+
+                    total += diffuse_specular;
+                }
+
+                if reflective > 0. {
+                    let mut reflect_ray = hit.ray.reflect(&hit.normal);
+                    reflect_ray.step(self.config.min_dist);
+                    total +=
+                        reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
+                }
+
+                total
+            }
+
+            Material::Emissive { pattern } => {
+                scene
+                    .pattern(*pattern)
+                    .color_at(scene, &hit.object, &hit.normal)
+            }
+        };
 
         // TODO: compute refraction contribution
 

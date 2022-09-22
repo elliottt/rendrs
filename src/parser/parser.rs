@@ -326,6 +326,11 @@ impl<'a> Parser<'a> {
                     .phong(pattern, ambient, diffuse, specular, shininess, reflective))
             }
 
+            "emissive" => {
+                let pattern = me.parse_pattern()?;
+                Ok(me.scene.emissive(pattern))
+            }
+
             name => bail!("Unknown material type: {}", name),
         })
     }

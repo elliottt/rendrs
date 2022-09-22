@@ -277,6 +277,10 @@ impl Scene {
         })
     }
 
+    pub fn emissive(&mut self, pattern: PatternId) -> MaterialId {
+        self.add_material(Material::Emissive { pattern })
+    }
+
     #[inline]
     fn add_light(&mut self, light: Light) -> LightId {
         let id = LightId(self.lights.len() as u32);
@@ -697,7 +701,7 @@ impl Light {
 #[derive(Debug)]
 pub enum Material {
     Phong {
-        /// For now, the pattern of a surface is just a color.
+        /// The pattern of the surface.
         pattern: PatternId,
 
         /// The ambient reflection of this surface.
@@ -715,14 +719,11 @@ pub enum Material {
         /// How reflective the surface is.
         reflective: f32,
     },
-}
 
-impl Material {
-    pub fn reflectance(&self) -> f32 {
-        match self {
-            Material::Phong { reflective, .. } => *reflective,
-        }
-    }
+    Emissive {
+        /// The emissive pattern.
+        pattern: PatternId,
+    },
 }
 
 /// Patterns for texturing a surface with.
