@@ -267,7 +267,7 @@ impl Scene {
         shininess: f32,
         reflective: f32,
     ) -> MaterialId {
-        self.add_material(Material {
+        self.add_material(Material::Phong {
             pattern,
             ambient,
             diffuse,
@@ -695,24 +695,34 @@ impl Light {
 
 /// Materials using the Phong reflection model.
 #[derive(Debug)]
-pub struct Material {
-    /// For now, the pattern of a surface is just a color.
-    pub pattern: PatternId,
+pub enum Material {
+    Phong {
+        /// For now, the pattern of a surface is just a color.
+        pattern: PatternId,
 
-    /// The ambient reflection of this surface.
-    pub ambient: f32,
+        /// The ambient reflection of this surface.
+        ambient: f32,
 
-    /// The diffuse reflection of this surface.
-    pub diffuse: f32,
+        /// The diffuse reflection of this surface.
+        diffuse: f32,
 
-    /// The specular reflection of this surface.
-    pub specular: f32,
+        /// The specular reflection of this surface.
+        specular: f32,
 
-    /// The shininess of the surface.
-    pub shininess: f32,
+        /// The shininess of the surface.
+        shininess: f32,
 
-    /// How reflective the surface is.
-    pub reflective: f32,
+        /// How reflective the surface is.
+        reflective: f32,
+    },
+}
+
+impl Material {
+    pub fn reflectance(&self) -> f32 {
+        match self {
+            Material::Phong { reflective, .. } => *reflective,
+        }
+    }
 }
 
 /// Patterns for texturing a surface with.

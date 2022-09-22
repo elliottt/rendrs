@@ -195,7 +195,7 @@ impl<C> Whitted<C> {
             let in_shadow = light.position().map_or(false, |light| {
                 hit.in_shadow(&self.config, scene, root, &light)
             });
-            color += lighting::phong(
+            color += lighting::shade(
                 scene,
                 material,
                 light,
@@ -207,11 +207,11 @@ impl<C> Whitted<C> {
             );
         }
 
-        if material.reflective > 0. {
+        let reflectance = material.reflectance();
+        if reflectance > 0. {
             let mut reflect_ray = hit.ray.reflect(&hit.normal);
             reflect_ray.step(self.config.min_dist);
-            color +=
-                material.reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
+            color += reflectance * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
         }
 
         // TODO: compute refraction contribution
