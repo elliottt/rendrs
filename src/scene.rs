@@ -483,6 +483,7 @@ impl Node {
                 if left.distance < right.distance {
                     right.object = ray.position;
                     right.normal = -right.normal;
+                    right.material = right.material.or_else(|| left.material);
                     right
                 } else {
                     left.object = ray.position;
