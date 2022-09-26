@@ -10,6 +10,7 @@ mod parser;
 mod ray;
 mod scene;
 mod transform;
+mod web;
 
 use parser::Target;
 
