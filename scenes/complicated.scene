@@ -41,12 +41,12 @@
   combination
   (subtract
     (union
-      (transform (translate -1 0 0) blue-sphere)
-      (transform (translate 1 0 0) red-sphere))
+      (transform (translate 1 0 0) blue-sphere)
+      (transform (translate -1 0 0) red-sphere))
     (transform (translate 0 1 -1) (sphere 1))))
 
 
-(light (point #ffffff (5 0 -10)))
+(light (point #ffffff (5 10 -10)))
 
 (render
   (file "complicated.png")
