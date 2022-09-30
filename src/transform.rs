@@ -1,4 +1,4 @@
-use nalgebra::{Matrix4, Point3, Unit, Vector3};
+use nalgebra::{Matrix4, Normed, Point3, Unit, Vector3};
 use std::ops::Neg;
 
 #[derive(Debug, Clone)]
@@ -80,8 +80,8 @@ impl Transform {
 
     /// Compose an axis-angle rotation to the transform.
     pub fn rotate(mut self, axisangle: &Vector3<f32>) -> Self {
-        self.matrix = self.matrix * Matrix4::new_rotation(axisangle.clone());
-        self.inverse = Matrix4::new_rotation(axisangle.neg()) * self.inverse;
+        self.matrix = Matrix4::new_rotation(axisangle.clone()) * self.matrix;
+        self.inverse = self.inverse * Matrix4::new_rotation(axisangle.neg());
         self
     }
 }
@@ -138,10 +138,10 @@ impl ApplyTransform for Vector3<f32> {
     }
 }
 
-impl<T: ApplyTransform> ApplyTransform for Unit<T> {
+impl<T: Normed + ApplyTransform> ApplyTransform for Unit<T> {
     #[inline]
     fn transform(&self, m: &Matrix4<f32>) -> Self {
-        Unit::new_unchecked(self.as_ref().transform(m))
+        Unit::new_normalize(self.as_ref().transform(m))
     }
 }
 
@@ -170,8 +170,11 @@ fn test_rotation() {
 #[test]
 fn test_composition() {
     let t = Transform::new()
-        .uniform_scale(10.0)
-        .translate(&Vector3::new(1., 0., 0.));
-    let p = Point3::new(1., 0., 1.);
+        .translate(&Vector3::new(1., 0., 0.))
+        .rotate(&Vector3::new(0., 0., std::f32::consts::FRAC_PI_2));
+    let p = Point3::new(0., 0., 0.);
+    assert_eq!(1., p.apply(&t).y);
+
+    let p = Point3::new(1., 0., 3.);
     assert_eq!(p, p.apply(&t).invert(&t));
 }

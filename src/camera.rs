@@ -50,8 +50,8 @@ impl ProjectiveCamera {
     pub fn new(info: &CanvasInfo, camera_to_world: Transform, camera_to_screen: Transform) -> Self {
         let screen_to_raster = Transform::new()
             .scale(&Vector3::new(info.width_f32(), info.height_f32(), 1.))
-            .scale(&Vector3::new(0.5, 0.5, 1.))
-            .translate(&Vector3::new(1., 1., 0.));
+            .scale(&Vector3::new(-0.5, 0.5, 1.))
+            .translate(&Vector3::new(-1., 1., 0.));
 
         let raster_to_screen = screen_to_raster.inverse();
         let raster_to_camera = camera_to_screen.inverse() * &raster_to_screen;
@@ -128,14 +128,14 @@ fn test_projective_camera() {
     );
 
     assert_eq!(
-        Point3::new(-1., -1., 0.),
+        Point3::new(1., -1., 0.),
         Point3::new(0., 0., 0.).apply(&camera.raster_to_camera)
     );
 
     // (10, 10) is out of bounds for screen space, but represents the upper-right corner of the
     // (9,9) pixel.
     assert_eq!(
-        Point3::new(1., 1., 0.),
+        Point3::new(-1., 1., 0.),
         Point3::new(10., 10., 0.).apply(&camera.raster_to_camera)
     );
 }
