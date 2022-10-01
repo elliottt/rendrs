@@ -268,7 +268,7 @@ impl Canvas {
     pub fn rows(&self) -> Rows {
         Rows {
             canvas: self,
-            row: (self.height as usize),
+            row: 0,
         }
     }
 
@@ -320,12 +320,15 @@ impl<'a> Iterator for Rows<'a> {
     type Item = (usize, &'a [Color]);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.row == 0 {
+        if self.row >= self.canvas.height as usize{
             return None;
         }
 
-        self.row -= 1;
+        let ix = self.row;
+        let row = self.canvas.row(ix);
 
-        Some((self.row, self.canvas.row(self.row)))
+        self.row += 1;
+
+        Some((ix, row))
     }
 }

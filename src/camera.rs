@@ -70,7 +70,7 @@ pub struct PinholeCamera {
 
 impl PinholeCamera {
     pub fn new(info: &CanvasInfo, camera_to_world: Transform, fov: f32) -> Self {
-        let camera_to_screen = Transform::perspective(info.aspect_ratio(), fov, 1., 1000.);
+        let camera_to_screen = Transform::perspective(info.aspect_ratio(), fov, -1., -1000.);
         Self {
             camera: ProjectiveCamera::new(info, camera_to_world, camera_to_screen),
         }
@@ -127,6 +127,8 @@ fn test_projective_camera() {
         Point3::new(5., 5., 0.).apply(&camera.raster_to_camera)
     );
 
+    // This is the bottom-left of the image. It's flipped by the transformation in ProjectiveCamera
+    // so that we don't need to do anything special when outputting it.
     assert_eq!(
         Point3::new(1., -1., 0.),
         Point3::new(0., 0., 0.).apply(&camera.raster_to_camera)
@@ -151,7 +153,7 @@ fn test_pinhole_camera() {
 
     assert_eq!(Point3::new(0., 0., 0.), ray.position);
     assert_eq!(
-        Unit::new_normalize(Vector3::new(0., 0., -1.)),
+        Unit::new_normalize(Vector3::new(0., 0., 1.)),
         ray.direction
     );
 }

@@ -22,7 +22,7 @@
 (node
   ground
   (transform
-    (translate 0 -2 0)
+    (translate 0 -3 0)
     (paint stripes (plane (0 1 0)))))
 
 (node
