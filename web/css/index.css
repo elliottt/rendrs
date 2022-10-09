@@ -1,0 +1,16 @@
+
+body {
+  font-family: Arial, Helvetica;
+}
+
+div.container {
+  border: 1px solid black;
+  margin: 5px;
+  padding: 5px;
+}
+
+div.container div.title {
+  border-bottom: 1px solid black;
+  padding-bottom: 3px;
+  margin-bottom: 5px;
+}

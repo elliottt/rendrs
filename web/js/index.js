@@ -52,6 +52,11 @@ function makeOutput(output) {
   const container = document.createElement('div');
   container.classList.add('container');
 
+  const title = document.createElement('div');
+  title.innerText = output.name;
+  title.classList.add('title');
+  container.appendChild(title);
+
   switch (output.type) {
     case "ascii":
       container.classList.add('ascii');
