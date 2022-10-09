@@ -3,11 +3,13 @@ use actix_files as fs;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_web_actors::ws;
 use anyhow::Error;
+use crossbeam::channel::{self, RecvTimeoutError};
 use fs::NamedFile;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use rand::{rngs::ThreadRng, Rng};
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -24,18 +26,64 @@ pub async fn serve(port: u16, threads: usize, scene: String) -> Result<(), Error
 
     let mut watcher = {
         let render_server = render_server.clone();
-        notify::recommended_watcher(move |event| match event {
+
+        let (send, recv) = channel::bounded(1);
+
+        let watcher_path = scene_path.clone();
+        let watcher = notify::recommended_watcher(move |event| match event {
             Ok(Event {
                 kind: EventKind::Modify(ModifyKind::Data(_)),
                 paths,
                 ..
-            }) if paths.contains(&scene_path) => {
-                render_server.do_send(Message::File {
-                    name: String::from("norf"),
-                });
-            }
+            }) if paths.contains(&watcher_path) => send.send(()).unwrap(),
             _ => (),
-        })?
+        })?;
+
+        std::thread::spawn(move || {
+            'outer: loop {
+                log::info!("rendering {:?}", scene_path);
+
+                // render the scene
+                match render::render_scene(threads, &scene_path) {
+                    Ok(outputs) => {
+                        log::info!("render done");
+                        let outputs = outputs
+                            .map(|output| match output {
+                                render::Output::File { path } => Output::File {
+                                    name: String::from(
+                                        path.file_name().and_then(|os| os.to_str()).unwrap(),
+                                    ),
+                                },
+                                render::Output::Ascii { chars } => Output::Ascii {
+                                    name: String::from("ascii"),
+                                    content: chars,
+                                },
+                            })
+                            .collect();
+                        render_server.do_send(RenderResult { outputs });
+                    }
+
+                    Err(err) => log::error!("error: {}", err),
+                }
+
+                // wait for the next edit
+                if recv.recv().is_err() {
+                    break 'outer;
+                }
+
+                // debounce edits
+                loop {
+                    let res = recv.recv_timeout(Duration::from_millis(1000));
+                    match res {
+                        Ok(_) => continue,
+                        Err(RecvTimeoutError::Timeout) => break,
+                        Err(_) => break 'outer,
+                    }
+                }
+            }
+        });
+
+        watcher
     };
 
     watcher.watch(&scene_dir, RecursiveMode::NonRecursive)?;
@@ -45,6 +93,7 @@ pub async fn serve(port: u16, threads: usize, scene: String) -> Result<(), Error
             .app_data(web::Data::new(render_server.clone()))
             .service(web::resource("/").to(index))
             .route("/ws", web::get().to(client_route))
+            .service(fs::Files::new("/output", "."))
             .service(fs::Files::new("/static", "web").index_file("index.html"))
     })
     .workers(2)
@@ -67,7 +116,6 @@ async fn client_route(
     stream: web::Payload,
     srv: web::Data<Addr<RenderServer>>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    println!("web socket!");
     ws::start(
         RenderClient {
             id: 0,
@@ -81,7 +129,12 @@ async fn client_route(
 
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
-enum Message {
+struct RenderResult {
+    outputs: Vec<Output>,
+}
+
+#[derive(Clone)]
+enum Output {
     File { name: String },
     Ascii { name: String, content: String },
 }
@@ -89,7 +142,7 @@ enum Message {
 #[derive(Message)]
 #[rtype(usize)]
 struct Connect {
-    addr: Recipient<Message>,
+    addr: Recipient<RenderResult>,
 }
 
 #[derive(Message)]
@@ -99,8 +152,9 @@ struct Disconnect {
 }
 
 struct RenderServer {
-    clients: HashMap<usize, Recipient<Message>>,
+    clients: HashMap<usize, Recipient<RenderResult>>,
     rng: ThreadRng,
+    last_result: Option<Vec<Output>>,
 }
 
 impl Actor for RenderServer {
@@ -112,14 +166,18 @@ impl RenderServer {
         RenderServer {
             clients: HashMap::new(),
             rng: rand::thread_rng(),
+            last_result: None,
         }
     }
 }
 
-impl Handler<Message> for RenderServer {
+impl Handler<RenderResult> for RenderServer {
     type Result = ();
 
-    fn handle(&mut self, msg: Message, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: RenderResult, _: &mut Context<Self>) -> Self::Result {
+        self.last_result = Some(msg.outputs.clone());
+
+        // TODO: buffer the last render result in the server, and send it on new client connections
         for client in self.clients.values() {
             client.do_send(msg.clone())
         }
@@ -132,11 +190,18 @@ impl Handler<Connect> for RenderServer {
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
         let id = self.rng.gen::<usize>();
 
-        msg.addr.do_send(Message::File {
-            name: String::from("foobar"),
+        msg.addr.do_send(RenderResult {
+            outputs: vec![Output::File {
+                name: String::from("foobar"),
+            }],
         });
 
-        self.clients.insert(id, msg.addr);
+        self.clients.insert(id, msg.addr.clone());
+
+        if let Some(outputs) = &self.last_result {
+            msg.addr.do_send(RenderResult { outputs: outputs.clone() });
+        }
+
         id
     }
 }
@@ -162,12 +227,13 @@ impl RenderClient {
     fn hb(&self, ctx: &mut ws::WebsocketContext<Self>) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
-                println!("Heartbeat failed, disconnecting");
+                log::trace!("Heartbeat failed, disconnecting");
                 act.addr.do_send(Disconnect { id: act.id });
                 ctx.stop();
                 return;
             }
 
+            log::trace!("sending a ping request");
             ctx.ping(b"");
         });
     }
@@ -177,7 +243,6 @@ impl Actor for RenderClient {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        println!("started");
         let addr = ctx.address();
         self.addr
             .send(Connect {
@@ -186,16 +251,20 @@ impl Actor for RenderClient {
             .into_actor(self)
             .then(|res, act, ctx| {
                 match res {
-                    Ok(res) => act.id = res,
+                    Ok(res) => {
+                        act.id = res;
+                        log::info!("started client {}", act.id);
+                    }
                     _ => ctx.stop(),
                 }
                 fut::ready(())
             })
             .wait(ctx);
+        self.hb(ctx);
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        println!("stopped");
+        log::info!("stopping client {}", self.id);
         self.addr.do_send(Disconnect { id: self.id });
         Running::Stop
     }
@@ -214,28 +283,48 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for RenderClient {
 
         match msg {
             ws::Message::Ping(msg) => ctx.pong(&msg),
+            ws::Message::Pong(_) => {
+                log::trace!("ping response");
+                self.hb = Instant::now()
+            }
             _ => (),
         }
     }
 }
 
-impl Handler<Message> for RenderClient {
+impl Handler<RenderResult> for RenderClient {
     type Result = ();
 
-    fn handle(&mut self, msg: Message, ctx: &mut Self::Context) {
-        match msg {
-            Message::File { name } => {
-                ctx.text(format!("{{ \"type\": \"file\", \"name\": \"{}\" }}", name));
+    fn handle(&mut self, msg: RenderResult, ctx: &mut Self::Context) {
+        let mut buf = String::new();
+        let mut sep = "";
+
+        write!(&mut buf, "{{ \"outputs\": [").unwrap();
+        for output in msg.outputs {
+            write!(&mut buf, "{}", sep).unwrap();
+            match output {
+                Output::File { name } => {
+                    write!(&mut buf, "{{ \"type\": \"file\", \"name\": \"{}\" }}", name).unwrap()
+                }
+
+                Output::Ascii { name, content } => {
+                    let content = content.replace("\\", "\\\\");
+                    let content = content.replace("\n", "\\n");
+                    write!(
+                        &mut buf,
+                        "{{ \"type\": \"ascii\", \"name\": \"{}\", \"content\": \"{}\" }}",
+                        name,
+                        content.replace("\"", "\\\"")
+                    )
+                    .unwrap();
+                }
             }
 
-            Message::Ascii { name, content } => {
-                let content = content.replace("\"", "\\\"");
-                ctx.text(format!(
-                    "{{ \"type\": \"ascii\", \"name\": \"{}\", \"content\": \"{}\" }}",
-                    name,
-                    content.replace("\"", "\\\"")
-                ));
-            }
+            sep = ", ";
         }
+
+        write!(&mut buf, "]}}").unwrap();
+
+        ctx.text(buf);
     }
 }

@@ -1468,6 +1468,7 @@ dependencies = [
  "crossbeam",
  "env_logger",
  "image",
+ "log",
  "nalgebra",
  "notify",
  "num_cpus",
