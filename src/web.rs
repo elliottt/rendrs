@@ -54,13 +54,16 @@ pub async fn serve(port: u16, threads: usize, scene: String) -> Result<(), Error
                                         path.file_name().and_then(|os| os.to_str()).unwrap(),
                                     ),
                                 },
-                                render::Output::Ascii { chars } => Output::Ascii {
-                                    name: String::from("ascii"),
+                                render::Output::Ascii { name, chars } => Output::Ascii {
+                                    name,
                                     content: chars,
                                 },
                             })
                             .collect();
-                        render_server.do_send(RenderResult { outputs });
+                        let scene = String::from(
+                            scene_path.file_name().and_then(|os| os.to_str()).unwrap(),
+                        );
+                        render_server.do_send(RenderResult { scene, outputs });
                     }
 
                     Err(err) => log::error!("error: {}", err),
@@ -130,6 +133,7 @@ async fn client_route(
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 struct RenderResult {
+    scene: String,
     outputs: Vec<Output>,
 }
 
@@ -154,7 +158,7 @@ struct Disconnect {
 struct RenderServer {
     clients: HashMap<usize, Recipient<RenderResult>>,
     rng: ThreadRng,
-    last_result: Option<Vec<Output>>,
+    last_result: Option<RenderResult>,
 }
 
 impl Actor for RenderServer {
@@ -175,7 +179,7 @@ impl Handler<RenderResult> for RenderServer {
     type Result = ();
 
     fn handle(&mut self, msg: RenderResult, _: &mut Context<Self>) -> Self::Result {
-        self.last_result = Some(msg.outputs.clone());
+        self.last_result = Some(msg.clone());
 
         // TODO: buffer the last render result in the server, and send it on new client connections
         for client in self.clients.values() {
@@ -190,16 +194,10 @@ impl Handler<Connect> for RenderServer {
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
         let id = self.rng.gen::<usize>();
 
-        msg.addr.do_send(RenderResult {
-            outputs: vec![Output::File {
-                name: String::from("foobar"),
-            }],
-        });
-
         self.clients.insert(id, msg.addr.clone());
 
         if let Some(outputs) = &self.last_result {
-            msg.addr.do_send(RenderResult { outputs: outputs.clone() });
+            msg.addr.do_send(outputs.clone());
         }
 
         id
@@ -299,7 +297,8 @@ impl Handler<RenderResult> for RenderClient {
         let mut buf = String::new();
         let mut sep = "";
 
-        write!(&mut buf, "{{ \"outputs\": [").unwrap();
+        write!(&mut buf, "{{ \"scene\": \"{}\", \"outputs\": [", msg.scene).unwrap();
+
         for output in msg.outputs {
             write!(&mut buf, "{}", sep).unwrap();
             match output {

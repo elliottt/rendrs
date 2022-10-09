@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Error;
 use clap::{Parser, Subcommand};
@@ -75,8 +75,10 @@ fn main() -> Result<(), Error> {
             let path = PathBuf::from(&scene);
             for output in render::render_scene(threads as usize, &path)? {
                 match output {
-                    render::Output::File { path } => println!("Wrote file {}", path.to_str().unwrap()),
-                    render::Output::Ascii { chars } => println!("{}", chars),
+                    render::Output::File { path } => {
+                        println!("Wrote file {}", path.to_str().unwrap())
+                    }
+                    render::Output::Ascii { chars, .. } => println!("{}", chars),
                 }
             }
         }

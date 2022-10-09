@@ -1,12 +1,11 @@
-
 use anyhow::Error;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
 use crate::{integrator, parser};
 
 pub enum Output {
     File { path: PathBuf },
-    Ascii { chars: String },
+    Ascii { name: String, chars: String },
 }
 
 pub fn render_scene(threads: usize, scene: &Path) -> Result<impl Iterator<Item = Output>, Error> {
@@ -31,7 +30,8 @@ pub fn render_scene(threads: usize, scene: &Path) -> Result<impl Iterator<Item =
                 Output::File { path }
             }
 
-            parser::Target::Ascii => Output::Ascii {
+            parser::Target::Ascii { name } => Output::Ascii {
+                name,
                 chars: canvas.to_ascii(),
             },
         }

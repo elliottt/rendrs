@@ -33,7 +33,7 @@ pub enum Target {
     File { path: PathBuf },
 
     /// Output the image to the console.
-    Ascii,
+    Ascii { name: String },
 }
 
 pub struct Render {
@@ -484,7 +484,10 @@ impl<'a> Parser<'a> {
                 })
             }
 
-            "ascii" => Ok(Target::Ascii),
+            "ascii" => {
+                let name = me.string()?;
+                Ok(Target::Ascii { name })
+            }
 
             target => bail!("Unknown target type: {}", target),
         })
