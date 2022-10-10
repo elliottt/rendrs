@@ -3,6 +3,12 @@
 `rendrs` is a poorly named ray-marching raytracer. It has a scene description
 language that's s-expression based, and documented in the language section.
 
+## Examples 
+
+`cargo run --release -- render scenes/complicated.scene`
+
+![](examples/complicated.png)
+
 ## Running
 
 `rendrs` can be run in one of two modes, as an offline renderer that will output
