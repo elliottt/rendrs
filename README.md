@@ -31,6 +31,7 @@ started. The port used can be controlled via the `--port` argument, and the
 * [ ] Global illumination integrator
 * [ ] Sub-pixel sampling strategies
 * [ ] Handle non-square pixels for ascii rendering
+* [ ] `.obj` file mesh loading
 
 ## Language
 
