@@ -85,7 +85,7 @@ impl Default for MarchConfig {
     fn default() -> Self {
         Self {
             max_steps: 200,
-            min_dist: 0.01,
+            min_dist: 0.001,
             max_dist: 1000.,
         }
     }
