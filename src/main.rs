@@ -11,6 +11,7 @@ mod math;
 mod parser;
 mod ray;
 mod render;
+mod sampler;
 mod scene;
 mod transform;
 mod web;

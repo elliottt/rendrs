@@ -17,6 +17,7 @@ pub fn render_scene(threads: usize, scene: &Path) -> Result<impl Iterator<Item =
             render.canvas_info.clone(),
             &scene,
             render.root,
+            &crate::sampler::UniformSampler::new(4, 4),
             &render.integrator,
             threads as usize,
         );

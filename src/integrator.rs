@@ -1,11 +1,12 @@
 use crossbeam::{channel, thread};
-use nalgebra::{Point3, Unit, Vector3};
+use nalgebra::{Point2, Point3, Unit, Vector3};
 
 use crate::{
     camera::{Camera, CanvasInfo, Sample},
     canvas::{Canvas, Color},
     math,
     ray::Ray,
+    sampler::Sampler,
     scene::{Distance, Light, MarchConfig, Material, MaterialId, NodeId, Scene},
 };
 
@@ -78,10 +79,11 @@ impl Iterator for Tiles {
     }
 }
 
-pub fn render<I: Integrator>(
+pub fn render<I: Integrator, S: Sampler>(
     info: CanvasInfo,
     scene: &Scene,
     root: NodeId,
+    sampler: &S,
     integrator: &I,
     num_threads: usize,
 ) -> Canvas {
@@ -93,16 +95,22 @@ pub fn render<I: Integrator>(
     thread::scope(|s| {
         for _ in 0..num_threads {
             s.spawn(|_| {
+                let mut sampler = sampler.clone();
+                let inv_num_samples = 1. / (sampler.samples_per_pixel() as f32);
                 let results = results.clone();
                 for tile in tiles.clone() {
                     let mut chunk = Canvas::new(tile.width, tile.height);
 
                     for ((col, row), pixel) in chunk.coords().zip(chunk.pixels_mut()) {
-                        let y = row as f32 + tile.offset_y + 0.5;
-                        let x = col as f32 + tile.offset_x + 0.5;
+                        for sample in sampler.pixel(&Point2::new(
+                            col as f32 + tile.offset_x,
+                            row as f32 + tile.offset_y,
+                        )) {
+                            let sample = Sample::new(sample.x, sample.y);
+                            *pixel += integrator.luminance(scene, root, &sample);
+                        }
 
-                        let sample = Sample::new(x, y);
-                        *pixel = integrator.luminance(scene, root, &sample);
+                        *pixel *= inv_num_samples;
                     }
 
                     results
