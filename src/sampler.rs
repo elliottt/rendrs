@@ -1,13 +1,27 @@
 use nalgebra::{Point2, Vector2};
 
-pub trait Sampler: std::marker::Send + std::marker::Sync + Clone {
-    type PixelIterator: Iterator<Item = Point2<f32>>;
-
+pub trait Sampler: std::marker::Send + std::marker::Sync {
     /// Produce an iterator that will traverse the samples for a single pixel.
-    fn pixel(&mut self, pixel: &Point2<f32>) -> Self::PixelIterator;
+    fn pixel_samples(&mut self, samples: &mut Vec<Point2<f32>>, pixel: &Point2<f32>);
 
     /// A size-hint for the number of samples computed for each pixel.
     fn samples_per_pixel(&self) -> usize;
+
+    fn clone_sampler(&self) -> Box<dyn Sampler>;
+}
+
+impl<S: Sampler + ?Sized> Sampler for Box<S> {
+    fn pixel_samples(&mut self, samples: &mut Vec<Point2<f32>>, pixel: &Point2<f32>) {
+        self.as_mut().pixel_samples(samples, pixel)
+    }
+
+    fn samples_per_pixel(&self) -> usize {
+        self.as_ref().samples_per_pixel()
+    }
+
+    fn clone_sampler(&self) -> Box<dyn Sampler> {
+        self.as_ref().clone_sampler()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -29,66 +43,44 @@ impl UniformSampler {
     }
 }
 
-pub struct UniformIterator {
-    done: bool,
-    base: Point2<f32>,
-    step: Point2<f32>,
-    pos: Vector2<f32>,
-}
-
-impl Iterator for UniformIterator {
-    type Item = Point2<f32>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.done {
-            return None;
-        }
-
-        let p = self.base + self.pos;
-
-        self.pos.x += self.step.x;
-
-        if self.pos.x >= 1. {
-            self.pos.x = self.step.x / 2.;
-            self.pos.y += self.step.y;
-        }
-
-        if self.pos.y >= 1. {
-            self.done = true;
-        }
-
-        Some(p)
-    }
-}
-
 impl Sampler for UniformSampler {
-    type PixelIterator = UniformIterator;
+    fn pixel_samples(&mut self, samples: &mut Vec<Point2<f32>>, pixel: &Point2<f32>) {
+        let mut pos = Vector2::new(self.step.x / 2., self.step.y / 2.);
 
-    fn pixel(&mut self, pixel: &Point2<f32>) -> Self::PixelIterator {
-        UniformIterator {
-            done: false,
-            base: pixel.clone(),
-            step: self.step.clone(),
-            pos: Vector2::new(self.step.x / 2., self.step.y / 2.),
+        while pos.y < 1. {
+            samples.push(pixel + pos);
+
+            pos.x += self.step.x;
+
+            if pos.x >= 1. {
+                pos.x = self.step.x / 2.;
+                pos.y += self.step.y;
+            }
         }
     }
 
     fn samples_per_pixel(&self) -> usize {
         self.size
     }
+
+    fn clone_sampler(&self) -> Box<dyn Sampler> {
+        Box::new(self.clone())
+    }
 }
 
 #[test]
 fn test_uniform_sampler() {
     let mut sampler = UniformSampler::new(1, 1);
-    let samples: Vec<_> = sampler.pixel(&Point2::new(0., 0.)).take(10).collect();
+    let mut samples = Vec::new();
+    sampler.pixel_samples(&mut samples, &Point2::new(0., 0.));
     println!("{:?}", samples);
     assert_eq!(1, samples.len());
     assert_eq!(1, sampler.samples_per_pixel());
     assert_eq!(Point2::new(0.5, 0.5), samples[0]);
 
     let mut sampler = UniformSampler::new(2, 2);
-    let samples: Vec<_> = sampler.pixel(&Point2::new(0., 0.)).take(10).collect();
+    samples.clear();
+    sampler.pixel_samples(&mut samples, &Point2::new(0., 0.));
     println!("{:?}", samples);
     assert_eq!(4, samples.len());
     assert_eq!(4, sampler.samples_per_pixel());

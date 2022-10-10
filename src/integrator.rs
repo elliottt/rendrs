@@ -83,8 +83,8 @@ pub fn render<I: Integrator, S: Sampler>(
     info: CanvasInfo,
     scene: &Scene,
     root: NodeId,
-    sampler: &S,
-    integrator: &I,
+    sampler: S,
+    integrator: I,
     num_threads: usize,
 ) -> Canvas {
     let mut canvas = info.new_canvas();
@@ -95,17 +95,20 @@ pub fn render<I: Integrator, S: Sampler>(
     thread::scope(|s| {
         for _ in 0..num_threads {
             s.spawn(|_| {
-                let mut sampler = sampler.clone();
+                let mut sampler = sampler.clone_sampler();
+                let mut samples = Vec::with_capacity(sampler.samples_per_pixel());
                 let inv_num_samples = 1. / (sampler.samples_per_pixel() as f32);
                 let results = results.clone();
                 for tile in tiles.clone() {
                     let mut chunk = Canvas::new(tile.width, tile.height);
 
                     for ((col, row), pixel) in chunk.coords().zip(chunk.pixels_mut()) {
-                        for sample in sampler.pixel(&Point2::new(
-                            col as f32 + tile.offset_x,
-                            row as f32 + tile.offset_y,
-                        )) {
+                        samples.clear();
+                        sampler.pixel_samples(
+                            &mut samples,
+                            &Point2::new(col as f32 + tile.offset_x, row as f32 + tile.offset_y),
+                        );
+                        for sample in &samples {
                             let sample = Sample::new(sample.x, sample.y);
                             *pixel += integrator.luminance(scene, root, &sample);
                         }

@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::integrator::Whitted;
+use crate::sampler::{Sampler, UniformSampler};
 use crate::scene::{MarchConfig, PatternId};
 use crate::{
     camera::{Camera, CanvasInfo, PinholeCamera},
@@ -40,6 +41,7 @@ pub struct Render {
     pub target: Target,
     pub canvas_info: CanvasInfo,
     pub root: NodeId,
+    pub sampler: Box<dyn Sampler>,
     pub integrator: Box<dyn Integrator>,
 }
 
@@ -493,9 +495,26 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_integrator(&mut self) -> Result<(CanvasInfo, Box<dyn Integrator>)> {
+    fn parse_sampler(&mut self) -> Result<Box<dyn Sampler>> {
+        self.parens(|me| match me.ident()?.as_ref() {
+            "uniform" => {
+                let width = me.number()?;
+                let height = if me.peek_rparen() {
+                    width
+                } else {
+                    me.number()?
+                };
+                Ok(Box::new(UniformSampler::new(width as u32, height as u32)) as Box<dyn Sampler>)
+            }
+
+            sampler => bail!("Unknown sampler: `{}`", sampler),
+        })
+    }
+
+    fn parse_integrator(&mut self) -> Result<(CanvasInfo, Box<dyn Sampler>, Box<dyn Integrator>)> {
         self.parens(|me| match me.ident()?.as_ref() {
             "whitted" => {
+                let sampler = me.parse_sampler()?;
                 let (info, camera) = me.parse_camera()?;
 
                 let mut num_reflections = 10;
@@ -513,6 +532,7 @@ impl<'a> Parser<'a> {
 
                 Ok((
                     info,
+                    sampler,
                     Box::new(Whitted::new(camera, config, num_reflections)) as Box<dyn Integrator>,
                 ))
             }
@@ -555,7 +575,7 @@ impl<'a> Parser<'a> {
                 "render" => {
                     let target = me.parse_target()?;
 
-                    let (canvas_info, integrator) = me.parse_integrator()?;
+                    let (canvas_info, sampler, integrator) = me.parse_integrator()?;
 
                     let root = me.parse_node()?;
 
@@ -563,6 +583,7 @@ impl<'a> Parser<'a> {
                         target,
                         canvas_info,
                         root,
+                        sampler,
                         integrator,
                     })
                 }

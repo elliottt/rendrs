@@ -51,6 +51,7 @@
 (render
   (file "complicated.png")
   (whitted
+    (uniform 4)
     (pinhole 1000 1000
              (look-at (0 0 -5) (0 0 0) (0 1 0))
              (degrees 90)))

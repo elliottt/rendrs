@@ -200,7 +200,10 @@ Render targets are declared as follows:
   disambiguate it from other `ascii` targets.
 
 There is currently only one `<integrator>` supported, the `whitted` integrator.
-It takes as an argument a single `<camera>` value.
+It takes as an argument a `<sampler>` and `<camera>` value. The only sampler
+currently implemented is the `(uniform <number> <number>)` sampler, where the
+two numeric parameters are the number of horizontal and vertical samples to
+collect for a single pixel.
 
 Finally, the `<node>` argument will be the root of the scene, and only nodes
 reachable from that node will be rendered.
