@@ -25,6 +25,13 @@ provided, and will open your web-browser to `http://127.0.0.1:8080` when
 started. The port used can be controlled via the `--port` argument, and the
 `--threads` argument is also valid here.
 
+## TODO
+
+* [ ] Transparent objects
+* [ ] Global illumination integrator
+* [ ] Sub-pixel sampling strategies
+* [ ] Handle non-square pixels for ascii rendering
+
 ## Language
 
 The scene description language is made up of s-expressions. Top-level
