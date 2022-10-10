@@ -4,7 +4,7 @@
          (solid #0000ff))
 
 (pattern red
-         (solid #ff0000))
+         (solid #ff00ff))
 
 (pattern stripes
          (stripes (solid #ffffff) (solid #000000)))
@@ -51,8 +51,8 @@
 (render
   (file "complicated.png")
   (whitted
-    (uniform 4)
-    (pinhole 1000 1000
+    (uniform 3)
+    (pinhole 512 512
              (look-at (0 0 -5) (0 0 0) (0 1 0))
              (degrees 90)))
     (group wall ground combination))

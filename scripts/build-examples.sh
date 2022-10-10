@@ -14,5 +14,6 @@ for scene in "${scenes[@]}"; do
     continue
   fi
 
+  echo "rendering $scene"
   cargo run --release -- render "$scene"
 done

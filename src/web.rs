@@ -46,7 +46,6 @@ pub async fn serve(port: u16, threads: usize, scene: String) -> Result<(), Error
                 // render the scene
                 match render::render_scene(threads, &scene_path) {
                     Ok(outputs) => {
-                        log::info!("render done");
                         let outputs = outputs
                             .map(|output| match output {
                                 render::Output::File { path } => Output::File {
@@ -60,6 +59,9 @@ pub async fn serve(port: u16, threads: usize, scene: String) -> Result<(), Error
                                 },
                             })
                             .collect();
+
+                        log::info!("render done");
+
                         let scene = String::from(
                             scene_path.file_name().and_then(|os| os.to_str()).unwrap(),
                         );
