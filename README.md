@@ -27,11 +27,11 @@ started. The port used can be controlled via the `--port` argument, and the
 
 ## TODO
 
+* [ ] `.obj` file mesh loading
 * [ ] Transparent objects
 * [ ] Global illumination integrator
-* [ ] Sub-pixel sampling strategies
 * [ ] Handle non-square pixels for ascii rendering
-* [ ] `.obj` file mesh loading
+* [x] Sub-pixel sampling strategies
 
 ## Language
 
