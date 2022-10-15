@@ -8,6 +8,7 @@ mod camera;
 mod canvas;
 mod integrator;
 mod math;
+mod obj;
 mod parser;
 mod ray;
 mod render;
