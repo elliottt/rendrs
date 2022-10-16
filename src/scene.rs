@@ -457,7 +457,7 @@ impl Node {
 
             Node::Group { union, nodes } => {
                 let mut res =
-                    nodes.fold_intersections(ray, SDFResult::new(id, ray.position), |acc, id| {
+                    nodes.fold_intersections(ray, SDFResult::new(id, ray.position), |acc, &id| {
                         let res = scene.node(id).sdf(scene, id, ray);
                         if res.distance < acc.distance {
                             res
@@ -575,7 +575,7 @@ impl Node {
             },
 
             Node::Group { nodes, .. } => {
-                nodes.fold_intersections(ray, FastSDFResult::new(), |acc, id| {
+                nodes.fold_intersections(ray, FastSDFResult::new(), |acc, &id| {
                     let res = scene.node(id).fast_sdf(scene, ray);
                     if res.distance < acc.distance {
                         res

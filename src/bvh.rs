@@ -174,7 +174,7 @@ impl ApplyTransform for BoundingBox {
         match self {
             Self::Min => Self::Min,
             Self::Max => Self::Max,
-            Self::Bounds {..} => {
+            Self::Bounds { .. } => {
                 // compute the centroid and extent
                 let extent = self.extent();
                 let centroid = self.centroid();
@@ -312,21 +312,26 @@ impl<T: Clone> BVH<T> {
 
         self.build(right, start + middle);
     }
+}
 
-    pub fn fold_intersections<R, F: FnMut(R, T) -> R>(&self, ray: &Ray, acc: R, mut fun: F) -> R {
+impl<T> BVH<T> {
+    pub fn fold_intersections<R, F>(&self, ray: &Ray, acc: R, mut fun: F) -> R
+    where
+        F: FnMut(R, &T) -> R,
+    {
         self.intersections_rec(ray, 0, acc, &mut fun)
     }
 
     fn intersections_rec<R, F>(&self, ray: &Ray, ix: usize, acc: R, fun: &mut F) -> R
     where
-        F: FnMut(R, T) -> R,
+        F: FnMut(R, &T) -> R,
     {
         let node = &self.nodes[ix];
         if node.bounds.intersects(ray) {
             if node.len > 0 {
                 let start = node.offset as usize;
                 let end = start + node.len as usize;
-                self.values[start..end].iter().cloned().fold(acc, fun)
+                self.values[start..end].iter().fold(acc, fun)
             } else {
                 let acc = self.intersections_rec(ray, ix + 1, acc, fun);
                 self.intersections_rec(ray, ix + node.offset as usize, acc, fun)
@@ -346,7 +351,7 @@ fn largest_axis(bound: &BoundingBox) -> (f32, Axis) {
     match bound {
         BoundingBox::Min => (0., Axis::X),
         BoundingBox::Max => (std::f32::INFINITY, Axis::X),
-        BoundingBox::Bounds {min, max} => {
+        BoundingBox::Bounds { min, max } => {
             let diff = max - min;
             if diff.x > diff.y {
                 if diff.x > diff.z {
