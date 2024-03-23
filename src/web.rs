@@ -105,7 +105,11 @@ pub async fn serve(port: u16, threads: usize, scene: String) -> Result<(), Error
     .bind(("127.0.0.1", port))?
     .run();
 
-    open::that(format!("http://127.0.0.1:{}/", port))?;
+    let url = format!("http://127.0.0.1:{}/", port);
+    if open::that(&url).is_err() {
+        log::warn!("Failed to open browser");
+        log::info!("Rendering available at {url}");
+    }
 
     server.await?;
 
