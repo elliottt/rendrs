@@ -197,9 +197,9 @@ pub struct Whitted<C> {
     config: MarchConfig,
     max_reflections: u32,
 
-    /// The objects that the current ray is contained within, and their cached `MaterialId` for
-    /// looking up properties later.
-    containers: Vec<(NodeId, MaterialId)>,
+    /// The objects that the current ray is contained within, along with the cached index of
+    /// refraction.
+    containers: Vec<(NodeId, f32)>,
 }
 
 impl<C> Whitted<C> {
@@ -212,8 +212,20 @@ impl<C> Whitted<C> {
         }
     }
 
+    /// Fetch the current refractive index of the object the ray is inside, or the default index of
+    /// 1.0 when the ray is not currently inside of another object.
+    fn refractive_index(&self) -> f32 {
+        self.containers.last().map(|(_, ri)| *ri).unwrap_or(1.0)
+    }
+
     /// Determine the color that would result from a ray intersection with the scene.
-    pub fn color_for_ray(&self, scene: &Scene, root: NodeId, ray: Ray, reflection: u32) -> Color {
+    pub fn color_for_ray(
+        &mut self,
+        scene: &Scene,
+        root: NodeId,
+        ray: Ray,
+        reflection: u32,
+    ) -> Color {
         let mut color = Color::black();
 
         if reflection >= self.max_reflections {
@@ -231,12 +243,12 @@ impl<C> Whitted<C> {
 
         // return unlit magenta if there's no material for this object
         let material = if let Some(material) = hit.material {
-            scene.material(material)
+            material
         } else {
             return Color::hex(0xff00ff);
         };
 
-        let color = match material {
+        match scene.material(material) {
             &Material::Phong {
                 pattern,
                 ambient,
@@ -253,10 +265,13 @@ impl<C> Whitted<C> {
                     .pattern(pattern)
                     .color_at(scene, &hit.object, &hit.normal);
 
-                let mut total = Color::black();
+                let mut surface = Color::black();
+                let mut reflected = Color::black();
+                let mut refracted = Color::black();
+
                 for light in scene.lights.iter() {
                     let effective_color = &base_color * light.intensity();
-                    total += ambient * &effective_color;
+                    surface += ambient * &effective_color;
 
                     // When the point is out of view of this light, we only integrate the ambient component of the
                     // light.
@@ -297,21 +312,53 @@ impl<C> Whitted<C> {
                         }
                     };
 
-                    total += diffuse_specular;
+                    surface += diffuse_specular;
                 }
 
                 if reflective > 0. {
                     let mut reflect_ray = hit.ray.reflect(&hit.normal);
                     reflect_ray.step(self.config.min_dist);
-                    total +=
+                    reflected =
                         reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
                 }
 
                 if transparent > 0. {
-                    todo!("handle {}", refractive_index)
+                    let n1 = self.refractive_index();
+
+                    if let Some((idx, _)) = self
+                        .containers
+                        .iter()
+                        .enumerate()
+                        .find(|(_, (o, _))| *o == hit.node)
+                    {
+                        // If we're already inside of an object in the containers list, remove that
+                        // entry now.
+                        self.containers.remove(idx);
+                    } else {
+                        self.containers.push((hit.node, refractive_index));
+                    }
+
+                    let n2 = self.refractive_index();
+
+                    let n_ratio = n1 / n2;
+                    let cos_i = hit.ray.direction.dot(&hit.normal);
+                    let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
+
+                    // Check for the lack of total internal reflection
+                    if sin2_t <= 1.0 {
+                        let cos_t = f32::sqrt(1.0 - sin2_t);
+                        let direction = hit.normal.scale(n_ratio * cos_t - cos_t)
+                            - hit.ray.direction.scale(n_ratio);
+
+                        let mut refract_ray =
+                            Ray::new(hit.ray.position, Unit::new_normalize(direction));
+                        refract_ray.step(self.config.min_dist);
+                        refracted = transparent
+                            * self.color_for_ray(scene, root, refract_ray, reflection + 1)
+                    }
                 }
 
-                total
+                surface + reflected + refracted
             }
 
             Material::Emissive { pattern } => {
@@ -319,11 +366,7 @@ impl<C> Whitted<C> {
                     .pattern(*pattern)
                     .color_at(scene, &hit.object, &hit.normal)
             }
-        };
-
-        // TODO: compute refraction contribution
-
-        color
+        }
     }
 }
 
