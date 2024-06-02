@@ -105,7 +105,7 @@ pub struct SDFResult {
     /// The distance between the world-space ray and this object.
     pub distance: Distance,
 
-    /// The material for the object.
+    /// The maierial for the object.
     pub material: Option<MaterialId>,
 }
 
@@ -266,6 +266,8 @@ impl Scene {
         specular: f32,
         shininess: f32,
         reflective: f32,
+        transparent: f32,
+        refractive_index: f32,
     ) -> MaterialId {
         self.add_material(Material::Phong {
             pattern,
@@ -274,6 +276,8 @@ impl Scene {
             specular,
             shininess,
             reflective,
+            transparent,
+            refractive_index,
         })
     }
 
@@ -719,6 +723,12 @@ pub enum Material {
 
         /// How reflective the surface is.
         reflective: f32,
+
+        /// How transparent the object is.
+        transparent: f32,
+
+        /// The refractive index of the object.
+        refractive_index: f32,
     },
 
     Emissive {

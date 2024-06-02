@@ -6,13 +6,12 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::integrator::Whitted;
 use crate::sampler::{Sampler, UniformSampler};
 use crate::scene::{MarchConfig, PatternId};
 use crate::{
     camera::{Camera, CanvasInfo, PinholeCamera},
     canvas::Color,
-    integrator::Integrator,
+    integrator::{Integrator, IntegratorBuilder, WhittedBuilder},
     math,
     scene::{MaterialId, NodeId, Scene},
     transform::Transform,
@@ -42,7 +41,7 @@ pub struct Render {
     pub canvas_info: CanvasInfo,
     pub root: NodeId,
     pub sampler: Box<dyn Sampler>,
-    pub integrator: Box<dyn Integrator>,
+    pub builder: Box<dyn IntegratorBuilder>,
 }
 
 struct Parser<'a> {
@@ -306,6 +305,12 @@ impl<'a> Parser<'a> {
                 let mut shininess = 200.0;
                 let mut reflective = 0.0;
 
+                // opaque, by  default
+                let mut transparent = 0.0;
+
+                // vacuum by default
+                let mut refractive_index = 1.0;
+
                 while !me.peek_rparen() {
                     match me.symbol()?.as_ref() {
                         ":pattern" => pattern = Some(me.parse_pattern()?),
@@ -314,6 +319,8 @@ impl<'a> Parser<'a> {
                         ":specular" => specular = me.number()?,
                         ":shininess" => shininess = me.number()?,
                         ":reflective" => reflective = me.number()?,
+                        ":transparent" => transparent = me.number()?,
+                        ":refractive_index" => refractive_index = me.number()?,
                         sym => bail!("Unknown material field `{}`", sym),
                     }
                 }
@@ -323,9 +330,16 @@ impl<'a> Parser<'a> {
                     None => bail!("Material is missing a :pattern"),
                 };
 
-                Ok(me
-                    .scene
-                    .phong(pattern, ambient, diffuse, specular, shininess, reflective))
+                Ok(me.scene.phong(
+                    pattern,
+                    ambient,
+                    diffuse,
+                    specular,
+                    shininess,
+                    reflective,
+                    transparent,
+                    refractive_index,
+                ))
             }
 
             "emissive" => {
@@ -511,7 +525,9 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_integrator(&mut self) -> Result<(CanvasInfo, Box<dyn Sampler>, Box<dyn Integrator>)> {
+    fn parse_integrator(
+        &mut self,
+    ) -> Result<(CanvasInfo, Box<dyn Sampler>, Box<dyn IntegratorBuilder>)> {
         self.parens(|me| match me.ident()?.as_ref() {
             "whitted" => {
                 let sampler = me.parse_sampler()?;
@@ -533,7 +549,8 @@ impl<'a> Parser<'a> {
                 Ok((
                     info,
                     sampler,
-                    Box::new(Whitted::new(camera, config, num_reflections)) as Box<dyn Integrator>,
+                    Box::new(WhittedBuilder::new(camera, config, num_reflections))
+                        as Box<dyn IntegratorBuilder>,
                 ))
             }
 
@@ -575,7 +592,7 @@ impl<'a> Parser<'a> {
                 "render" => {
                     let target = me.parse_target()?;
 
-                    let (canvas_info, sampler, integrator) = me.parse_integrator()?;
+                    let (canvas_info, sampler, builder) = me.parse_integrator()?;
 
                     let root = me.parse_node()?;
 
@@ -584,7 +601,7 @@ impl<'a> Parser<'a> {
                         canvas_info,
                         root,
                         sampler,
-                        integrator,
+                        builder,
                     })
                 }
 

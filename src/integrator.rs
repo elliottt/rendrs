@@ -79,12 +79,12 @@ impl Iterator for Tiles {
     }
 }
 
-pub fn render<I: Integrator, S: Sampler>(
+pub fn render(
     info: CanvasInfo,
     scene: &Scene,
     root: NodeId,
-    sampler: S,
-    integrator: I,
+    sampler: impl Sampler,
+    builder: impl IntegratorBuilder,
     num_threads: usize,
 ) -> Canvas {
     let mut canvas = info.new_canvas();
@@ -94,11 +94,13 @@ pub fn render<I: Integrator, S: Sampler>(
 
     thread::scope(|s| {
         for _ in 0..num_threads {
-            s.spawn(|_| {
-                let mut sampler = sampler.clone_sampler();
+            let mut sampler = sampler.clone_sampler();
+            let results = results.clone();
+            let mut integrator = builder.build();
+            let tiles = tiles.clone();
+            s.spawn(move |_| {
                 let mut samples = Vec::with_capacity(sampler.samples_per_pixel());
                 let inv_num_samples = 1. / (sampler.samples_per_pixel() as f32);
-                let results = results.clone();
                 for tile in tiles.clone() {
                     let mut chunk = Canvas::new(tile.width, tile.height);
 
@@ -141,24 +143,63 @@ pub fn render<I: Integrator, S: Sampler>(
     canvas
 }
 
-pub trait Integrator: std::marker::Send + std::marker::Sync {
-    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color;
+pub trait IntegratorBuilder {
+    fn build(&self) -> Box<dyn Integrator>;
+}
+
+impl<C: IntegratorBuilder + ?Sized> IntegratorBuilder for Box<C> {
+    fn build(&self) -> Box<dyn Integrator> {
+        self.as_ref().build()
+    }
+}
+
+pub trait Integrator: Send {
+    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color;
 }
 
 impl<C> Integrator for Box<C>
 where
     C: Integrator + ?Sized,
 {
-    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
-        self.as_ref().luminance(scene, root, sample)
+    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+        self.as_mut().luminance(scene, root, sample)
     }
 }
 
-#[derive(Clone)]
+pub struct WhittedBuilder<C> {
+    camera: C,
+    config: MarchConfig,
+    max_reflections: u32,
+}
+
+impl<C> WhittedBuilder<C> {
+    pub fn new(camera: C, config: MarchConfig, max_reflections: u32) -> Self {
+        Self {
+            camera,
+            config,
+            max_reflections,
+        }
+    }
+}
+
+impl<C: Camera + Clone + 'static> IntegratorBuilder for WhittedBuilder<C> {
+    fn build(&self) -> Box<dyn Integrator> {
+        Box::new(Whitted::new(
+            self.camera.clone(),
+            self.config.clone(),
+            self.max_reflections,
+        ))
+    }
+}
+
 pub struct Whitted<C> {
     camera: C,
     config: MarchConfig,
     max_reflections: u32,
+
+    /// The objects that the current ray is contained within, and their cached `MaterialId` for
+    /// looking up properties later.
+    containers: Vec<(NodeId, MaterialId)>,
 }
 
 impl<C> Whitted<C> {
@@ -167,6 +208,7 @@ impl<C> Whitted<C> {
             camera,
             config,
             max_reflections,
+            containers: Vec::new(),
         }
     }
 
@@ -202,6 +244,8 @@ impl<C> Whitted<C> {
                 specular,
                 shininess,
                 reflective,
+                transparent,
+                refractive_index,
             } => {
                 let eyev = -hit.ray.direction;
 
@@ -263,6 +307,10 @@ impl<C> Whitted<C> {
                         reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
                 }
 
+                if transparent > 0. {
+                    todo!("handle {}", refractive_index)
+                }
+
                 total
             }
 
@@ -279,8 +327,9 @@ impl<C> Whitted<C> {
     }
 }
 
-impl<C: Camera + std::marker::Send + std::marker::Sync> Integrator for Whitted<C> {
-    fn luminance(&self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+impl<C: Camera> Integrator for Whitted<C> {
+    fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
+        self.containers.clear();
         self.color_for_ray(scene, root, self.camera.generate_ray(sample), 0)
     }
 }

@@ -18,7 +18,7 @@ pub fn render_scene(threads: usize, scene: &Path) -> Result<impl Iterator<Item =
             &scene,
             render.root,
             render.sampler,
-            render.integrator,
+            render.builder,
             threads as usize,
         );
         let width = canvas.width();
