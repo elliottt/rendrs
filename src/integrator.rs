@@ -232,7 +232,9 @@ impl<C> Whitted<C> {
             return color;
         }
 
-        let hit = if let Some(hit) = Hit::march(&self.config, scene, root, ray) {
+        let hit = if let Some(hit) =
+            Hit::march(&self.config, scene, root, ray, !self.containers.is_empty())
+        {
             hit
         } else {
             for light in scene.lights.iter() {
@@ -266,8 +268,6 @@ impl<C> Whitted<C> {
                     .color_at(scene, &hit.object, &hit.normal);
 
                 let mut surface = Color::black();
-                let mut reflected = Color::black();
-                let mut refracted = Color::black();
 
                 for light in scene.lights.iter() {
                     let effective_color = &base_color * light.intensity();
@@ -315,50 +315,24 @@ impl<C> Whitted<C> {
                     surface += diffuse_specular;
                 }
 
-                if reflective > 0. {
-                    let mut reflect_ray = hit.ray.reflect(&hit.normal);
-                    reflect_ray.step(self.config.min_dist);
-                    reflected =
-                        reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1);
-                }
+                let reflected = self.reflected_color(scene, root, reflection, &hit, reflective);
 
-                if transparent > 0. {
-                    let n1 = self.refractive_index();
+                let (refracted, reflectance) = self.refracted_color(
+                    scene,
+                    root,
+                    reflection,
+                    &hit,
+                    reflective > 0.0,
+                    transparent,
+                    refractive_index,
+                );
 
-                    if let Some((idx, _)) = self
-                        .containers
-                        .iter()
-                        .enumerate()
-                        .find(|(_, (o, _))| *o == hit.node)
-                    {
-                        // If we're already inside of an object in the containers list, remove that
-                        // entry now.
-                        self.containers.remove(idx);
+                surface
+                    + if reflective > 0.0 && transparent > 0.0 {
+                        reflected * reflectance + refracted * (1.0 - reflectance)
                     } else {
-                        self.containers.push((hit.node, refractive_index));
+                        reflected + refracted
                     }
-
-                    let n2 = self.refractive_index();
-
-                    let n_ratio = n1 / n2;
-                    let cos_i = hit.ray.direction.dot(&hit.normal);
-                    let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
-
-                    // Check for the lack of total internal reflection
-                    if sin2_t <= 1.0 {
-                        let cos_t = f32::sqrt(1.0 - sin2_t);
-                        let direction = hit.normal.scale(n_ratio * cos_t - cos_t)
-                            - hit.ray.direction.scale(n_ratio);
-
-                        let mut refract_ray =
-                            Ray::new(hit.ray.position, Unit::new_normalize(direction));
-                        refract_ray.step(self.config.min_dist);
-                        refracted = transparent
-                            * self.color_for_ray(scene, root, refract_ray, reflection + 1)
-                    }
-                }
-
-                surface + reflected + refracted
             }
 
             Material::Emissive { pattern } => {
@@ -367,6 +341,91 @@ impl<C> Whitted<C> {
                     .color_at(scene, &hit.object, &hit.normal)
             }
         }
+    }
+
+    fn reflected_color(
+        &mut self,
+        scene: &Scene,
+        root: NodeId,
+        reflection: u32,
+        hit: &Hit,
+        reflective: f32,
+    ) -> Color {
+        if reflective <= 0.0 {
+            return Color::black();
+        }
+
+        let mut reflect_ray = hit.ray.reflect(&hit.normal);
+        reflect_ray.step(self.config.min_dist);
+        reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1)
+    }
+
+    fn refracted_color(
+        &mut self,
+        scene: &Scene,
+        root: NodeId,
+        reflection: u32,
+        hit: &Hit,
+        reflective: bool,
+        transparent: f32,
+        refractive_index: f32,
+    ) -> (Color, f32) {
+        if transparent <= 0.0 {
+            return (Color::black(), 1.0);
+        }
+
+        let n1 = self.refractive_index();
+
+        let refrac_normal = if let Some((idx, _)) = self
+            .containers
+            .iter()
+            .enumerate()
+            .find(|(_, (o, _))| *o == hit.node)
+        {
+            // If we're already inside of an object in the containers list, remove it as we're
+            // exiting the object.
+            self.containers.remove(idx);
+
+            // Negate the normal, as the intersection was to the inside of the object.
+            -hit.normal
+        } else {
+            self.containers.push((hit.node, refractive_index));
+            hit.normal
+        };
+
+        let n2 = self.refractive_index();
+
+        let n_ratio = n1 / n2;
+        let cos_i = hit.ray.direction.dot(&refrac_normal);
+        let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
+
+        // Check for total internal reflection
+        if sin2_t > 1.0 {
+            return (Color::black(), 1.0);
+        }
+
+        let cos_t = f32::sqrt(1.0 - sin2_t);
+
+        // Step 2x min distance to ensure that we step into the object, and are far enough away to
+        // not trigger a hit immediately.
+        let start = hit.ray.position + hit.ray.direction.scale(self.config.min_dist * 4.0);
+
+        let direction = Unit::new_unchecked(
+            refrac_normal.scale(n_ratio * cos_i - cos_t) - hit.ray.direction.scale(n_ratio),
+        );
+
+        let refract_ray = Ray::new(start, direction);
+        let color = transparent * self.color_for_ray(scene, root, refract_ray, reflection + 1);
+
+        let schlick = if reflective {
+            let cos = if n1 > n2 { cos_t } else { cos_i };
+            let r0 = ((n1 - n2) / (n1 + n2)).powi(2);
+            r0 + (1.0 - r0) * (1.0 - cos).powi(5)
+        } else {
+            0.0
+        };
+
+        (color, schlick)
     }
 }
 
@@ -403,14 +462,22 @@ pub struct Hit {
 
 impl Hit {
     /// March the ray until it hits something in the geometry or runs out of fuel.
-    pub fn march(config: &MarchConfig, scene: &Scene, root: NodeId, mut ray: Ray) -> Option<Self> {
+    pub fn march(
+        config: &MarchConfig,
+        scene: &Scene,
+        root: NodeId,
+        mut ray: Ray,
+        inside: bool,
+    ) -> Option<Self> {
         let mut total_dist = Distance::default();
 
         let node = scene.node(root);
 
+        let sign = if inside { -1.0 } else { 1.0 };
+
         for i in 0..config.max_steps {
             let result = node.sdf(scene, root, &ray);
-            let radius = result.distance.0;
+            let radius = result.distance.0 * sign;
 
             if radius < config.min_dist {
                 return Some(Self {

@@ -11,7 +11,7 @@ use crate::scene::{MarchConfig, PatternId};
 use crate::{
     camera::{Camera, CanvasInfo, PinholeCamera},
     canvas::Color,
-    integrator::{Integrator, IntegratorBuilder, WhittedBuilder},
+    integrator::{IntegratorBuilder, WhittedBuilder},
     math,
     scene::{MaterialId, NodeId, Scene},
     transform::Transform,
