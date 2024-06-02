@@ -178,23 +178,22 @@ impl<C> Whitted<C> {
             return color;
         }
 
-        let hit = Hit::march(&self.config, scene, root, ray);
-
-        if hit.is_none() {
+        let hit = if let Some(hit) = Hit::march(&self.config, scene, root, ray) {
+            hit
+        } else {
             for light in scene.lights.iter() {
                 color += light.light_escape();
             }
             return color;
-        }
-
-        let hit = hit.unwrap();
+        };
 
         // return unlit magenta if there's no material for this object
-        if hit.material.is_none() {
+        let material = if let Some(material) = hit.material {
+            scene.material(material)
+        } else {
             return Color::hex(0xff00ff);
-        }
+        };
 
-        let material = scene.material(hit.material.unwrap());
         let color = match material {
             &Material::Phong {
                 pattern,
