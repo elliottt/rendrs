@@ -5,22 +5,6 @@ pub fn reflect(vec: &Unit<Vector3<f32>>, normal: &Unit<Vector3<f32>>) -> Unit<Ve
     Unit::new_unchecked(vec.as_ref() - normal.as_ref() * 2. * vec.dot(normal))
 }
 
-pub trait Clamp<Bounds = Self> {
-    type Output;
-
-    /// Clamp a value to the range.
-    fn clamp(self, lo: f32, hi: f32) -> Self::Output;
-}
-
-impl Clamp for f32 {
-    type Output = Self;
-
-    #[inline]
-    fn clamp(self, lo: f32, hi: f32) -> f32 {
-        self.max(lo).min(hi)
-    }
-}
-
 pub trait Mix {
     type Output;
 

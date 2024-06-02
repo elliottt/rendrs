@@ -1,4 +1,4 @@
-use crate::math::{Clamp, Mix};
+use crate::math::Mix;
 
 #[derive(Debug, Default, Clone)]
 pub struct Color {
@@ -54,18 +54,6 @@ impl Color {
     /// Convert the [`Color`] to grayscale.
     pub fn to_grayscale(&self) -> f32 {
         0.3 * self.r + 0.59 * self.g + 0.11 * self.b
-    }
-}
-
-impl Clamp<f32> for &Color {
-    type Output = Color;
-
-    fn clamp(self, lo: f32, hi: f32) -> Self::Output {
-        Color::new(
-            self.r.clamp(lo, hi),
-            self.g.clamp(lo, hi),
-            self.b.clamp(lo, hi),
-        )
     }
 }
 
@@ -320,7 +308,7 @@ impl<'a> Iterator for Rows<'a> {
     type Item = (usize, &'a [Color]);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.row >= self.canvas.height as usize{
+        if self.row >= self.canvas.height as usize {
             return None;
         }
 

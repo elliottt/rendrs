@@ -4,8 +4,13 @@ use crate::{ray::Ray, transform::ApplyTransform};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BoundingBox {
+    /// The bounding box that contains nothing.
     Min,
+
+    /// The bounding box that contains everything.
     Max,
+
+    /// A non-empty bounding box that doesn't include everything.
     Bounds { min: Point3<f32>, max: Point3<f32> },
 }
 
