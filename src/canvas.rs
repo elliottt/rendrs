@@ -46,6 +46,10 @@ impl Color {
         Self::new(1., 1., 1.)
     }
 
+    pub fn magenta() -> Self {
+        Self::new(1., 0., 1.)
+    }
+
     pub fn to_u8(&self) -> [u8; 3] {
         let convert = |x: f32| (x * 255.0).min(255.0).max(0.0) as u8;
         [convert(self.r), convert(self.g), convert(self.b)]
