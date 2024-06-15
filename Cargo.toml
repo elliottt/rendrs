@@ -12,6 +12,7 @@ anyhow = "1.0.81"
 crossbeam = "0.8.4"
 num_cpus = "1.16"
 rand = "^0.8"
+smallvec = "1.13.2"
 
 clap = { version = "4.5.3", features = ["derive"] }
 log = "0.4.21"

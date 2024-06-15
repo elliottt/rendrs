@@ -1,5 +1,7 @@
 use crossbeam::{channel, thread};
 use nalgebra::{Point2, Point3, Unit, Vector3};
+use smallvec::SmallVec;
+use std::borrow::Cow;
 
 use crate::{
     camera::{Camera, CanvasInfo, Sample},
@@ -196,10 +198,6 @@ pub struct Whitted<C> {
     camera: C,
     config: MarchConfig,
     max_reflections: u32,
-
-    /// The objects that the current ray is contained within, along with the cached index of
-    /// refraction.
-    containers: Vec<(NodeId, f32)>,
 }
 
 impl<C> Whitted<C> {
@@ -208,21 +206,15 @@ impl<C> Whitted<C> {
             camera,
             config,
             max_reflections,
-            containers: Vec::new(),
         }
     }
 
-    /// Fetch the current refractive index of the object the ray is inside, or the default index of
-    /// 1.0 when the ray is not currently inside of another object.
-    fn refractive_index(&self) -> f32 {
-        self.containers.last().map(|(_, ri)| *ri).unwrap_or(1.0)
-    }
-
     /// Determine the color that would result from a ray intersection with the scene.
-    pub fn color_for_ray(
+    fn color_for_ray<'a>(
         &mut self,
         scene: &Scene,
         root: NodeId,
+        containers: Cow<'a, Containers>,
         ray: Ray,
         reflection: u32,
     ) -> Color {
@@ -232,16 +224,15 @@ impl<C> Whitted<C> {
             return color;
         }
 
-        let hit = if let Some(hit) =
-            Hit::march(&self.config, scene, root, ray, !self.containers.is_empty())
-        {
-            hit
-        } else {
-            for light in scene.lights.iter() {
-                color += light.light_escape();
-            }
-            return color;
-        };
+        let hit =
+            if let Some(hit) = Hit::march(&self.config, scene, root, ray, !containers.is_empty()) {
+                hit
+            } else {
+                for light in scene.lights.iter() {
+                    color += light.light_escape();
+                }
+                return color;
+            };
 
         // return unlit magenta if there's no material for this object
         let material = if let Some(material) = hit.material {
@@ -315,11 +306,19 @@ impl<C> Whitted<C> {
                     surface += diffuse_specular;
                 }
 
-                let reflected = self.reflected_color(scene, root, reflection, &hit, reflective);
+                let reflected = self.reflected_color(
+                    scene,
+                    root,
+                    containers.clone(),
+                    reflection,
+                    &hit,
+                    reflective,
+                );
 
                 let (refracted, reflectance) = self.refracted_color(
                     scene,
                     root,
+                    containers,
                     reflection,
                     &hit,
                     reflective > 0.0,
@@ -343,10 +342,11 @@ impl<C> Whitted<C> {
         }
     }
 
-    fn reflected_color(
+    fn reflected_color<'a>(
         &mut self,
         scene: &Scene,
         root: NodeId,
+        containers: Cow<'a, Containers>,
         reflection: u32,
         hit: &Hit,
         reflective: f32,
@@ -357,13 +357,14 @@ impl<C> Whitted<C> {
 
         let mut reflect_ray = hit.ray.reflect(&hit.normal);
         reflect_ray.step(self.config.min_dist);
-        reflective * self.color_for_ray(scene, root, reflect_ray, reflection + 1)
+        reflective * self.color_for_ray(scene, root, containers, reflect_ray, reflection + 1)
     }
 
-    fn refracted_color(
+    fn refracted_color<'a>(
         &mut self,
         scene: &Scene,
         root: NodeId,
+        mut containers: Cow<'a, Containers>,
         reflection: u32,
         hit: &Hit,
         reflective: bool,
@@ -374,48 +375,34 @@ impl<C> Whitted<C> {
             return (Color::black(), 1.0);
         }
 
-        let n1 = self.refractive_index();
+        let (n1, n2, exiting) = containers
+            .to_mut()
+            .refractive_indices(hit.node, refractive_index);
 
-        let refrac_normal = if let Some((idx, _)) = self
-            .containers
-            .iter()
-            .enumerate()
-            .find(|(_, (o, _))| *o == hit.node)
-        {
-            // If we're already inside of an object in the containers list, remove it as we're
-            // exiting the object.
-            self.containers.remove(idx);
-
-            // Negate the normal, as the intersection was to the inside of the object.
-            -hit.normal
-        } else {
-            self.containers.push((hit.node, refractive_index));
-            hit.normal
-        };
-
-        let n2 = self.refractive_index();
+        let normal = if exiting { -hit.normal } else { hit.normal };
 
         let n_ratio = n1 / n2;
-        let cos_i = hit.ray.direction.dot(&refrac_normal);
+        let cos_i = hit.ray.direction.dot(&normal);
         let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
 
         // Check for total internal reflection
         if sin2_t > 1.0 {
-            return (Color::black(), 1.0);
+            return (Color::magenta(), 1.0);
         }
 
         let cos_t = f32::sqrt(1.0 - sin2_t);
 
-        // Step 2x min distance to ensure that we step into the object, and are far enough away to
-        // not trigger a hit immediately.
-        let start = hit.ray.position + hit.ray.direction.scale(self.config.min_dist * 4.0);
+        // Step 2x min distance along the negated normal to ensure that we step into the object,
+        // and are far enough away to not trigger a hit immediately.
+        let start = hit.ray.position - normal.scale(self.config.min_dist * 2.0);
 
         let direction = Unit::new_unchecked(
-            refrac_normal.scale(n_ratio * cos_i - cos_t) - hit.ray.direction.scale(n_ratio),
+            normal.scale(n_ratio * cos_i - cos_t) - hit.ray.direction.scale(n_ratio),
         );
 
         let refract_ray = Ray::new(start, direction);
-        let color = transparent * self.color_for_ray(scene, root, refract_ray, reflection + 1);
+        let color =
+            transparent * self.color_for_ray(scene, root, containers, refract_ray, reflection + 1);
 
         let schlick = if reflective {
             let cos = if n1 > n2 { cos_t } else { cos_i };
@@ -431,8 +418,47 @@ impl<C> Whitted<C> {
 
 impl<C: Camera> Integrator for Whitted<C> {
     fn luminance(&mut self, scene: &Scene, root: NodeId, sample: &Sample) -> Color {
-        self.containers.clear();
-        self.color_for_ray(scene, root, self.camera.generate_ray(sample), 0)
+        self.color_for_ray(
+            scene,
+            root,
+            Cow::Owned(Containers::default()),
+            self.camera.generate_ray(sample),
+            0,
+        )
+    }
+}
+
+/// A record of transparent objects that a ray is traversing.
+#[derive(Clone, Debug, Default)]
+pub struct Containers(SmallVec<[(NodeId, f32); 4]>);
+
+impl Containers {
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// For an intersection with object `node` with `refractive_index`, return the indices of
+    /// refraction on either side of the intersection.
+    fn refractive_indices(&mut self, node: NodeId, refractive_index: f32) -> (f32, f32, bool) {
+        let n1 = self.0.last().map(|(_, ri)| *ri).unwrap_or(1.0);
+
+        // Determine if we're entering or leaving `node`
+        let exiting = if let Some(idx) = self
+            .0
+            .iter()
+            .enumerate()
+            .find(|(_, (n, _))| *n == node)
+            .map(|(idx, _)| idx)
+        {
+            self.0.remove(idx);
+            true
+        } else {
+            self.0.push((node, refractive_index));
+            false
+        };
+
+        let n2 = self.0.last().map(|(_, ri)| *ri).unwrap_or(1.0);
+        (n1, n2, exiting)
     }
 }
 
@@ -551,5 +577,75 @@ impl Hit {
         let ray = Ray::new(start, Unit::new_normalize(dir));
         Hit::march_dist(config, scene, root, ray)
             .map_or(false, |hit_dist| hit_dist.0 < dist_to_light)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_refraction_sphere_direct() {
+        let mut scene = Scene::default();
+
+        let white = scene.solid(Color::white());
+        let vacuum = scene.phong(white, 0.1, 0.9, 0.9, 200.0, 0.0, 1.0, 1.0);
+        let sphere = scene.sphere(1.0);
+        let root = scene.paint(vacuum, sphere);
+
+        // Check normal construction from an external hit
+        let res = Hit::march(
+            &MarchConfig::default(),
+            &scene,
+            root,
+            Ray::new(
+                Point3::new(0., 0., -2.),
+                Unit::new_unchecked(Vector3::new(0., 0., 1.)),
+            ),
+            false,
+        )
+        .expect("intersection");
+
+        assert_eq!(res.normal.x, 0.);
+        assert_eq!(res.normal.y, 0.);
+        assert_eq!(res.normal.z, -1.);
+
+        // Check normal construction from an internal hit, asserting that the normal computed is
+        // always pointing out of the object.
+        let res = Hit::march(
+            &MarchConfig::default(),
+            &scene,
+            root,
+            Ray::new(
+                Point3::new(0., 0., 0.),
+                Unit::new_unchecked(Vector3::new(0., 0., 1.)),
+            ),
+            true,
+        )
+        .expect("intersection");
+
+        assert_eq!(res.normal.x, 0.);
+        assert_eq!(res.normal.y, 0.);
+        assert_eq!(res.normal.z, 1.);
+    }
+
+    #[test]
+    fn test_refraction_indices() {
+        let mut containers = Containers::default();
+
+        let mut scene = Scene::default();
+
+        // These aren't used for actual intersections, as we're mocking the intersection order in
+        // the asserts below.
+        let a = scene.sphere(1.);
+        let b = scene.sphere(1.);
+        let c = scene.sphere(1.);
+
+        assert_eq!((1.0, 1.5, false), containers.refractive_indices(a, 1.5));
+        assert_eq!((1.5, 2.0, false), containers.refractive_indices(b, 2.0));
+        assert_eq!((2.0, 2.5, false), containers.refractive_indices(c, 2.5));
+        assert_eq!((2.5, 2.5, true), containers.refractive_indices(b, 2.0));
+        assert_eq!((2.5, 1.5, true), containers.refractive_indices(c, 2.5));
+        assert_eq!((1.5, 1.0, true), containers.refractive_indices(a, 1.5));
     }
 }

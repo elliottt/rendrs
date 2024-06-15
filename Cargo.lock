@@ -1805,6 +1805,7 @@ dependencies = [
  "num_cpus",
  "open",
  "rand",
+ "smallvec",
 ]
 
 [[package]]
