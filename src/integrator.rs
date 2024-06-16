@@ -224,7 +224,7 @@ impl<C> Whitted<C> {
             return color;
         }
 
-        let hit =
+        let mut hit =
             if let Some(hit) = Hit::march(&self.config, scene, root, ray, !containers.is_empty()) {
                 hit
             } else {
@@ -306,6 +306,11 @@ impl<C> Whitted<C> {
                     surface += diffuse_specular;
                 }
 
+                // If we're exiting a transparent object on this hit, we need to invert the normal.
+                if containers.contains(hit.node) {
+                    hit.normal = -hit.normal;
+                }
+
                 let reflected = self.reflected_color(
                     scene,
                     root,
@@ -375,29 +380,27 @@ impl<C> Whitted<C> {
             return (Color::black(), 1.0);
         }
 
-        let (n1, n2, exiting) = containers
+        let (n1, n2) = containers
             .to_mut()
             .refractive_indices(hit.node, refractive_index);
 
-        let normal = if exiting { -hit.normal } else { hit.normal };
-
         let n_ratio = n1 / n2;
-        let cos_i = hit.ray.direction.dot(&normal);
+        let cos_i = hit.ray.direction.dot(&hit.normal);
         let sin2_t = n_ratio.powi(2) * (1.0 - cos_i.powi(2));
 
         // Check for total internal reflection
         if sin2_t > 1.0 {
-            return (Color::magenta(), 1.0);
+            return (Color::black(), 1.0);
         }
 
         let cos_t = f32::sqrt(1.0 - sin2_t);
 
         // Step 2x min distance along the negated normal to ensure that we step into the object,
         // and are far enough away to not trigger a hit immediately.
-        let start = hit.ray.position - normal.scale(self.config.min_dist * 2.0);
+        let start = hit.ray.position - hit.normal.scale(self.config.min_dist * 2.0);
 
         let direction = Unit::new_unchecked(
-            normal.scale(n_ratio * cos_i - cos_t) - hit.ray.direction.scale(n_ratio),
+            hit.normal.scale(n_ratio * cos_i - cos_t) - hit.ray.direction.scale(n_ratio),
         );
 
         let refract_ray = Ray::new(start, direction);
@@ -405,9 +408,9 @@ impl<C> Whitted<C> {
             transparent * self.color_for_ray(scene, root, containers, refract_ray, reflection + 1);
 
         let schlick = if reflective {
-            let cos = if n1 > n2 { cos_t } else { cos_i };
+            // TODO: it's not clear why cos_t is what should always be used here.
             let r0 = ((n1 - n2) / (n1 + n2)).powi(2);
-            r0 + (1.0 - r0) * (1.0 - cos).powi(5)
+            r0 + (1.0 - r0) * (1.0 - cos_t).powi(5)
         } else {
             0.0
         };
@@ -437,13 +440,17 @@ impl Containers {
         self.0.is_empty()
     }
 
+    fn contains(&self, node: NodeId) -> bool {
+        self.0.iter().any(|(n, _)| *n == node)
+    }
+
     /// For an intersection with object `node` with `refractive_index`, return the indices of
     /// refraction on either side of the intersection.
-    fn refractive_indices(&mut self, node: NodeId, refractive_index: f32) -> (f32, f32, bool) {
+    fn refractive_indices(&mut self, node: NodeId, refractive_index: f32) -> (f32, f32) {
         let n1 = self.0.last().map(|(_, ri)| *ri).unwrap_or(1.0);
 
         // Determine if we're entering or leaving `node`
-        let exiting = if let Some(idx) = self
+        if let Some(idx) = self
             .0
             .iter()
             .enumerate()
@@ -451,14 +458,12 @@ impl Containers {
             .map(|(idx, _)| idx)
         {
             self.0.remove(idx);
-            true
         } else {
             self.0.push((node, refractive_index));
-            false
-        };
+        }
 
         let n2 = self.0.last().map(|(_, ri)| *ri).unwrap_or(1.0);
-        (n1, n2, exiting)
+        (n1, n2)
     }
 }
 
