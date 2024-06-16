@@ -646,11 +646,17 @@ mod tests {
         let b = scene.sphere(1.);
         let c = scene.sphere(1.);
 
-        assert_eq!((1.0, 1.5, false), containers.refractive_indices(a, 1.5));
-        assert_eq!((1.5, 2.0, false), containers.refractive_indices(b, 2.0));
-        assert_eq!((2.0, 2.5, false), containers.refractive_indices(c, 2.5));
-        assert_eq!((2.5, 2.5, true), containers.refractive_indices(b, 2.0));
-        assert_eq!((2.5, 1.5, true), containers.refractive_indices(c, 2.5));
-        assert_eq!((1.5, 1.0, true), containers.refractive_indices(a, 1.5));
+        assert_eq!((1.0, 1.5), containers.refractive_indices(a, 1.5));
+        assert!(containers.contains(a));
+        assert_eq!((1.5, 2.0), containers.refractive_indices(b, 2.0));
+        assert!(containers.contains(b));
+        assert_eq!((2.0, 2.5), containers.refractive_indices(c, 2.5));
+        assert!(containers.contains(c));
+        assert_eq!((2.5, 2.5), containers.refractive_indices(b, 2.0));
+        assert!(!containers.contains(b));
+        assert_eq!((2.5, 1.5), containers.refractive_indices(c, 2.5));
+        assert!(!containers.contains(c));
+        assert_eq!((1.5, 1.0), containers.refractive_indices(a, 1.5));
+        assert!(!containers.contains(a));
     }
 }
