@@ -149,35 +149,6 @@ impl BoundingBox {
     }
 }
 
-#[test]
-fn test_contains() {
-    let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
-    assert!(a.contains(&a.centroid()));
-}
-
-#[test]
-fn test_union() {
-    let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
-    assert_eq!(a, a.union(&BoundingBox::min()));
-    assert_eq!(BoundingBox::max(), a.union(&BoundingBox::max()));
-}
-
-#[test]
-fn test_union_point() {
-    let p = Point3::new(1., 1., 1.);
-    let a = BoundingBox::min().union_point(&p);
-    println!("{:?}", p);
-    println!("{:?}", a);
-    assert!(a.contains(&p));
-}
-
-#[test]
-fn test_intersect() {
-    let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
-    assert_eq!(a, a.intersect(&BoundingBox::max()));
-    assert_eq!(BoundingBox::min(), a.intersect(&BoundingBox::min()));
-}
-
 impl ApplyTransform for BoundingBox {
     fn transform(&self, m: &Matrix4<f32>) -> Self {
         match self {
@@ -203,24 +174,8 @@ impl ApplyTransform for BoundingBox {
     }
 }
 
-#[test]
-fn test_bounding_box_transform() {
-    use crate::transform::Transform;
-
-    let bound = BoundingBox::new(Point3::new(-1., -1., 0.), Point3::new(1., 1., 0.));
-    let other =
-        bound.apply(&Transform::new().rotate(&Vector3::new(std::f32::consts::FRAC_PI_2, 0., 0.)));
-    let total = bound.union(&other);
-
-    assert!(total.contains(&Point3::new(0.5, 0.5, 0.5)));
-
-    let bound = BoundingBox::max();
-    let other =
-        bound.apply(&Transform::new().rotate(&Vector3::new(std::f32::consts::FRAC_PI_2, 0., 0.)));
-    assert_eq!(bound, other);
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 enum Axis {
     X,
     Y,
@@ -389,17 +344,81 @@ fn largest_axis(bound: &BoundingBox) -> (f32, Axis) {
         BoundingBox::Max => (std::f32::INFINITY, Axis::X),
         BoundingBox::Bounds { min, max } => {
             let diff = max - min;
-            if diff.x > diff.y {
-                if diff.x > diff.z {
-                    (min.x + diff.x / 2., Axis::X)
-                } else {
-                    (min.z + diff.z / 2., Axis::Z)
-                }
-            } else if diff.x > diff.z {
-                (min.x + diff.x / 2., Axis::X)
-            } else {
-                (min.y + diff.y / 2., Axis::Y)
+
+            let mut axis = Axis::X;
+
+            if diff.y > diff.x {
+                axis = Axis::Y;
             }
+
+            if diff.z > diff[axis as usize] {
+                axis = Axis::Z;
+            }
+
+            (min[axis as usize] + max[axis as usize] / 2., axis)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bounding_box_transform() {
+        use crate::transform::Transform;
+
+        let bound = BoundingBox::new(Point3::new(-1., -1., 0.), Point3::new(1., 1., 0.));
+        let other = bound.apply(&Transform::new().rotate(&Vector3::new(
+            std::f32::consts::FRAC_PI_2,
+            0.,
+            0.,
+        )));
+        let total = bound.union(&other);
+
+        assert!(total.contains(&Point3::new(0.5, 0.5, 0.5)));
+
+        let bound = BoundingBox::max();
+        let other = bound.apply(&Transform::new().rotate(&Vector3::new(
+            std::f32::consts::FRAC_PI_2,
+            0.,
+            0.,
+        )));
+        assert_eq!(bound, other);
+    }
+
+    #[test]
+    fn test_contains() {
+        let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
+        assert!(a.contains(&a.centroid()));
+    }
+
+    #[test]
+    fn test_union() {
+        let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
+        assert_eq!(a, a.union(&BoundingBox::min()));
+        assert_eq!(BoundingBox::max(), a.union(&BoundingBox::max()));
+    }
+
+    #[test]
+    fn test_union_point() {
+        let p = Point3::new(1., 1., 1.);
+        let a = BoundingBox::min().union_point(&p);
+        println!("{:?}", p);
+        println!("{:?}", a);
+        assert!(a.contains(&p));
+    }
+
+    #[test]
+    fn test_intersect() {
+        let a = BoundingBox::new(Point3::new(1., 1., 1.), Point3::new(-1., -1., -1.));
+        assert_eq!(a, a.intersect(&BoundingBox::max()));
+        assert_eq!(BoundingBox::min(), a.intersect(&BoundingBox::min()));
+    }
+
+    #[test]
+    fn test_largest_axis() {
+        let bound = BoundingBox::new(Point3::new(0., 0., 0.), Point3::new(0., 0., 2.));
+        assert_eq!((1.0, Axis::Z), largest_axis(&bound));
     }
 }
