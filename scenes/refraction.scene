@@ -23,7 +23,9 @@
       :reflective 1
       :transparent 1
       :refractive_index 1.5)
-    (transform (translate 0 0 0) (sphere 1))))
+    (smooth-union (degrees 10)
+    (transform (translate 0.5 0 0) (sphere 1))
+    (transform (translate -0.5 0 0) (sphere 1)))))
 
 (node
   cube
@@ -38,17 +40,17 @@
 (render
   (file "refraction.png")
   (whitted
-    (uniform 1)
+    (uniform 2)
     (pinhole 512 512
              (look-at (0 0 -2) (0 0 0) (0 1 0))
              (degrees 90)))
     (group room cube sphere))
 
-(render
-  (file "refraction-side.png")
-  (whitted
-    (uniform 1)
-    (pinhole 512 512
-             (look-at (2 0 -1) (0 0 0) (0 1 0))
-             (degrees 90)))
-    (group room cube sphere))
+;; (render
+;;   (file "refraction-side.png")
+;;   (whitted
+;;     (uniform 1)
+;;     (pinhole 512 512
+;;              (look-at (2 0 -1) (0 0 0) (0 1 0))
+;;              (degrees 90)))
+;;     (group room cube sphere))

@@ -1,4 +1,5 @@
 use nalgebra::{Point3, Unit, Vector2, Vector3};
+use approx::AbsDiffEq;
 
 use crate::{
     bvh::{BoundingBox, BVH},
@@ -470,7 +471,7 @@ impl Node {
                 }
             }
 
-            Node::Invert {node} => {
+            Node::Invert { node } => {
                 let mut res = scene.node(*node).sdf(scene, *node, ray);
 
                 res.distance.0 = -res.distance.0;
@@ -535,7 +536,10 @@ impl Node {
                     if h == 0. {
                         left.normal = right.normal;
                     } else {
-                        left.normal = self.normal_sdf(scene, ray.clone(), left.distance);
+                        left.normal = right
+                            .normal
+                            .try_slerp(&left.normal, h, f32::default_epsilon())
+                            .unwrap_or_else(|| self.normal_sdf(scene, ray.clone(), left.distance));
                     }
                 }
 
