@@ -7,11 +7,11 @@ pub enum BoundingBox {
     /// The bounding box that contains nothing.
     Min,
 
-    /// The bounding box that contains everything.
-    Max,
-
     /// A non-empty bounding box that doesn't include everything.
     Bounds { min: Point3<f32>, max: Point3<f32> },
+
+    /// The bounding box that contains everything.
+    Max,
 }
 
 fn min_point(a: &Point3<f32>, b: &Point3<f32>) -> Point3<f32> {
@@ -61,6 +61,10 @@ impl BoundingBox {
 
     pub fn max() -> Self {
         Self::Max
+    }
+
+    pub fn is_max(&self) -> bool {
+        matches!(self, Self::Max)
     }
 
     pub fn union(&self, other: &Self) -> Self {
@@ -255,13 +259,16 @@ impl Node {
 
 #[derive(Default, Debug, Clone)]
 pub struct BVH<T> {
+    // Values that have max extent
+    max: Vec<T>,
     nodes: Vec<Node>,
     values: Vec<T>,
 }
 
-impl<T: Clone> BVH<T> {
+impl<T: Clone + core::fmt::Debug> BVH<T> {
     fn new() -> Self {
         Self {
+            max: Vec::new(),
             nodes: Vec::new(),
             values: Vec::new(),
         }
@@ -269,7 +276,22 @@ impl<T: Clone> BVH<T> {
 
     pub fn from_nodes(mut values: Vec<(BoundingBox, T)>) -> Self {
         let mut bvh = Self::new();
-        bvh.build(&mut values, 0);
+
+        // First, sort all the nodes that have max extent into the start of the vector, so that
+        // it's possible to place them all in the root.
+        values.sort_unstable_by_key(|(b, _)| !b.is_max());
+        let max_end = values.partition_point(|(b, _)| b.is_max());
+        let values = if max_end > 0 {
+            bvh.max.extend(values.iter().map(|(_, v)| v.clone()));
+            &mut values[max_end..]
+        } else {
+            &mut values
+        };
+
+        if !values.is_empty() {
+            bvh.build(values, 0);
+        }
+
         bvh
     }
 
@@ -320,11 +342,16 @@ impl<T: Clone> BVH<T> {
 }
 
 impl<T> BVH<T> {
-    pub fn fold_intersections<R, F>(&self, ray: &Ray, acc: R, mut fun: F) -> R
+    pub fn fold_intersections<R, F>(&self, ray: &Ray, mut acc: R, mut fun: F) -> R
     where
         F: FnMut(R, &T) -> R,
     {
-        self.intersections_rec(ray, 0, acc, &mut fun)
+        acc = self.max.iter().fold(acc, &mut fun);
+        if !self.nodes.is_empty() {
+            self.intersections_rec(ray, 0, acc, &mut fun)
+        } else {
+            acc
+        }
     }
 
     fn intersections_rec<R, F>(&self, ray: &Ray, ix: usize, acc: R, fun: &mut F) -> R
@@ -347,6 +374,10 @@ impl<T> BVH<T> {
     }
 
     pub fn bounding_box(&self) -> BoundingBox {
+        if !self.max.is_empty() {
+            return BoundingBox::Max;
+        }
+
         assert!(!self.nodes.is_empty());
         self.nodes[0].bounds.clone()
     }
