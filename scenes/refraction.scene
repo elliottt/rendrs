@@ -1,0 +1,71 @@
+;; vim: ft=lisp sw=2 ts=2 et
+
+(material
+  stripes
+  (phong
+    :pattern (checkers (solid #80ff80) (solid #000000))
+    :specular 0))
+
+(node
+  wall
+  (paint stripes
+         (transform
+           (translate 0 0 10)
+           (plane (0 0 -1)))))
+
+(node
+  walls
+  (group
+    wall
+    (transform (rotate (0 1.5707 0)) wall)
+    (transform (rotate (0 -1.5707 0)) wall)
+    (transform (rotate (0 -2.3561 0)) wall)
+    ))
+
+(node
+  ceiling
+  (paint stripes
+         (transform
+           (translate 0 10 0)
+           (plane (0 -1 0)))))
+
+(node
+  floor
+  (paint stripes
+         (transform
+           (translate 0 -10 0)
+           (plane (0 1 0)))))
+
+(node
+  room
+  (group floor walls ceiling))
+
+(node
+  sphere
+  (paint
+    (phong
+      :pattern (solid #000000)
+      :reflective 1
+      :transparent 1
+      :refractive_index 1.5)
+
+      (transform (translate -0.5 0 0) (sphere 1))))
+
+(node
+  cube
+  (paint
+    (phong :pattern (solid #ff0000))
+    (transform
+      (translate 0 0 2)
+      (box 0.5 0.5 0.5))))
+
+(light (point #ffffff (0 9 -9)))
+
+(render
+  (file "refraction.png")
+  (whitted
+    (uniform 1)
+    (pinhole 512 512
+             (look-at (0 0 -2) (0 0 0) (0 1 0))
+             (degrees 90)))
+    (group room cube sphere))
