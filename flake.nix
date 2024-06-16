@@ -24,6 +24,7 @@
           buildInputs = [
             rust
             pkgs.rust-analyzer
+            lldb
           ];
         };
       }
