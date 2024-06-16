@@ -52,6 +52,9 @@ pub enum Node {
     /// Primitive shapes.
     Prim { prim: Prim },
 
+    /// Invert an SDF.
+    Invert { node: NodeId },
+
     /// A group of nodes.
     Group { union: bool, nodes: BVH<NodeId> },
 
@@ -189,6 +192,11 @@ impl Scene {
         self.add_node(Node::Prim {
             prim: Prim::Torus { hole, radius },
         })
+    }
+
+    /// Invert the node.
+    pub fn invert(&mut self, node: NodeId) -> NodeId {
+        self.add_node(Node::Invert { node })
     }
 
     fn add_group(&mut self, union: bool, nodes: Vec<NodeId>) -> NodeId {
@@ -425,6 +433,8 @@ impl Node {
         match self {
             Node::Prim { prim } => prim.bounding_box(),
 
+            Node::Invert { .. } => BoundingBox::Max,
+
             Node::Group { nodes, .. } => nodes.bounding_box(),
 
             Node::Subtract { left, .. } => scene.bounding_box(*left).clone(),
@@ -458,6 +468,15 @@ impl Node {
                         .unwrap_or_else(|| self.normal_sdf(scene, ray.clone(), distance)),
                     distance,
                 }
+            }
+
+            Node::Invert {node} => {
+                let mut res = scene.node(*node).sdf(scene, *node, ray);
+
+                res.distance.0 = -res.distance.0;
+                res.normal = -res.normal;
+
+                res
             }
 
             Node::Group { union, nodes } => {
@@ -578,6 +597,12 @@ impl Node {
                 distance: prim.sdf(&ray.position),
                 material: None,
             },
+
+            Node::Invert { node } => {
+                let mut res = scene.node(*node).fast_sdf(scene, ray);
+                res.distance.0 = -res.distance.0;
+                res
+            }
 
             Node::Group { nodes, .. } => {
                 nodes.fold_intersections(ray, FastSDFResult::new(), |acc, &id| {

@@ -398,6 +398,11 @@ impl<'a> Parser<'a> {
                 Ok(me.scene.torus(hole, radius))
             }
 
+            "invert" => {
+                let node = me.parse_node()?;
+                Ok(me.scene.invert(node))
+            }
+
             "group" => {
                 let nodes = me.parse_nodes()?;
                 Ok(me.scene.group(nodes))

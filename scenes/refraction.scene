@@ -7,38 +7,13 @@
     :specular 0))
 
 (node
-  wall
-  (paint stripes
-         (transform
-           (translate 0 0 10)
-           (plane (0 0 -1)))))
-
-(node
-  walls
-  (group
-    wall
-    (transform (rotate (0 1.5707 0)) wall)
-    (transform (rotate (0 -1.5707 0)) wall)
-    (transform (rotate (0 -2.3561 0)) wall)
-    ))
-
-(node
-  ceiling
-  (paint stripes
-         (transform
-           (translate 0 10 0)
-           (plane (0 -1 0)))))
-
-(node
-  floor
-  (paint stripes
-         (transform
-           (translate 0 -10 0)
-           (plane (0 1 0)))))
-
-(node
   room
-  (group floor walls ceiling))
+  (paint
+    stripes
+    ;; TODO: there's an odd bug with inverted boxes that are aligned with the
+    ;; origin, where white diagonal lines appear. Translating slightly fixes it,
+    ;; but I wish I knew what was causing it.
+    (invert (transform (translate 0 0.1 0) (box 10 10 10)))))
 
 (node
   sphere
@@ -48,8 +23,7 @@
       :reflective 1
       :transparent 1
       :refractive_index 1.5)
-
-      (transform (translate -0.5 0 0) (sphere 1))))
+    (transform (translate 0 0 0) (sphere 1))))
 
 (node
   cube
@@ -67,5 +41,14 @@
     (uniform 1)
     (pinhole 512 512
              (look-at (0 0 -2) (0 0 0) (0 1 0))
+             (degrees 90)))
+    (group room cube sphere))
+
+(render
+  (file "refraction-side.png")
+  (whitted
+    (uniform 1)
+    (pinhole 512 512
+             (look-at (2 0 -1) (0 0 0) (0 1 0))
              (degrees 90)))
     (group room cube sphere))
