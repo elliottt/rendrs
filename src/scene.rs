@@ -380,9 +380,10 @@ impl Prim {
                 height,
                 depth,
             } => {
-                let x = p.x.abs() - width;
-                let y = p.y.abs() - height;
-                let z = p.z.abs() - depth;
+                let p = p.abs();
+                let x = p.x - width;
+                let y = p.y - height;
+                let z = p.z - depth;
                 let diff = x.max(y).max(z).min(0.0);
                 Distance(Vector3::new(x.max(0.), y.max(0.), z.max(0.)).norm() + diff)
             }
