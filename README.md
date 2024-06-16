@@ -3,7 +3,7 @@
 `rendrs` is a poorly named ray-marching raytracer. It has a scene description
 language that's s-expression based, and documented in the language section.
 
-## Examples 
+## Examples
 
 `cargo run --release -- render scenes/complicated.scene`
 
@@ -28,9 +28,9 @@ started. The port used can be controlled via the `--port` argument, and the
 ## TODO
 
 * [ ] `.obj` file mesh loading
-* [ ] Transparent objects
 * [ ] Global illumination integrator
 * [ ] Handle non-square pixels for ascii rendering
+* [x] Transparent objects
 * [x] Sub-pixel sampling strategies
 
 ## Language
@@ -163,6 +163,10 @@ The material values can take one of the following forms:
   * `:shininess <number>` - (default `200`) the specular light contribution
   * `:reflective <number>` - (default `0`) how reflective the surface is,
     `[0,1]`
+  * `:transparent <number>` - (default 0) how transparent the surface is,
+    `[0,1]`
+  * `:refractive_index <number>` - (default 0) the index of refraction for the
+    surface, must be positive.
 * `(emissive <pattern>)` - The surface behaves as a light source. This is
   currently not very helpful, as the only integrator available is a Whitted
   ray-tracer, that doesn't handle emissive objects well.
@@ -195,6 +199,7 @@ Render targets are declared as follows:
 ```
 
 `<target>` is one of the following forms:
+
 * `(file <string>)` - write the output to the file specified in the string
 * `(ascii <string>)` - Render the output as ascii, and use the string name to
   disambiguate it from other `ascii` targets.
