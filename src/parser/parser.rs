@@ -398,6 +398,19 @@ impl<'a> Parser<'a> {
                 Ok(me.scene.torus(hole, radius))
             }
 
+            "triangle" => {
+                let a = me.point()?;
+                let b = me.point()?;
+                let c = me.point()?;
+
+                // TODO: allow the normal to be specified, and default to computing it
+                let ba = b - a;
+                let ac = a - c;
+                let n = Unit::new_normalize(ba.cross(&ac));
+
+                Ok(me.scene.triangle(a, b, c, n))
+            }
+
             "invert" => {
                 let node = me.parse_node()?;
                 Ok(me.scene.invert(node))

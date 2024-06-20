@@ -1,5 +1,5 @@
-use nalgebra::{Point3, Unit, Vector2, Vector3};
 use approx::AbsDiffEq;
+use nalgebra::{Point3, Unit, Vector2, Vector3};
 
 use crate::{
     bvh::{BoundingBox, BVH},
@@ -45,6 +45,14 @@ pub enum Prim {
 
     /// A torus with the given hole radius and ring radius.
     Torus { hole: f32, radius: f32 },
+
+    /// A triangle with no depth.
+    Triangle {
+        a: Point3<f32>,
+        b: Point3<f32>,
+        c: Point3<f32>,
+        n: Unit<Vector3<f32>>,
+    },
 }
 
 /// Nodes in the scene graph.
@@ -192,6 +200,19 @@ impl Scene {
     pub fn torus(&mut self, hole: f32, radius: f32) -> NodeId {
         self.add_node(Node::Prim {
             prim: Prim::Torus { hole, radius },
+        })
+    }
+
+    /// Render a triangle in the scene, with no depth.
+    pub fn triangle(
+        &mut self,
+        a: Point3<f32>,
+        b: Point3<f32>,
+        c: Point3<f32>,
+        n: Unit<Vector3<f32>>,
+    ) -> NodeId {
+        self.add_node(Node::Prim {
+            prim: Prim::Triangle { a, b, c, n },
         })
     }
 
@@ -373,6 +394,8 @@ impl Prim {
                     Point3::new(rad, radius, rad),
                 )
             }
+
+            &Prim::Triangle { a, b, c, .. } => BoundingBox::new(a, b).union_point(&c),
         }
     }
 
@@ -380,16 +403,16 @@ impl Prim {
     /// primitives are all centered at the origin, there is no need to return more information than
     /// the distance.
     pub fn sdf(&self, p: &Point3<f32>) -> Distance {
-        let p = Vector3::new(p.x, p.y, p.z);
+        let pv = Vector3::new(p.x, p.y, p.z);
         match self {
-            Prim::Plane { normal } => Distance(p.dot(normal)),
-            Prim::Sphere { radius } => Distance(p.norm() - radius),
+            Prim::Plane { normal } => Distance(pv.dot(normal)),
+            Prim::Sphere { radius } => Distance(pv.norm() - radius),
             Prim::Box {
                 width,
                 height,
                 depth,
             } => {
-                let p = p.abs();
+                let p = pv.abs();
                 let x = p.x - width;
                 let y = p.y - height;
                 let z = p.z - depth;
@@ -398,8 +421,33 @@ impl Prim {
             }
 
             Prim::Torus { hole, radius } => {
-                let q = Vector2::new(p.xz().norm() - hole, p.y);
+                let q = Vector2::new(pv.xz().norm() - hole, pv.y);
                 return Distance(q.norm() - radius);
+            }
+
+            Prim::Triangle { a, b, c, n } => {
+                let ba = b - a;
+                let cb = c - b;
+                let ac = a - c;
+
+                let pa = p - a;
+                let pb = p - b;
+                let pc = p - c;
+
+                let v = if ba.cross(&n).dot(&pa).signum()
+                    + cb.cross(&n).dot(&pb).signum()
+                    + ac.cross(&n).dot(&pc).signum()
+                    < 2.0
+                {
+                    let x = ba * f32::clamp(ba.dot(&pa) / ba.dot(&ba), 0.0, 1.0) - pa;
+                    let y = cb * f32::clamp(cb.dot(&pb) / cb.dot(&cb), 0.0, 0.0) - pb;
+                    let z = ac * f32::clamp(ac.dot(&pc) / ac.dot(&ac), 0.0, 0.0) - pc;
+                    x.dot(&x).min(y.dot(&y)).min(z.dot(&z))
+                } else {
+                    n.dot(&pa).powi(2)/n.dot(&n)
+                };
+
+                Distance(f32::sqrt(v))
             }
         }
     }
@@ -412,6 +460,8 @@ impl Prim {
 
             // The sphere is always centered at the origin.
             Prim::Sphere { .. } => Some(Unit::new_normalize(Vector3::new(p.x, p.y, p.z))),
+
+            Prim::Triangle { n, .. } => Some(n.clone()),
 
             _ => None,
         }
