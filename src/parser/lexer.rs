@@ -1,11 +1,5 @@
 type Pos = u32;
 
-#[derive(Debug)]
-pub struct Range {
-    pub start: Pos,
-    pub end: Pos,
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub enum Token {
     LParen,
@@ -21,7 +15,6 @@ pub enum Token {
 #[derive(Debug)]
 pub struct Lexeme {
     pub token: Token,
-    pub range: Range,
     pub text: String,
 }
 
@@ -29,7 +22,7 @@ pub struct Lexeme {
 pub struct Lexer<'a> {
     input: &'a str,
     chars: std::iter::Peekable<std::str::CharIndices<'a>>,
-    offset: u32,
+    offset: Pos,
 }
 
 impl<'a> Lexer<'a> {
@@ -47,7 +40,7 @@ impl<'a> Lexer<'a> {
 
     fn next_char(&mut self) -> Option<char> {
         self.chars.next().map(|(off, c)| {
-            self.offset = off as u32;
+            self.offset = off as Pos;
             c
         })
     }
@@ -58,7 +51,7 @@ impl<'a> Lexer<'a> {
 
     fn consume_if<P: FnOnce(char) -> bool>(&mut self, pred: P) -> Option<char> {
         self.chars.next_if(|(_, c)| pred(*c)).map(|(ix, c)| {
-            self.offset = ix as u32;
+            self.offset = ix as Pos;
             c
         })
     }
@@ -66,8 +59,8 @@ impl<'a> Lexer<'a> {
     fn consume_while<P: FnMut(bool, char) -> bool>(&mut self, mut pred: P) -> usize {
         let start = self.pos();
 
-        while let Some((ix, _)) = self.chars.next_if(|(ix, c)| pred(*ix as u32 > start, *c)) {
-            self.offset = ix as u32;
+        while let Some((ix, _)) = self.chars.next_if(|(ix, c)| pred(*ix as Pos > start, *c)) {
+            self.offset = ix as Pos;
         }
 
         (self.pos() - start) as usize
@@ -144,16 +137,15 @@ impl<'a> Lexer<'a> {
         }) > 0
     }
 
-    fn text(&self, start: u32, end: u32) -> String {
+    fn text(&self, start: Pos, end: Pos) -> String {
         let slice = self.input.get(start as usize..=end as usize).unwrap();
         String::from(slice)
     }
 
     /// Construct a lexeme.
-    fn lexeme(&self, start: u32, token: Token) -> Lexeme {
+    fn lexeme(&self, start: Pos, token: Token) -> Lexeme {
         let end = self.offset;
         Lexeme {
-            range: Range { start, end },
             token,
             text: self.text(start, end),
         }
