@@ -244,13 +244,13 @@ impl<T: Clone + core::fmt::Debug> BVH<T> {
         };
 
         if !values.is_empty() {
-            bvh.build(values, 0);
+            bvh.build(values);
         }
 
         bvh
     }
 
-    fn build(&mut self, values: &mut [(BoundingBox, T)], start: usize) {
+    fn build(&mut self, values: &mut [(BoundingBox, T)]) {
         assert!(!values.is_empty());
 
         let (bounds, centroid) = values.iter().fold(
@@ -263,7 +263,7 @@ impl<T: Clone + core::fmt::Debug> BVH<T> {
         // If the centroids of all the values are the same, there's not point in trying to reduce
         // any further. Conveniently, this is true when the values slice is a singleton.
         if centroid.is_empty() {
-            self.nodes.push(Node::leaf(bounds, start, values.len()));
+            self.nodes.push(Node::leaf(bounds, self.values.len(), values.len()));
             self.values.extend(values.iter().map(|(_, v)| v.clone()));
             return;
         }
@@ -282,17 +282,21 @@ impl<T: Clone + core::fmt::Debug> BVH<T> {
         values.sort_unstable_by_key(|(bound, _)| !compare(bound));
         let middle = values.partition_point(|(b, _)| compare(b));
         let (left, right) = values.split_at_mut(middle);
-        assert!(!left.is_empty() && !right.is_empty());
+        assert!(
+            !left.is_empty() && !right.is_empty(),
+            "midpoint fell entirely on one side of axis {:?}",
+            axis
+        );
 
         let cur = self.nodes.len();
         self.nodes.push(Node::internal(bounds));
 
-        self.build(left, start);
+        self.build(left);
 
         // update the offset after writing the left subtree
         self.nodes[cur].offset = self.nodes.len() as u16;
 
-        self.build(right, start + middle);
+        self.build(right);
     }
 }
 
@@ -321,7 +325,7 @@ impl<T> BVH<T> {
                 self.values[start..end].iter().fold(acc, fun)
             } else {
                 let acc = self.intersections_rec(ray, ix + 1, acc, fun);
-                self.intersections_rec(ray, ix + node.offset as usize, acc, fun)
+                self.intersections_rec(ray, node.offset as usize, acc, fun)
             }
         } else {
             acc
