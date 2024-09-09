@@ -66,20 +66,16 @@ impl<C> Whitted<C> {
             return color;
         }
 
-        let mut hit =
-            if let Some(hit) = Hit::march(&self.config, scene, root, ray, !containers.is_empty()) {
-                hit
-            } else {
-                for light in scene.lights.iter() {
-                    color += light.light_escape();
-                }
-                return color;
-            };
+        let Some(mut hit) = Hit::march(&self.config, scene, root, ray, !containers.is_empty())
+        else {
+            for light in scene.lights.iter() {
+                color += light.light_escape();
+            }
+            return color;
+        };
 
         // return unlit magenta if there's no material for this object
-        let material = if let Some(material) = hit.material {
-            material
-        } else {
+        let Some(material) = hit.material else {
             return Color::hex(0xff00ff);
         };
 
