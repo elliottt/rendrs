@@ -10,10 +10,7 @@
   room
   (paint
     stripes
-    ;; TODO: there's an odd bug with inverted boxes that are aligned with the
-    ;; origin, where white diagonal lines appear. Translating slightly fixes it,
-    ;; but I wish I knew what was causing it.
-    (invert (transform (translate 0 0.1 0) (box 10 10 10)))))
+    (invert (box 10 10 10))))
 
 (node
   sphere
@@ -40,7 +37,7 @@
 (render
   (file "refraction.png")
   (whitted
-    (uniform 2)
+    (uniform 1)
     (pinhole 512 512
              (look-at (0 0 -2) (0 0 0) (0 1 0))
              (degrees 90)))

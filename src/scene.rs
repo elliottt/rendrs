@@ -444,7 +444,7 @@ impl Prim {
                     let z = ac * f32::clamp(ac.dot(&pc) / ac.dot(&ac), 0.0, 0.0) - pc;
                     x.dot(&x).min(y.dot(&y)).min(z.dot(&z))
                 } else {
-                    n.dot(&pa).powi(2)/n.dot(&n)
+                    n.dot(&pa).powi(2) / n.dot(&n)
                 };
 
                 Distance(f32::sqrt(v))
@@ -640,7 +640,18 @@ impl Node {
 
         ray.position = p - offset.yyx();
         let pz = self.fast_sdf(scene, &ray).distance;
-        Unit::new_normalize(Vector3::new(dist.0 - px.0, dist.0 - py.0, dist.0 - pz.0))
+        let (res, norm) =
+            Unit::new_and_get(Vector3::new(dist.0 - px.0, dist.0 - py.0, dist.0 - pz.0));
+
+        // This is a really unfortunate bug: occassionally the normal produced will be [0, 0, 0]
+        // using the sdf approach, which will normalize to a vector of NaN. That will in turn mess
+        // everything up down the line, producing weird white artifacts where this problem occurs.
+        // As a gross hacky workaround, detect this case and return [0,1,0] when it happens.
+        if norm == 0.0 {
+            Unit::new_unchecked(Vector3::new(0.0, 1.0, 0.0))
+        } else {
+            res
+        }
     }
 
     // A version of `sdf` that only computes the distance and material information. Useful for
