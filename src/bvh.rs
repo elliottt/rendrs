@@ -263,7 +263,8 @@ impl<T: Clone + core::fmt::Debug> BVH<T> {
         // If the centroids of all the values are the same, there's not point in trying to reduce
         // any further. Conveniently, this is true when the values slice is a singleton.
         if centroid.is_empty() {
-            self.nodes.push(Node::leaf(bounds, self.values.len(), values.len()));
+            self.nodes
+                .push(Node::leaf(bounds, self.values.len(), values.len()));
             self.values.extend(values.iter().map(|(_, v)| v.clone()));
             return;
         }

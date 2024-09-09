@@ -232,7 +232,9 @@ fn test_parse_face() {
 
     let cmd = cmd.unwrap();
     match cmd {
-        Command::Face { face: Face { vertices } } => {
+        Command::Face {
+            face: Face { vertices },
+        } => {
             println!("{:?}", vertices);
             assert_eq!(Point3::new(3., 3., 3.), vertices[0]);
             assert_eq!(Point3::new(1., 1., 1.), vertices[1]);

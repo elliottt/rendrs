@@ -152,8 +152,5 @@ fn test_pinhole_camera() {
     let ray = camera.generate_ray(&Sample::new(5., 5.));
 
     assert_eq!(Point3::new(0., 0., 0.), ray.position);
-    assert_eq!(
-        Unit::new_normalize(Vector3::new(0., 0., 1.)),
-        ray.direction
-    );
+    assert_eq!(Unit::new_normalize(Vector3::new(0., 0., 1.)), ray.direction);
 }
