@@ -73,8 +73,11 @@ impl Transform {
         let inv = Vector3::new(1. / vec.x, 1. / vec.y, 1. / vec.z);
         self.inverse.append_nonuniform_scaling_mut(&inv);
 
-        // hmmm
-        self.scale_factor *= vec.x.max(vec.y).max(vec.z);
+        // A non-uniform scaling factor is the minimum scale factor of each
+        // axis, as it will be multiplied by the resulting distance after
+        // the transform has been applied. The result here is that we'll take
+        // smaller steps when under the influence of a non-uniform object.
+        self.scale_factor *= vec.x.min(vec.y).min(vec.z);
         self
     }
 

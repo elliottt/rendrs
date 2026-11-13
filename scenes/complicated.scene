@@ -45,7 +45,6 @@
       (transform (translate -1 0 0) red-sphere))
     (transform (translate 0 1 -1) (sphere 1))))
 
-
 (light (point #ffffff (5 10 -10)))
 
 (render
