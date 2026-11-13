@@ -1,13 +1,13 @@
 use actix::prelude::*;
 use actix_files as fs;
-use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, web};
 use actix_web_actors::ws;
 use anyhow::Error;
 use crossbeam::channel::{self, RecvTimeoutError};
 use fs::NamedFile;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
-use rand::{rngs::ThreadRng, Rng};
+use rand::{Rng, rngs::ThreadRng};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -198,7 +198,7 @@ impl Handler<Connect> for RenderServer {
     type Result = usize;
 
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
-        let id = self.rng.gen::<usize>();
+        let id: usize = self.rng.r#gen();
 
         self.clients.insert(id, msg.addr.clone());
 

@@ -15,7 +15,7 @@
           inherit system overlays;
         };
 
-        rust = pkgs.rust-bin.stable.latest.default;
+        rust = pkgs.rust-bin.stable."1.100.0".default;
 
       in
       with pkgs;

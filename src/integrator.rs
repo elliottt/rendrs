@@ -108,7 +108,7 @@ pub fn render(
                 for tile in tiles.clone() {
                     let mut chunk = Canvas::new(tile.width, tile.height);
 
-                    for ((col, row), pixel) in chunk.coords().zip(chunk.pixels_mut()) {
+                    for ((col, row), pixel) in chunk.pixels_mut() {
                         samples.clear();
                         sampler.pixel_samples(
                             &mut samples,

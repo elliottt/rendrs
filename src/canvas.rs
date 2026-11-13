@@ -264,14 +264,13 @@ impl Canvas {
         }
     }
 
-    pub fn coords(&self) -> impl Iterator<Item = (usize, usize)> {
-        let width = self.width as usize;
-        (0..self.height as usize).flat_map(move |y| (0..width).map(move |x| (x, y)))
-    }
-
     /// Return an iterator to the mutable pixels of the image.
-    pub fn pixels_mut(&mut self) -> &mut [Color] {
-        &mut self.buffer
+    pub fn pixels_mut(&mut self) -> impl Iterator<Item = ((usize, usize), &mut Color)> {
+        let width = self.width as usize;
+        let height = self.height as usize;
+        (0..height)
+            .flat_map(move |y| (0..width).map(move |x| (x, y)))
+            .zip(&mut self.buffer)
     }
 
     /// Return raw image RGB8 data for the image.
